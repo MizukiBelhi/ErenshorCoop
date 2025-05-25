@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.11.35312.102
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ErenshorCoop", "ErenshorCoop.csproj", "{060CA869-6710-4C26-A2D8-63572E58569B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{060CA869-6710-4C26-A2D8-63572E58569B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{060CA869-6710-4C26-A2D8-63572E58569B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{060CA869-6710-4C26-A2D8-63572E58569B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{060CA869-6710-4C26-A2D8-63572E58569B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {8D1FB086-5ACB-4A73-B0A8-11677702C017}
+	EndGlobalSection
+EndGlobal
