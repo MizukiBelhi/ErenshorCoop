@@ -613,7 +613,7 @@ namespace ErenshorCoop
 			Spell spell = GameData.SpellDatabase.GetSpellByID(effectData.spellID);
 			if (spell == null) return;
 
-			if (effectData.spellID != "80328040")
+			/*if (effectData.spellID != "80328040")
 				Logging.Log(
 					$"StatusEffectData RECV:\n" +
 					$"- spellID: {effectData.spellID}\n" +
@@ -623,14 +623,30 @@ namespace ErenshorCoop
 					$"- attackerID: {effectData.attackerID}\n" +
 					$"- duration: {effectData.duration}\n" +
 					$"- playerIsCaster: {effectData.playerIsCaster}"
-				);
+				);*/
 
 			Character caster = null;
 			if (effectData.attackerID != -1)
 			{
 				if (!effectData.attackerIsPlayer)
 				{
-					caster = ClientNPCSyncManager.Instance.GetEntityFromID(effectData.attackerID, effectData.attackerIsSim).character;
+					try
+					{
+						caster = ClientNPCSyncManager.Instance.GetEntityFromID(effectData.attackerID, effectData.attackerIsSim).character;
+					} catch
+					{
+						//Attacker becomes invalid for some reason
+						/*Logging.LogError(
+							$"Error on the thing\n" +
+							$"- spellID: {effectData.spellID}\n" +
+							$"- damageBonus: {effectData.damageBonus}\n" +
+							$"- attackerIsPlayer: {effectData.attackerIsPlayer}\n" +
+							$"- attackerIsSim: {effectData.attackerIsSim}\n" +
+							$"- attackerID: {effectData.attackerID}\n" +
+							$"- duration: {effectData.duration}\n" +
+							$"- playerIsCaster: {effectData.playerIsCaster}"
+						);*/
+					}
 				}
 				else
 				{

@@ -837,13 +837,29 @@ namespace ErenshorCoop
 			{
 				if (Grouping.IsLocalLeader())
 				{
+					//Logging.Log($"is leader");
 					var XPBonus = (float)xpBonus.GetValue(GameData.PlayerStats);
 					//Send xp
-					PacketManager.GetOrCreatePacket<GroupPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.GROUP)
-						.AddPacketData(GroupDataType.EXPERIENCE, "xp", xp)
-						.SetData("xpBonus", XPBonus)
-						.SetData("useMod",  useMod);
+					if (!ServerConnectionManager.Instance.IsRunning)
+					{
+						//Logging.Log($"doing non-host xp");
+						PacketManager.GetOrCreatePacket<GroupPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.GROUP)
+							.AddPacketData(GroupDataType.EXPERIENCE, "xp", xp)
+							.SetData("xpBonus", XPBonus)
+							.SetData("useMod",  useMod);
+					}
+					else
+					{
+						//Logging.Log($"doing host xp");
+						Grouping.ServerHandleXP(ClientConnectionManager.Instance.LocalPlayerID, xp, useMod, XPBonus);
+					}
+
+
 					return false;
+				}
+				else
+				{
+					//Logging.Log($"not leader");
 				}
 
 				return false;

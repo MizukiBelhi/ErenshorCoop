@@ -125,7 +125,7 @@ namespace ErenshorCoop.UI
 			input.caretColor = Color.white;
 			input.customCaretColor = true;
 			//input.text = "fasfa";
-			input.characterLimit = 15;
+			input.characterLimit = 20;
 
 			input.interactable = true;
 			input.enabled = true;

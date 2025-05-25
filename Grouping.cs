@@ -274,7 +274,7 @@ namespace ErenshorCoop
 				SharedNPCSyncManager.Instance.StartCoroutine(SharedNPCSyncManager.Instance.DelayedCheckSim());
 		}
 
-		private static void ServerHandleXP(short playerID, int xp, bool useMod, float xpBonus)
+		public static void ServerHandleXP(short playerID, int xp, bool useMod, float xpBonus)
 		{
 			short groupID = GetGroupIDFromPlayer(playerID);
 			if (groupID == -1) return; //no group??
