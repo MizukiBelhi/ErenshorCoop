@@ -267,7 +267,7 @@ namespace ErenshorCoop
 		private void HandlePlayerAttack(PlayerAttackData data)
 		{
 			//TODO: attacked could potentially be a sim with PVP mod
-			(bool _, var attacked) = Extensions.GetCharacterFromID(data.attackedIsNPC, data.attackedID, false);
+			(bool isPlayer, var attacked) = Extensions.GetCharacterFromID(data.attackedIsNPC, data.attackedID, false);
 
 			
 
@@ -277,15 +277,29 @@ namespace ErenshorCoop
 				return;
 			}
 
+			bool fromPlayer = false; //This should be false by default, otherwise every player that receives this will be
+									//Adding player damage to the enemy, which would cause everyone to get xp
+			//Check if we are in a group
+			if (Grouping.HasGroup)
+			{
+				//Set fromPlayer to if this player is in our group and we're the leader
+				fromPlayer =  Grouping.IsLocalLeader() && Grouping.IsPlayerInGroup(entityID, false);
+				if (!isPlayer) //If the target isn't a player
+				{
+					//We add ourselves to the aggro list, this way everyone in the group is automatically in the aggro list
+					attacked.MyNPC.ManageAggro(1, ClientConnectionManager.Instance.LocalPlayer.character);
+				}
+			}
+
 			//Add attacked character to a list and remove it again after this call
 			//This way we can skip the mitigation calculation
 			
 			Variables.DontCalculateDamageMitigationCharacters.Add(attacked);
 
 			if (data.damageType == GameData.DamageType.Physical)
-				attacked.DamageMe(data.damage, false, data.damageType, character, data.effect);
+				attacked.DamageMe(data.damage, fromPlayer, data.damageType, character, data.effect);
 			else
-				attacked.MagicDamageMe(data.damage, false, data.damageType, character, data.resistMod);
+				attacked.MagicDamageMe(data.damage, fromPlayer, data.damageType, character, data.resistMod);
 
 			Variables.DontCalculateDamageMitigationCharacters.Remove(attacked);
 		}
@@ -608,84 +622,63 @@ namespace ErenshorCoop
 
 		public void HandleStatusEffectApply(StatusEffectData effectData)
 		{
-			
-
 			Spell spell = GameData.SpellDatabase.GetSpellByID(effectData.spellID);
 			if (spell == null) return;
 
-			/*if (effectData.spellID != "80328040")
-				Logging.Log(
-					$"StatusEffectData RECV:\n" +
-					$"- spellID: {effectData.spellID}\n" +
-					$"- damageBonus: {effectData.damageBonus}\n" +
-					$"- attackerIsPlayer: {effectData.attackerIsPlayer}\n" +
-					$"- attackerIsSim: {effectData.attackerIsSim}\n" +
-					$"- attackerID: {effectData.attackerID}\n" +
-					$"- duration: {effectData.duration}\n" +
-					$"- playerIsCaster: {effectData.playerIsCaster}"
-				);*/
-
-			Character caster = null;
-			if (effectData.attackerID != -1)
+			Entity target = null;
+			if (effectData.targetID < 0)
+				target = this;
+			else
 			{
-				if (!effectData.attackerIsPlayer)
+				Entity t = null;
+				if (ClientZoneOwnership.isZoneOwner)
 				{
-					try
-					{
-						caster = ClientNPCSyncManager.Instance.GetEntityFromID(effectData.attackerID, effectData.attackerIsSim).character;
-					} catch
-					{
-						//Attacker becomes invalid for some reason
-						/*Logging.LogError(
-							$"Error on the thing\n" +
-							$"- spellID: {effectData.spellID}\n" +
-							$"- damageBonus: {effectData.damageBonus}\n" +
-							$"- attackerIsPlayer: {effectData.attackerIsPlayer}\n" +
-							$"- attackerIsSim: {effectData.attackerIsSim}\n" +
-							$"- attackerID: {effectData.attackerID}\n" +
-							$"- duration: {effectData.duration}\n" +
-							$"- playerIsCaster: {effectData.playerIsCaster}"
-						);*/
-					}
+					t = SharedNPCSyncManager.Instance.GetEntityFromID(effectData.targetID, effectData.targetType == EntityType.SIM);
 				}
 				else
 				{
-					caster = ClientConnectionManager.Instance.GetPlayerFromID(effectData.attackerID).character;
-					if (caster == null && ClientConnectionManager.Instance.LocalPlayerID == effectData.attackerID)
-						caster = ClientConnectionManager.Instance.LocalPlayer.character;
+					t = ClientNPCSyncManager.Instance.GetEntityFromID(effectData.targetID,effectData.targetType == EntityType.SIM);
 				}
 
-				if (caster == null) return;
+				if (t == null) return;
+				target = t;
 			}
 
-			if (!effectData.playerIsCaster)
+			if (target == null) return;
+
+			Variables.DontCheckEffectCharacters.Add(target);
+			var targetChar = target.character;
+
+			if (effectData.targetID >= 0)
 			{
-				if (effectData.attackerID != -1 && effectData.duration >= 0)
+				
+
+				if (effectData.duration >= 0)
+					targetChar.MyStats.AddStatusEffect(spell, true, effectData.damageBonus, character, effectData.duration);
+				else if (effectData.duration < 0)
+					targetChar.MyStats.AddStatusEffect(spell, true, effectData.damageBonus, character);
+
+				//Check if we are in a group, and its a sim in our group
+				if (Grouping.HasGroup && Grouping.IsPlayerInGroup(entityID, false))
 				{
-					sim.MyStats.AddStatusEffect(spell, false, effectData.damageBonus, caster, effectData.duration);
-				}
-				else if (effectData.attackerID != -1 && effectData.duration < 0)
-				{
-					sim.MyStats.AddStatusEffect(spell, false, effectData.damageBonus, caster);
-				}
-				else
-				{
-					sim.MyStats.AddStatusEffect(spell, false, effectData.damageBonus);
+					if (target.type == EntityType.ENEMY) //If the target is an enemy
+					{
+						//We add ourselves to the aggro list, this way everyone in the group is automatically in the aggro list
+						targetChar.MyNPC.ManageAggro(1, ClientConnectionManager.Instance.LocalPlayer.character);
+					}
 				}
 			}
 			else
 			{
-				Variables.DontCheckEffectCharacters.Add(caster);
-				if (effectData.attackerID != -1 && effectData.duration >= 0)
-				{
-					caster!.MyStats.AddStatusEffect(spell, true, effectData.damageBonus, character, effectData.duration);
-				}
-				else if (effectData.attackerID != -1 && effectData.duration < 0)
-				{
-					caster!.MyStats.AddStatusEffect(spell, true, effectData.damageBonus, character);
-				}
-				Variables.DontCheckEffectCharacters.Remove(caster);
+				if(effectData.targetID == -1)
+					targetChar.MyStats.AddStatusEffect(spell, true, effectData.damageBonus);
+				if(effectData.targetID == -2)
+					targetChar.MyStats.AddStatusEffect(spell, true, effectData.damageBonus, character);
+				if(effectData.targetID == -3)
+					targetChar.MyStats.AddStatusEffect(spell, true, effectData.damageBonus, character, effectData.duration);
 			}
+
+			Variables.DontCheckEffectCharacters.Remove(target);
 		}
 
 		public void HandleStatusRemoval(bool RemoveAllStatus, bool RemoveBreak, int spellID)
@@ -708,12 +701,16 @@ namespace ErenshorCoop
 		{
 			if (currentScene != SceneManager.GetActiveScene().name) return;
 
+			if(spellEffect != null)
+				DestroyImmediate(spellEffect);
+
 			spellEffect = new GameObject();
 			spellEffect.transform.position = transform.position + transform.forward + Vector3.up * 1.5f;
 			spellEffect.transform.SetParent(transform);
 
 			var ChargeFX = Instantiate(GameData.EffectDB.SpellEffects[SpellChargeFXIndex], spellEffect.transform.position, spellEffect.transform.rotation);
 			ChargeFX.transform.SetParent(spellEffect.transform);
+			spellEffect.AddComponent<DestroyObjectTimer>().TimeToDestroy = 600f;
 		}
 
 		public void HandleSpellEffect(string spellID, short targetID, bool targetIsNPC, bool isSim)
@@ -749,10 +746,12 @@ namespace ErenshorCoop
 				case Spell.SpellType.Beneficial:
 				case Spell.SpellType.PBAE:
 				case Spell.SpellType.Heal:
-					Instantiate(GameData.EffectDB.SpellEffects[spell.SpellResolveFXIndex], targ.transform.position, Quaternion.identity);
+					Instantiate(GameData.EffectDB.SpellEffects[spell.SpellResolveFXIndex], targ.transform.position, Quaternion.identity)
+						.AddComponent<DestroyObjectTimer>().TimeToDestroy = 600f;
 					break;
 				case Spell.SpellType.Pet:
-					Instantiate(GameData.EffectDB.SpellEffects[spell.SpellResolveFXIndex], targ.transform.position, Quaternion.identity);
+					Instantiate(GameData.EffectDB.SpellEffects[spell.SpellResolveFXIndex], targ.transform.position, Quaternion.identity)
+						.AddComponent<DestroyObjectTimer>().TimeToDestroy = 600f;
 					UpdateSocialLog.LogAdd($"{playerName} summoned a companion!", "lightblue");
 
 				break;

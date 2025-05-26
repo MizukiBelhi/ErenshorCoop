@@ -782,7 +782,7 @@ namespace ErenshorCoop
 
 			if (!IsPlayer)
 			{
-				SharedNPCSyncManager.Instance.GetEntityFromID(entityID, IsSim).SendHeal(hd);
+				((NPCSync)SharedNPCSyncManager.Instance.GetEntityFromID(entityID, IsSim)).SendHeal(hd);
 			}
 			else
 			{
@@ -1500,7 +1500,7 @@ namespace ErenshorCoop
 			return null;
 		}
 
-		private static (bool, bool, short) GetEntityByStats(Stats _char)
+		private static (bool, bool, short) GetEntityIDByStats(Stats _char)
 		{
 			foreach (var mob in ClientNPCSyncManager.Instance.NetworkedMobs)
 			{
@@ -1531,6 +1531,58 @@ namespace ErenshorCoop
 
 			return (false, false, -1);
 		}
+		private static Entity GetEntityByStats(Stats _char)
+		{
+			if (!ClientZoneOwnership.isZoneOwner)
+			{
+				foreach (var mob in ClientNPCSyncManager.Instance.NetworkedMobs)
+				{
+					if (mob.Value.character.MyStats == _char)
+					{
+						return mob.Value;
+					}
+				}
+
+				foreach (var mob in ClientNPCSyncManager.Instance.NetworkedSims)
+				{
+					if (mob.Value.character.MyStats == _char)
+					{
+						return mob.Value;
+					}
+				}
+			}
+			else
+			{
+				foreach (var mob in SharedNPCSyncManager.Instance.mobs)
+				{
+					if (mob.Value.character.MyStats == _char)
+					{
+						return mob.Value;
+					}
+				}
+
+				foreach (var mob in SharedNPCSyncManager.Instance.sims)
+				{
+					if (mob.Value.character.MyStats == _char)
+					{
+						return mob.Value;
+					}
+				}
+			}
+
+			foreach (var player in ClientConnectionManager.Instance.Players)
+			{
+				if (player.Value.character.MyStats == _char)
+				{
+					return player.Value;
+				}
+			}
+
+			if (ClientConnectionManager.Instance.LocalPlayer.character.MyStats == _char)
+				return ClientConnectionManager.Instance.LocalPlayer;
+
+			return null;
+		}
 
 		public static void AddStatusEffectType1_Prefix(Stats __instance, Spell spell, bool _fromPlayer, int _dmgBonus)
 		{
@@ -1538,7 +1590,7 @@ namespace ErenshorCoop
 			{
 				if (ClientConnectionManager.Instance.LocalPlayer.stats == __instance)
 				{
-					if (Variables.DontCheckEffectCharacters.Contains(ClientConnectionManager.Instance.LocalPlayer.character)) return;
+					if (Variables.DontCheckEffectCharacters.Contains(ClientConnectionManager.Instance.LocalPlayer)) return;
 
 					string spellID = spell.Id;
 					var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_ACTION);
@@ -1547,7 +1599,7 @@ namespace ErenshorCoop
 					{
 						spellID =  spellID,
 						damageBonus = _dmgBonus,
-						attackerID =  -1,
+						targetID =  -1,
 						duration = -1,
 					};
 
@@ -1557,11 +1609,9 @@ namespace ErenshorCoop
 							$"StatusEffectData 1:\n" +
 							$"- spellID: {pack.effectData.spellID}\n" +
 							$"- damageBonus: {pack.effectData.damageBonus}\n" +
-							$"- attackerIsPlayer: {pack.effectData.attackerIsPlayer}\n" +
-							$"- attackerIsSim: {pack.effectData.attackerIsSim}\n" +
-							$"- attackerID: {pack.effectData.attackerID}\n" +
-							$"- duration: {pack.effectData.duration}\n" +
-							$"- playerIsCaster: {pack.effectData.playerIsCaster}"
+							$"- attackerIsPlayer: {pack.effectData.casterType}\n" +
+							$"- attackerID: {pack.effectData.casterID}\n" +
+							$"- duration: {pack.effectData.duration}\n"
 						);
 				}
 			}
@@ -1571,11 +1621,18 @@ namespace ErenshorCoop
 		{
 			if (ClientConnectionManager.Instance.IsRunning)
 			{
-				if (ClientConnectionManager.Instance.LocalPlayer.stats == __instance)
-				{
-					if (Variables.DontCheckEffectCharacters.Contains(ClientConnectionManager.Instance.LocalPlayer.character)) return;
+				Entity target = GetEntityByStats(__instance);
+				Entity caster = GetEntityByCharacter(_specificCaster);
 
-					( bool isPlayer, bool isSim, short entityID ) = GetEntityIDByCharacter(_specificCaster);
+				if (target == null) return;
+				if(caster == null) return;
+
+
+				if (Variables.DontCheckEffectCharacters.Contains(target)) return;
+
+				//If we cast something on ourselves
+				if (target == ClientConnectionManager.Instance.LocalPlayer && caster == ClientConnectionManager.Instance.LocalPlayer)
+				{
 					string spellID = spell.Id;
 					var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_ACTION);
 					pack.dataTypes.Add(ActionType.STATUS_EFFECT_APPLY);
@@ -1583,9 +1640,8 @@ namespace ErenshorCoop
 					{
 						spellID = spellID,
 						damageBonus = _dmgBonus,
-						attackerIsPlayer = isPlayer,
-						attackerIsSim = isSim,
-						attackerID = entityID,
+						casterType = EntityType.PLAYER,
+						targetID = -2,
 						duration = -1,
 					};
 
@@ -1594,19 +1650,16 @@ namespace ErenshorCoop
 							$"StatusEffectData 2:\n" +
 							$"- spellID: {pack.effectData.spellID}\n" +
 							$"- damageBonus: {pack.effectData.damageBonus}\n" +
-							$"- attackerIsPlayer: {pack.effectData.attackerIsPlayer}\n" +
-							$"- attackerIsSim: {pack.effectData.attackerIsSim}\n" +
-							$"- attackerID: {pack.effectData.attackerID}\n" +
-							$"- duration: {pack.effectData.duration}\n" +
-							$"- playerIsCaster: {pack.effectData.playerIsCaster}"
+							$"- attackerIsPlayer: {pack.effectData.casterType}\n" +
+							$"- attackerID: {pack.effectData.casterID}\n" +
+							$"- duration: {pack.effectData.duration}\n"
 						);
 				}
 				else
 				{
-					(bool _, bool _, short casterID) = GetEntityIDByCharacter(_specificCaster);
-					if (casterID == ClientConnectionManager.Instance.LocalPlayerID)
+					//if we are the caster
+					if (caster == ClientConnectionManager.Instance.LocalPlayer)
 					{
-						(bool isPlayer, bool isSim, short entityID) = GetEntityByStats(__instance);
 						string spellID = spell.Id;
 						var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_ACTION);
 						pack.dataTypes.Add(ActionType.STATUS_EFFECT_APPLY);
@@ -1614,24 +1667,32 @@ namespace ErenshorCoop
 						{
 							spellID = spellID,
 							damageBonus = _dmgBonus,
-							attackerIsPlayer = isPlayer,
-							attackerIsSim = isSim,
-							attackerID = entityID,
+							casterType = EntityType.PLAYER,
+							casterID = caster.entityID,
 							duration = -1,
-							playerIsCaster = true
+							targetID = target.entityID,
+							targetType = target.type,
 						};
-
-						if (spellID == "83280423440")
-							Logging.Log(
-								$"StatusEffectData 2 Own:\n" +
-								$"- spellID: {pack.effectData.spellID}\n" +
-								$"- damageBonus: {pack.effectData.damageBonus}\n" +
-								$"- attackerIsPlayer: {pack.effectData.attackerIsPlayer}\n" +
-								$"- attackerIsSim: {pack.effectData.attackerIsSim}\n" +
-								$"- attackerID: {pack.effectData.attackerID}\n" +
-								$"- duration: {pack.effectData.duration}\n" +
-								$"- playerIsCaster: {pack.effectData.playerIsCaster}"
-							);
+					}
+					else //We're not the caster
+					{
+						if (ClientZoneOwnership.isZoneOwner)
+						{
+							string spellID = spell.Id;
+							var pack = PacketManager.GetOrCreatePacket<EntityActionPacket>(caster.entityID, PacketType.ENTITY_ACTION);
+							pack.dataTypes.Add(ActionType.STATUS_EFFECT_APPLY);
+							pack.effectData = new StatusEffectData()
+							{
+								spellID = spellID,
+								damageBonus = _dmgBonus,
+								casterType = caster.type,
+								casterID = caster.entityID,
+								duration = -1,
+								targetID = target.entityID,
+								targetType = target.type,
+							};
+							pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
+						}
 					}
 				}
 			}
@@ -1641,11 +1702,18 @@ namespace ErenshorCoop
 		{
 			if (ClientConnectionManager.Instance.IsRunning)
 			{
-				if (ClientConnectionManager.Instance.LocalPlayer.stats == __instance)
-				{
-					if (Variables.DontCheckEffectCharacters.Contains(ClientConnectionManager.Instance.LocalPlayer.character)) return;
+				Entity target = GetEntityByStats(__instance);
+				Entity caster = GetEntityByCharacter(_specificCaster);
 
-					( bool isPlayer, bool isSim, short entityID ) = GetEntityIDByCharacter(_specificCaster);
+				if (target == null) return;
+				if (caster == null) return;
+
+
+				if (Variables.DontCheckEffectCharacters.Contains(target)) return;
+
+				//If we cast something on ourselves
+				if (target == ClientConnectionManager.Instance.LocalPlayer && caster == ClientConnectionManager.Instance.LocalPlayer)
+				{
 					string spellID = spell.Id;
 					var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_ACTION);
 					pack.dataTypes.Add(ActionType.STATUS_EFFECT_APPLY);
@@ -1653,10 +1721,9 @@ namespace ErenshorCoop
 					{
 						spellID = spellID,
 						damageBonus = _dmgBonus,
-						attackerIsPlayer = isPlayer,
-						attackerIsSim = isSim,
-						attackerID = entityID,
-						duration = _duration
+						casterType = EntityType.PLAYER,
+						targetID = -3,
+						duration = _duration,
 					};
 
 					if (spellID == "83280423440")
@@ -1664,18 +1731,16 @@ namespace ErenshorCoop
 							$"StatusEffectData 3:\n" +
 							$"- spellID: {pack.effectData.spellID}\n" +
 							$"- damageBonus: {pack.effectData.damageBonus}\n" +
-							$"- attackerIsPlayer: {pack.effectData.attackerIsPlayer}\n" +
-							$"- attackerIsSim: {pack.effectData.attackerIsSim}\n" +
-							$"- attackerID: {pack.effectData.attackerID}\n" +
-							$"- duration: {pack.effectData.duration}"
+							$"- attackerIsPlayer: {pack.effectData.casterType}\n" +
+							$"- attackerID: {pack.effectData.casterID}\n" +
+							$"- duration: {pack.effectData.duration}\n"
 						);
 				}
 				else
 				{
-					(_, _, short casterID) = GetEntityIDByCharacter(_specificCaster);
-					if (casterID == ClientConnectionManager.Instance.LocalPlayerID)
+					//if we are the caster
+					if (caster == ClientConnectionManager.Instance.LocalPlayer)
 					{
-						(bool isPlayer, bool isSim, short entityID) = GetEntityByStats(__instance);
 						string spellID = spell.Id;
 						var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_ACTION);
 						pack.dataTypes.Add(ActionType.STATUS_EFFECT_APPLY);
@@ -1683,24 +1748,32 @@ namespace ErenshorCoop
 						{
 							spellID = spellID,
 							damageBonus = _dmgBonus,
-							attackerIsPlayer = isPlayer,
-							attackerIsSim = isSim,
-							attackerID = entityID,
+							casterType = EntityType.PLAYER,
+							casterID = caster.entityID,
 							duration = _duration,
-							playerIsCaster = true
+							targetID = target.entityID,
+							targetType = target.type,
 						};
-
-						if (spellID == "83280423440")
-							Logging.Log(
-								$"StatusEffectData 3 OwnTarget??:\n" +
-								$"- spellID: {pack.effectData.spellID}\n" +
-								$"- damageBonus: {pack.effectData.damageBonus}\n" +
-								$"- attackerIsPlayer: {pack.effectData.attackerIsPlayer}\n" +
-								$"- attackerIsSim: {pack.effectData.attackerIsSim}\n" +
-								$"- attackerID: {pack.effectData.attackerID}\n" +
-								$"- duration: {pack.effectData.duration}\n"+
-								$"- playerIsCaster: {pack.effectData.playerIsCaster}"
-							);
+					}
+					else //We're not the caster
+					{
+						if (ClientZoneOwnership.isZoneOwner)
+						{
+							string spellID = spell.Id;
+							var pack = PacketManager.GetOrCreatePacket<EntityActionPacket>(caster.entityID, PacketType.ENTITY_ACTION);
+							pack.dataTypes.Add(ActionType.STATUS_EFFECT_APPLY);
+							pack.effectData = new StatusEffectData()
+							{
+								spellID = spellID,
+								damageBonus = _dmgBonus,
+								casterType = caster.type,
+								casterID = caster.entityID,
+								duration = _duration,
+								targetID = target.entityID,
+								targetType = target.type,
+							};
+							pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
+						}
 					}
 				}
 			}
@@ -1716,6 +1789,18 @@ namespace ErenshorCoop
 					pack.dataTypes.Add(ActionType.STATUS_EFFECT_REMOVE);
 					pack.statusID = index;
 				}
+				else
+				{
+					if (ClientZoneOwnership.isZoneOwner)
+					{
+						Entity target = GetEntityByStats(__instance);
+						if (target == null) return;
+						var pack = PacketManager.GetOrCreatePacket<EntityActionPacket>(target.entityID, PacketType.ENTITY_ACTION);
+						pack.dataTypes.Add(ActionType.STATUS_EFFECT_REMOVE);
+						pack.statusID = index;
+						pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
+					}
+				}
 			}
 		}
 
@@ -1729,6 +1814,18 @@ namespace ErenshorCoop
 					pack.dataTypes.Add(ActionType.STATUS_EFFECT_REMOVE);
 					pack.RemoveAllStatus = true;
 				}
+				else
+				{
+					if (ClientZoneOwnership.isZoneOwner)
+					{
+						Entity target = GetEntityByStats(__instance);
+						if (target == null) return;
+						var pack = PacketManager.GetOrCreatePacket<EntityActionPacket>(target.entityID, PacketType.ENTITY_ACTION);
+						pack.dataTypes.Add(ActionType.STATUS_EFFECT_REMOVE);
+						pack.RemoveAllStatus = true;
+						pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
+					}
+				}
 			}
 		}
 
@@ -1741,6 +1838,18 @@ namespace ErenshorCoop
 					var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_ACTION);
 					pack.dataTypes.Add(ActionType.STATUS_EFFECT_REMOVE);
 					pack.RemoveBreakable = true;
+				}
+				else
+				{
+					if (ClientZoneOwnership.isZoneOwner)
+					{
+						Entity target = GetEntityByStats(__instance);
+						if (target == null) return;
+						var pack = PacketManager.GetOrCreatePacket<EntityActionPacket>(target.entityID, PacketType.ENTITY_ACTION);
+						pack.dataTypes.Add(ActionType.STATUS_EFFECT_REMOVE);
+						pack.RemoveBreakable = true;
+						pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
+					}
 				}
 			}
 		}

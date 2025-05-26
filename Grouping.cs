@@ -35,6 +35,7 @@ namespace ErenshorCoop
 		{
 			public short entityID;
 			public bool isSim;
+			public short simIndex;
 
 			public bool Equals(Member other)
 			{
@@ -107,6 +108,8 @@ namespace ErenshorCoop
 			return false;
 		}
 
+		public static bool HasGroup => currentGroup.groupList is {Count: > 0 };
+
 		public static bool IsLocalLeader()
 		{
 			return currentGroup.leaderID == ClientConnectionManager.Instance.LocalPlayerID;
@@ -162,6 +165,11 @@ namespace ErenshorCoop
 
 			var leaderPlayer = ClientConnectionManager.Instance.GetPlayerFromID(leaderID);
 
+			var s = GameData.SimMngr.Sims[simIndex];
+			if (s.MyAvatar.GetComponent<NPCSync>() == null) return;
+
+			short simEntId = s.MyAvatar.GetComponent<NPCSync>().entityID;
+
 			Group group;
 
 			if (groupID == -1)
@@ -173,7 +181,7 @@ namespace ErenshorCoop
 					groupList = new()
 					{
 						new Member(){entityID = leaderID,isSim = false},
-						new Member(){entityID = (short)simIndex,isSim = true}
+						new Member(){entityID = simEntId,isSim = true, simIndex = (short)simIndex}
 					},
 					internalList = new()
 					{
@@ -762,7 +770,7 @@ namespace ErenshorCoop
 						}
 						else
 						{
-							n = GameData.SimMngr.Sims[playerID];
+							n = GameData.SimMngr.Sims[currentGroup.groupList[i].simIndex];
 							n.Grouped = true;
 							if (n.MyAvatar == null)
 								n.SpawnMeInGame(ClientConnectionManager.Instance.LocalPlayer.transform.position);
@@ -960,7 +968,7 @@ namespace ErenshorCoop
 			{
 				foreach (var member in currentGroup.groupList)
 				{
-					if (member.isSim && member.entityID == simPlayer.simIndex)
+					if (member.isSim && member.simIndex == simPlayer.simIndex)
 						return;
 				}
 			}

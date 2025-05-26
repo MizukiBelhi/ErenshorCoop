@@ -42,6 +42,7 @@ namespace ErenshorCoop.Shared.Packets
 				{
 					writer.Put(member.entityID);
 					writer.Put(member.isSim);
+					writer.Put(member.simIndex);
 				}
 			}
 
@@ -73,7 +74,8 @@ namespace ErenshorCoop.Shared.Packets
 					var m = new Grouping.Member
 					{
 						entityID = reader.GetShort(),
-						isSim = reader.GetBool()
+						isSim = reader.GetBool(),
+						simIndex = reader.GetShort(),
 					};
 					groupList.Add(m);
 				}

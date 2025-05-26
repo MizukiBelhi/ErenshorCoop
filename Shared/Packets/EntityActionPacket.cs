@@ -21,6 +21,10 @@ namespace ErenshorCoop.Shared.Packets
 		public bool targetIsSim;
 		public List<short> targetPlayerIDs;
 		public List<HealingData> healingData;
+		public StatusEffectData effectData;
+		public bool RemoveAllStatus = false;
+		public bool RemoveBreakable = false;
+		public int statusID;
 
 		public EntityActionPacket() : base(DeliveryMethod.ReliableOrdered) { }
 
@@ -73,6 +77,22 @@ namespace ErenshorCoop.Shared.Packets
 					writer.Put(h.isCrit);
 					writer.Put(h.isMP);
 				}
+			}
+			if (dataTypes.Contains(ActionType.STATUS_EFFECT_APPLY))
+			{
+				writer.Put(effectData.spellID);
+				writer.Put(effectData.damageBonus);
+				writer.Put(effectData.casterID);
+				writer.Put((byte)effectData.casterType);
+				writer.Put(effectData.duration);
+				writer.Put(effectData.targetID);
+				writer.Put((byte)effectData.targetType);
+			}
+			if (dataTypes.Contains(ActionType.STATUS_EFFECT_REMOVE))
+			{
+				writer.Put(statusID);
+				writer.Put(RemoveAllStatus);
+				writer.Put(RemoveBreakable);
 			}
 
 		}
@@ -132,6 +152,25 @@ namespace ErenshorCoop.Shared.Packets
 					};
 					healingData.Add(h);
 				}
+			}
+			if (dataTypes.Contains(ActionType.STATUS_EFFECT_APPLY))
+			{
+				effectData = new()
+				{
+					spellID = reader.GetString(),
+					damageBonus = reader.GetInt(),
+					casterID = reader.GetShort(),
+					casterType = (EntityType)reader.GetByte(),
+					duration = reader.GetFloat(),
+					targetID = reader.GetShort(),
+					targetType = (EntityType)reader.GetByte()
+				};
+			}
+			if (dataTypes.Contains(ActionType.STATUS_EFFECT_REMOVE))
+			{
+				statusID = reader.GetInt();
+				RemoveAllStatus = reader.GetBool();
+				RemoveBreakable = reader.GetBool();
 			}
 
 		}

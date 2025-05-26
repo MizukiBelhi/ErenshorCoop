@@ -73,11 +73,11 @@ namespace ErenshorCoop.Shared.Packets
 			{
 				writer.Put(effectData.spellID);
 				writer.Put(effectData.damageBonus);
-				writer.Put(effectData.attackerID);
-				writer.Put(effectData.attackerIsPlayer);
-				writer.Put(effectData.attackerIsSim);
-				writer.Put(effectData.playerIsCaster);
+				writer.Put(effectData.casterID);
+				writer.Put((byte)effectData.casterType);
 				writer.Put(effectData.duration);
+				writer.Put(effectData.targetID);
+				writer.Put((byte)effectData.targetType);
 			}
 			if (dataTypes.Contains(ActionType.STATUS_EFFECT_REMOVE))
 			{
@@ -146,11 +146,11 @@ namespace ErenshorCoop.Shared.Packets
 				{
 					spellID = reader.GetString(),
 					damageBonus = reader.GetInt(),
-					attackerID = reader.GetShort(),
-					attackerIsPlayer = reader.GetBool(),
-					attackerIsSim = reader.GetBool(),
-					playerIsCaster = reader.GetBool(),
-					duration = reader.GetFloat()
+					casterID = reader.GetShort(),
+					casterType = (EntityType)reader.GetByte(),
+					duration = reader.GetFloat(),
+					targetID = reader.GetShort(),
+					targetType = (EntityType)reader.GetByte()
 				};
 			}
 			if (dataTypes.Contains(ActionType.STATUS_EFFECT_REMOVE))
@@ -204,11 +204,11 @@ namespace ErenshorCoop.Shared.Packets
 	{
 		public string spellID;
 		public int damageBonus;
-		public bool attackerIsPlayer;
-		public bool attackerIsSim;
-		public short attackerID;
+		public EntityType casterType;
+		public short casterID;
 		public float duration;
-		public bool playerIsCaster;
+		public short targetID;
+		public EntityType targetType;
 	}
 
 	public struct HealingData

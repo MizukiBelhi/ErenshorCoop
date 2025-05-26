@@ -14,7 +14,7 @@ namespace ErenshorCoop.Shared
 		public const byte MaxChannelCount = (RequiredEntityChannels * MaxEntityType)+2; //Two extra channel for messaging and grouping
 
 		public static List<Character> DontCalculateDamageMitigationCharacters = new();
-		public static List<Character> DontCheckEffectCharacters = new();
+		public static List<Entity> DontCheckEffectCharacters = new();
 
 		public static Dictionary<int, SpawnGroup> spawnData = new();
 		public static Dictionary<int, SpawnPoint> spawnPoints = new();

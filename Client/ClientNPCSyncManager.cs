@@ -579,6 +579,10 @@ namespace ErenshorCoop.Client
 						NetworkedMobs[entityAction.entityID].HandleEndSpell();
 					if (entityAction.dataTypes.Contains(ActionType.HEAL))
 						NetworkedMobs[entityAction.entityID].HandleHeal(entityAction.healingData);
+					if(entityAction.dataTypes.Contains(ActionType.STATUS_EFFECT_APPLY))
+						NetworkedMobs[entityAction.entityID].HandleStatusEffectApply(entityAction.effectData);
+					if(entityAction.dataTypes.Contains(ActionType.STATUS_EFFECT_REMOVE))
+						NetworkedMobs[entityAction.entityID].HandleStatusRemoval(entityAction.RemoveAllStatus, entityAction.RemoveBreakable, entityAction.statusID);
 				}
 				else if(NetworkedSims.ContainsKey(entityAction.entityID) && entityAction.entityType == EntityType.SIM)
 				{
@@ -592,11 +596,15 @@ namespace ErenshorCoop.Client
 						NetworkedSims[entityAction.entityID].HandleEndSpell();
 					if (entityAction.dataTypes.Contains(ActionType.HEAL))
 						NetworkedSims[entityAction.entityID].HandleHeal(entityAction.healingData);
+					if (entityAction.dataTypes.Contains(ActionType.STATUS_EFFECT_APPLY))
+						NetworkedSims[entityAction.entityID].HandleStatusEffectApply(entityAction.effectData);
+					if (entityAction.dataTypes.Contains(ActionType.STATUS_EFFECT_REMOVE))
+						NetworkedSims[entityAction.entityID].HandleStatusRemoval(entityAction.RemoveAllStatus, entityAction.RemoveBreakable, entityAction.statusID);
 				}
 			}
 		}
 
-		public NetworkedNPC GetEntityFromID(short entityID, bool isSim)
+		public Entity GetEntityFromID(short entityID, bool isSim)
 		{
 			if(isSim)
 				foreach (var p in NetworkedSims)

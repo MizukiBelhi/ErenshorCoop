@@ -410,7 +410,7 @@ namespace ErenshorCoop.Shared
 		}
 
 
-		public NPCSync GetEntityFromID(short entityID, bool isSim)
+		public Entity GetEntityFromID(short entityID, bool isSim)
 		{
 			if(isSim)
 				if (sims.TryGetValue(entityID, out var sim))

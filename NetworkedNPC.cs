@@ -249,5 +249,72 @@ namespace ErenshorCoop
 			}
 		}
 
+
+		public void HandleStatusEffectApply(StatusEffectData effectData)
+		{
+			Spell spell = GameData.SpellDatabase.GetSpellByID(effectData.spellID);
+			if (spell == null) return;
+
+			Entity target = null;
+			if (effectData.targetID < 0)
+				target = this;
+			else
+			{
+				Entity t = null;
+				if (ClientZoneOwnership.isZoneOwner)
+				{
+					t = SharedNPCSyncManager.Instance.GetEntityFromID(effectData.targetID, effectData.targetType == EntityType.SIM);
+				}
+				else
+				{
+					t = ClientNPCSyncManager.Instance.GetEntityFromID(effectData.targetID, effectData.targetType == EntityType.SIM);
+				}
+
+				if (t == null) return;
+				target = t;
+			}
+
+			if (target == null) return;
+
+			Variables.DontCheckEffectCharacters.Add(target);
+			var targetChar = target.character;
+
+			if (effectData.targetID >= 0)
+			{
+				//Check if we are in a group, and its a sim in our group
+				if (Grouping.HasGroup && Grouping.IsPlayerInGroup(entityID, type == EntityType.SIM))
+				{
+					if (target.type == EntityType.ENEMY) //If the target is an enemy
+					{
+						//We add ourselves to the aggro list, this way everyone in the group is automatically in the aggro list
+						targetChar.MyNPC.ManageAggro(1, ClientConnectionManager.Instance.LocalPlayer.character);
+					}
+				}
+
+				if (effectData.duration >= 0)
+					targetChar.MyStats.AddStatusEffect(spell, true, effectData.damageBonus, character, effectData.duration);
+				else if (effectData.duration <= 0)
+					targetChar.MyStats.AddStatusEffect(spell, true, effectData.damageBonus, character);
+			}
+
+			Variables.DontCheckEffectCharacters.Remove(target);
+		}
+
+		public void HandleStatusRemoval(bool RemoveAllStatus, bool RemoveBreak, int spellID)
+		{
+			if (RemoveAllStatus)
+			{
+				character.MyStats.RemoveAllStatusEffects();
+			}
+			if (RemoveBreak)
+			{
+				character.MyStats.RemoveBreakableEffects();
+			}
+			if (!RemoveAllStatus && !RemoveBreak)
+			{
+				character.MyStats.RemoveStatusEffect(spellID);
+			}
+		}
+
 	}
 }
