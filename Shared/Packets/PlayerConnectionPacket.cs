@@ -15,6 +15,7 @@ namespace ErenshorCoop.Shared.Packets
 		public Quaternion rotation;
 		public Class _class;
 		public int health;
+		public int mp;
 		public int level;
 		public string scene;
 		public string name;
@@ -30,6 +31,7 @@ namespace ErenshorCoop.Shared.Packets
 			writer.Put(position);
 			writer.Put(rotation);
 			writer.Put(health);
+			writer.Put(mp);
 			writer.Put(ErenshorCoopMod.Class2ClassID(_class));
 			writer.Put((byte)level);
 			writer.Put(name);
@@ -56,6 +58,7 @@ namespace ErenshorCoop.Shared.Packets
 			position = reader.GetVector3();
 			rotation = reader.GetRotation();
 			health = reader.GetInt();
+			mp = reader.GetInt();
 			_class = ErenshorCoopMod.ClassID2Class(reader.GetByte());
 			level = reader.GetByte();
 			name = reader.GetString();

@@ -17,6 +17,7 @@ namespace ErenshorCoop.Shared.Packets
 		public Quaternion rotation;
 		public Class _class;
 		public int health;
+		public int mp;
 		public int level;
 		public string scene;
 		public string name;
@@ -38,6 +39,8 @@ namespace ErenshorCoop.Shared.Packets
 				writer.Put(rotation);
 			if (dataTypes.Contains(PlayerDataType.HEALTH))
 				writer.Put(health);
+			if(dataTypes.Contains(PlayerDataType.MP))
+				writer.Put(mp);
 			if (dataTypes.Contains(PlayerDataType.CLASS))
 				writer.Put(ErenshorCoopMod.Class2ClassID(_class));
 			if (dataTypes.Contains(PlayerDataType.LEVEL))
@@ -84,6 +87,8 @@ namespace ErenshorCoop.Shared.Packets
 				rotation = reader.GetRotation();
 			if (dataTypes.Contains(PlayerDataType.HEALTH))
 				health = reader.GetInt();
+			if(dataTypes.Contains(PlayerDataType.MP))
+				mp = reader.GetInt();
 			if (dataTypes.Contains(PlayerDataType.CLASS))
 				_class = ErenshorCoopMod.ClassID2Class(reader.GetByte());
 			if(dataTypes.Contains(PlayerDataType.LEVEL))

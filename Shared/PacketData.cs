@@ -89,8 +89,7 @@ namespace ErenshorCoop.Shared
 		ANIM,
 		LEVEL,
 		CLASS,
-		PET_POSITION,
-		PET_ROTATION,
+		MP,
 	}
 
 	public enum EntityDataType : byte
@@ -100,7 +99,8 @@ namespace ErenshorCoop.Shared
 		ANIM,
 		HEALTH,
 		SIM_REMOVE,
-		ENTITY_REMOVE
+		ENTITY_REMOVE,
+		MP
 	}
 
 	public enum ActionType : byte

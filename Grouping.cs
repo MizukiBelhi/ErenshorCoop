@@ -39,7 +39,7 @@ namespace ErenshorCoop
 
 			public bool Equals(Member other)
 			{
-				return entityID == other.entityID && isSim == other.isSim;
+				return entityID == other.entityID && isSim == other.isSim && simIndex == other.simIndex;
 			}
 
 			public override bool Equals(object obj)
@@ -50,6 +50,11 @@ namespace ErenshorCoop
 			public override int GetHashCode()
 			{
 				unchecked { return ( entityID.GetHashCode() * 397 ) ^ isSim.GetHashCode(); }
+			}
+
+			public override string ToString()
+			{
+				return $"Member(entityID: {entityID}, isSim: {isSim}, simIndex: {simIndex})";
 			}
 		}
 
@@ -165,8 +170,13 @@ namespace ErenshorCoop
 
 			var leaderPlayer = ClientConnectionManager.Instance.GetPlayerFromID(leaderID);
 
+			//Logging.Log($"Adding sim with {simIndex}");
+
 			var s = GameData.SimMngr.Sims[simIndex];
-			if (s.MyAvatar.GetComponent<NPCSync>() == null) return;
+			if (s.MyAvatar.GetComponent<NPCSync>() == null)
+			{
+				SharedNPCSyncManager.Instance.ServerSpawnSim(s.MyAvatar.gameObject, simIndex);
+			}
 
 			short simEntId = s.MyAvatar.GetComponent<NPCSync>().entityID;
 
@@ -193,13 +203,11 @@ namespace ErenshorCoop
 			else
 			{
 				group = groups[groupID];
-				group.groupList.Add(new Member() { entityID = (short)simIndex, isSim = true });
+				group.groupList.Add(new Member() { entityID = simEntId, isSim = true, simIndex = (short)simIndex });
 			}
 
 			//actual group leader
 			var gLeader = ClientConnectionManager.Instance.GetPlayerFromID(group.leaderID);
-			//Sim
-			var simPlayer = GameData.SimMngr.Sims[simIndex];
 
 			foreach (var player in group.internalList)
 			{
@@ -208,9 +216,10 @@ namespace ErenshorCoop
 					.AddPacketData(GroupDataType.MEMBER_LIST, "groupList", group.groupList)
 					.SetData("leaderID", group.leaderID);
 
-				PacketManager.GetOrCreatePacket<PlayerMessagePacket>(player.entityID, PacketType.PLAYER_MESSAGE)
+				if(gLeader.entityID != player.entityID)
+					PacketManager.GetOrCreatePacket<PlayerMessagePacket>(player.entityID, PacketType.PLAYER_MESSAGE)
 					.SetTarget(player.peer)
-					.SetData("message",     $"Sim {simPlayer.SimName} has joined your group.")
+					.SetData("message",     $"Sim {s.SimName} has joined your group.")
 					.SetData("messageType", MessageType.INFO);
 			}
 
@@ -569,17 +578,21 @@ namespace ErenshorCoop
 
 				var playerSc = ClientConnectionManager.Instance.GetPlayerFromID(playerID);
 
-				PacketManager.GetOrCreatePacket<PlayerMessagePacket>(playerSc.entityID, PacketType.PLAYER_MESSAGE)
-					.SetTarget(playerSc.peer)
-					.SetData("message",     reason == GroupLeaveReason.LEFT ? $"You've left the group.": $"You've been removed from the group.")
-					.SetData("messageType", MessageType.INFO);
+				if (playerSc != null && playerSc.peer != null) //Happens when they disconnect
+				{
+					PacketManager.GetOrCreatePacket<PlayerMessagePacket>(playerSc.entityID, PacketType.PLAYER_MESSAGE)
+						.SetTarget(playerSc.peer)
+						.SetData("message",     reason == GroupLeaveReason.LEFT ? $"You've left the group." : $"You've been removed from the group.")
+						.SetData("messageType", MessageType.INFO);
+				
 
-				var l = new List<Member>();
+					var l = new List<Member>();
 
-				PacketManager.GetOrCreatePacket<ServerGroupPacket>(playerSc.entityID, PacketType.SERVER_GROUP)
-					.SetTarget(playerSc.peer)
-					.AddPacketData(GroupDataType.MEMBER_LIST, "groupList", l)
-					.SetData("leaderID", (short)-1);
+					PacketManager.GetOrCreatePacket<ServerGroupPacket>(playerSc.entityID, PacketType.SERVER_GROUP)
+						.SetTarget(playerSc.peer)
+						.AddPacketData(GroupDataType.MEMBER_LIST, "groupList", l)
+						.SetData("leaderID", (short)-1);
+				}
 
 				if (groupID != -1)
 				{
@@ -588,6 +601,13 @@ namespace ErenshorCoop
 					group.groupList.Remove(GetMemberFromPlayer(playerID).Value);
 					group.internalList.Remove(playerSc);
 					bool isHostInGroup = false;
+
+					var mes = "";
+					if (playerSc != null && playerSc.peer != null)
+						mes = reason == GroupLeaveReason.LEFT ? $"Player {playerSc.entityName} has left your group." : $"Player {playerSc.entityName} removed from group.";
+					else
+						mes = "A Player has left your group.";
+
 					foreach (var nPlayer in group.internalList)
 					{
 						if (nPlayer.entityID == ClientConnectionManager.Instance.LocalPlayerID)
@@ -597,10 +617,10 @@ namespace ErenshorCoop
 						.AddPacketData(GroupDataType.MEMBER_LIST, "groupList", group.groupList)
 						.SetData("leaderID", group.leaderID);
 
-					
+						
 						PacketManager.GetOrCreatePacket<PlayerMessagePacket>(nPlayer.entityID, PacketType.PLAYER_MESSAGE)
 							.SetTarget(nPlayer.peer)
-							.SetData("message",     reason == GroupLeaveReason.LEFT ? $"Player {playerSc.entityName} has left your group." : $"Player {playerSc.entityName} removed from group.")
+							.SetData("message",     mes)
 							.SetData("messageType", MessageType.INFO);
 
 					}
@@ -770,7 +790,7 @@ namespace ErenshorCoop
 						}
 						else
 						{
-							n = GameData.SimMngr.Sims[currentGroup.groupList[i].simIndex];
+							n = GameData.SimMngr.Sims[(int)currentGroup.groupList[i].simIndex];
 							n.Grouped = true;
 							if (n.MyAvatar == null)
 								n.SpawnMeInGame(ClientConnectionManager.Instance.LocalPlayer.transform.position);
@@ -858,6 +878,18 @@ namespace ErenshorCoop
 			//currentGroup = new();
 		}
 
+
+		public static void ForceRemoveFromGroup(short playerID)
+		{
+			if (ServerConnectionManager.Instance.IsRunning)
+			{
+				var packet = new GroupPacket();
+				packet.dataTypes.Add(GroupDataType.REMOVE);
+				packet.playerID = playerID;
+				packet.reason = GroupLeaveReason.KICKED;
+				HandleClientPacket(packet);
+			}
+		}
 		public static void RemoveFromGroup(short playerID)
 		{
 			if (currentGroup.leaderID != -1 && currentGroup.leaderID != ClientConnectionManager.Instance.LocalPlayerID)

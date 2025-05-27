@@ -17,6 +17,7 @@ namespace ErenshorCoop
 		public Quaternion previousRotation = Quaternion.identity;
 		public int previousHealth = 0;
 		public int previousLevel = 0;
+		public int previousMP = 0;
 		public short playerID = -1;
 
 		public Animator animator;
@@ -92,7 +93,8 @@ namespace ErenshorCoop
 					.SetData("lookData", l)
 					.SetData("gearData", gear)
 					.SetData("level",    GameData.PlayerStats.Level)
-					.SetData("health",   stats.CurrentHP);
+					.SetData("health",   stats.CurrentHP)
+					.SetData("mp", stats.CurrentMana);
 
 				packet.CanSend();
 
@@ -171,7 +173,8 @@ namespace ErenshorCoop
 				.SetData("lookData", l)
 				.SetData("gearData", gear)
 				.SetData("level",    GameData.PlayerStats.Level)
-				.SetData("health",   stats.CurrentHP);
+				.SetData("health",   stats.CurrentHP)
+				.SetData("mp",   stats.CurrentMana);
 
 			packet.CanSend();
 			hasSentConnect = true;
@@ -226,6 +229,12 @@ namespace ErenshorCoop
 			{
 				SendLevelUpdate();
 				previousLevel = GameData.PlayerStats.Level;
+			}
+
+			if (previousMP != stats.CurrentMana)
+			{
+				PacketManager.GetOrCreatePacket<PlayerDataPacket>(playerID, PacketType.PLAYER_DATA).AddPacketData(PlayerDataType.MP, "mp", stats.CurrentMana);
+				previousMP = stats.CurrentMana;
 			}
 
 

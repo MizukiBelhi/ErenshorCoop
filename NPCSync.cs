@@ -24,6 +24,7 @@ namespace ErenshorCoop
 		public Quaternion previousRotation = Quaternion.identity;
 
 		private int previousHealth = 0;
+		private int previousMP = 0;
 
 		
 
@@ -77,6 +78,17 @@ namespace ErenshorCoop
 				p.zone = SceneManager.GetActiveScene().name;
 
 				previousHealth = character.MyStats.CurrentHP;
+			}
+
+			if (previousMP != character.MyStats.CurrentMana)
+			{
+				var p = PacketManager.GetOrCreatePacket<EntityDataPacket>(entityID, PacketType.ENTITY_DATA);
+				p.AddPacketData(EntityDataType.MP, "mp", character.MyStats.CurrentMana);
+				p.SetData("targetPlayerIDs", SharedNPCSyncManager.Instance.GetPlayerSendList());
+				p.entityType = type;
+				p.zone = SceneManager.GetActiveScene().name;
+
+				previousMP = character.MyStats.CurrentMana;
 			}
 
 			if (Vector3.Distance(transform.position, previousPosition) > 0.1f)

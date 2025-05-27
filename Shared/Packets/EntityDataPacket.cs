@@ -15,6 +15,7 @@ namespace ErenshorCoop.Shared.Packets
 
 		public List<AnimationData> animData = new();
 		public int health;
+		public int mp;
 		public List<short> targetPlayerIDs;
 
 		public EntityDataPacket() : base(DeliveryMethod.ReliableOrdered) { }
@@ -35,6 +36,8 @@ namespace ErenshorCoop.Shared.Packets
 
 			if(dataTypes.Contains(EntityDataType.HEALTH))
 				writer.Put(health);
+			if(dataTypes.Contains(EntityDataType.MP))
+				writer.Put(mp);
 			if (dataTypes.Contains(EntityDataType.ANIM))
 			{
 				writer.Put(animData.Count);
@@ -65,6 +68,8 @@ namespace ErenshorCoop.Shared.Packets
 
 			if (dataTypes.Contains(EntityDataType.HEALTH))
 				health = reader.GetInt();
+			if(dataTypes.Contains(EntityDataType.MP))
+				mp = reader.GetInt();
 			if (dataTypes.Contains(EntityDataType.ANIM))
 			{
 				int animCount = reader.GetInt();

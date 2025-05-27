@@ -77,11 +77,19 @@ namespace ErenshorCoop
 			ErenshorCoopMod.CreatePostHook(typeof(Chessboard),        "SpawnPiece",       typeof(GameHooks), "CSpawnPiece_Postfix");
 			ErenshorCoopMod.CreatePostHook(typeof(SiraetheEvent),     "Update",           typeof(GameHooks), "SUpdate_Postfix");
 
-
-			ErenshorCoopMod.UnPatchTranspiler(typeof(SpellVessel), "ResolveSpell", typeof(GameHooks), "ResolveSpellTranspiler");
+			try
+			{
+				ErenshorCoopMod.UnPatchTranspiler(typeof(SpellVessel), "ResolveSpell", typeof(GameHooks), "ResolveSpellTranspiler");
+			}catch{}
 			ErenshorCoopMod.CreateTranspilerHook(typeof(SpellVessel), "ResolveSpell", typeof(GameHooks), "ResolveSpellTranspiler");
 
-
+			if (insertions < 10)
+			{
+				Logging.LogError($"There was an issue resolving healing" +
+								$"\nPlease Update to the newest mod version or wait" +
+								$"\nuntil a new version has been released." +
+								$"\nHealing might not work, continue at your own risk.");
+			}
 
 			//ErenshorCoopMod.CreatePrefixHook(typeof(Misc), "GenPopup", typeof(GameHooks), "MiscGenPopup_Prefix");
 
@@ -120,6 +128,7 @@ namespace ErenshorCoop
 
 			type = typeof(NPCFightEvent);
 			_actualSpawn = type.GetField("actualSpawn", BindingFlags.NonPublic | BindingFlags.Instance);
+
 
 		}
 
@@ -254,8 +263,6 @@ namespace ErenshorCoop
 						//__instance.actualSpawn = __instance.SpawnAddsEveryXSeconds * 60f;
 						runSpawn = true;
 					}
-
-					
 				}
 			}
 
@@ -420,6 +427,7 @@ namespace ErenshorCoop
 
 #region TRANSPILERS
 
+		private static int insertions = 0;
 
 		public static IEnumerable<CodeInstruction> ResolveSpellTranspiler(IEnumerable<CodeInstruction> instructions)
 		{
@@ -431,7 +439,7 @@ namespace ErenshorCoop
 				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldsfld,   AccessTools.Field(typeof(GameData),          groupMemberName)));
 				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldfld,    AccessTools.Field(typeof(SimPlayerTracking), "MyStats")));
 				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldc_I4_0)); //0
-				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldloc_S,  14)); // text
+				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldloc_S,  17)); // text
 				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldarg_0)); // this
 				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(SpellVessel), "SpellSource")));
 				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldc_I4_1)); //true
@@ -440,11 +448,13 @@ namespace ErenshorCoop
 				var syncMethod = AccessTools.Method(typeof(GameHooks), nameof(SyncHealing));
 				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Call, syncMethod));
 				i = insertAt - 1;
+				insertions++;
 			}
 
 			var codes = new List<CodeInstruction>(instructions);
 			Label healCase = new();
 			Label lastCase = new();
+
 
 			for (int i = 0; i < codes.Count; i++)
 			{
@@ -468,18 +478,17 @@ namespace ErenshorCoop
 				var IsField = codes[i].operand is FieldInfo;
 				var field = codes[i].operand as FieldInfo;
 
-				if (codes.Count >= i+7 &&
-					codes[i].opcode == OpCodes.Stfld && IsField &&
-					field.Name == "CurrentHP" && field.DeclaringType == typeof(Stats) && codes[i + 7].opcode == OpCodes.Ble_S)
+				if (i-7 >= 0 && codes[i].opcode == OpCodes.Stfld && IsField &&
+					field.Name == "CurrentHP" && field.DeclaringType == typeof(Stats) && codes[i - 7].opcode == OpCodes.Stloc_S && ((LocalBuilder)codes[i - 7].operand).LocalIndex == 18)
 				{
 					var insertIndex = i + 1;
 
 					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldarg_0)); //this.
 					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(SpellVessel), "spell"))); //spell
 					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldarg_0)); //this.
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld,   AccessTools.Field(typeof(SpellVessel), "targ"))); //SpellVessel.targ
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldloc_S, 13)); //num6
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldloc_S, 14)); //text
+					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld,   AccessTools.Field(typeof(SpellVessel), "targ"))); //targ
+					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldloc_S, 16)); //num6
+					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldloc_S, 17)); //text
 					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldarg_0)); //this.
 					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(SpellVessel), "SpellSource"))); //SpellSource
 					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldc_I4_0)); //false
@@ -488,7 +497,10 @@ namespace ErenshorCoop
 					var syncMethod = AccessTools.Method(typeof(GameHooks), nameof(SyncHealing));
 					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Call, syncMethod));
 
+					//Logging.Log($"inserted caster");
+					insertions++;
 					i = insertIndex - 1;
+
 				}
 
 				if (codes.Count >= i + 1 &&
@@ -502,6 +514,7 @@ namespace ErenshorCoop
 						nextField.DeclaringType == typeof(GameData))
 					{
 						InsertSyncHealingCalls(codes, ref i, i + 1, nextField.Name);
+						//Logging.Log($"inserted mem1");
 					}
 
 					if (nextField != null &&
@@ -509,6 +522,7 @@ namespace ErenshorCoop
 						nextField.DeclaringType == typeof(GameData))
 					{
 						InsertSyncHealingCalls(codes, ref i, i + 1, nextField.Name);
+						//Logging.Log($"inserted mem2");
 					}
 
 					if (nextField != null &&
@@ -516,6 +530,7 @@ namespace ErenshorCoop
 						nextField.DeclaringType == typeof(GameData))
 					{
 						InsertSyncHealingCalls(codes, ref i, i + 1, nextField.Name);
+						//Logging.Log($"inserted mem3");
 					}
 				}
 				if (codes.Count >= i + 4 &&
@@ -561,10 +576,10 @@ namespace ErenshorCoop
 
 					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldarg_0)); //this.
 					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld,    AccessTools.Field(typeof(SpellVessel), "spell"))); //spell
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldloc_S,  17)); //character4.
+					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldloc_S,  22)); //character4.
 					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld,    AccessTools.Field(typeof(Character), "MyStats"))); //MyStats
 					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldc_I4_0)); //num6
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldloc_S,  14)); //text
+					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldloc_S,  17)); //text
 					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldarg_0)); //this.
 					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(SpellVessel), "SpellSource"))); //SpellSource
 					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldc_I4_1)); //true
@@ -573,6 +588,8 @@ namespace ErenshorCoop
 					var syncMethod = AccessTools.Method(typeof(GameHooks), nameof(SyncHealing));
 					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Call, syncMethod));
 
+					insertions++;
+					//Logging.Log($"inserted char4");
 					i = insertIndex - 1;
 				}
 
@@ -604,6 +621,7 @@ namespace ErenshorCoop
 				var syncMethod = AccessTools.Method(typeof(GameHooks), nameof(SyncHealing));
 				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Call, syncMethod));
 				i = insertAt - 1;
+				insertions++;
 			}
 
 			var IsField = codes[i].operand is FieldInfo;
@@ -636,6 +654,8 @@ namespace ErenshorCoop
 					var syncMethod = AccessTools.Method(typeof(GameHooks), nameof(SyncHealing));
 					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Call, syncMethod));
 
+					//Logging.Log($"inserted caster mp");
+					insertions++;
 					i = insertIndex - 1;
 				}
 			}
@@ -651,6 +671,7 @@ namespace ErenshorCoop
 					nextField.DeclaringType == typeof(GameData))
 				{
 					InsertSyncHealingCalls(codes, ref i, i + 1, nextField.Name);
+					//Logging.Log($"inserted mp mem1");
 				}
 
 				if (nextField != null &&
@@ -658,6 +679,7 @@ namespace ErenshorCoop
 					nextField.DeclaringType == typeof(GameData))
 				{
 					InsertSyncHealingCalls(codes, ref i, i + 1, nextField.Name);
+					//Logging.Log($"inserted mp mem2");
 				}
 
 				if (nextField != null &&
@@ -665,6 +687,7 @@ namespace ErenshorCoop
 					nextField.DeclaringType == typeof(GameData))
 				{
 					InsertSyncHealingCalls(codes, ref i, i + 1, nextField.Name);
+					//Logging.Log($"inserted mp mem3");
 				}
 			}
 			if (codes.Count >= i + 4 &&
@@ -711,7 +734,7 @@ namespace ErenshorCoop
 
 				codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldarg_0)); //this.
 				codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld,   AccessTools.Field(typeof(SpellVessel), "spell"))); //spell
-				codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldloc_S, 18)); //character5.
+				codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldloc_S, 23)); //character5.
 				codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld,   AccessTools.Field(typeof(Character),   "MyStats"))); //MyStats
 				codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldarg_0)); //this.
 				codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(SpellVessel), "spell"))); //spell.
@@ -725,6 +748,8 @@ namespace ErenshorCoop
 				var syncMethod = AccessTools.Method(typeof(GameHooks), nameof(SyncHealing));
 				codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Call, syncMethod));
 
+				//Logging.Log($"inserted mp char5");
+				insertions++;
 				i = insertIndex - 1;
 			}
 		}
@@ -803,7 +828,7 @@ namespace ErenshorCoop
 			UI.Main.isGameMenuOpen = true;
 			if (UI.Main.connectUI != null)
 				UI.Main.connectUI.SetActive(true);
-			Logging.Log("open esc");
+			//Logging.Log("open esc");
 		}
 
 		public static void CloseEscMenu_Postfix()
@@ -811,7 +836,7 @@ namespace ErenshorCoop
 			UI.Main.isGameMenuOpen = false;
 			if(UI.Main.connectUI != null)
 				UI.Main.connectUI.SetActive(false);
-			Logging.Log("close esc");
+			//Logging.Log("close esc");
 		}
 
 		public static void ToggleEscMenu_Postfix(GameManager __instance)
@@ -819,7 +844,7 @@ namespace ErenshorCoop
 			UI.Main.isGameMenuOpen = __instance.EscapeMenu.activeSelf;
 			if (UI.Main.connectUI != null)
 				UI.Main.connectUI.SetActive(UI.Main.isGameMenuOpen);
-			Logging.Log("toggle esc");
+			//Logging.Log("toggle esc");
 		}
 
 

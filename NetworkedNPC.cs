@@ -9,6 +9,7 @@ using ErenshorCoop.Shared.Packets;
 using UnityEngine.AI;
 using UnityEngine.SceneManagement;
 using System;
+using TMPro;
 
 namespace ErenshorCoop
 {
@@ -106,6 +107,8 @@ namespace ErenshorCoop
 					break;
 				case AnimatorSyncType.TRIG:
 					MyAnim.SetTrigger(param);
+					if(type == EntityType.SIM && param == "Revive")
+						HandleRespawn();
 					break;
 				case AnimatorSyncType.RSTTRIG:
 					MyAnim.ResetTrigger(param);
@@ -231,6 +234,8 @@ namespace ErenshorCoop
 			{
 
 				(bool isPlayer, var target) = Extensions.GetCharacterFromID(healingData.targetIsNPC, healingData.targetID, healingData.targetIsSim);
+				if (target == null) continue;
+
 				if (!healingData.isMP)
 				{
 					//Note: even if each player sends their updated health, this might actually be faster
@@ -314,6 +319,27 @@ namespace ErenshorCoop
 			{
 				character.MyStats.RemoveStatusEffect(spellID);
 			}
+		}
+
+		private void HandleRespawn()
+		{
+			for (int i = 0; i <= 9; i++)
+			{
+				if (character.MyStats.StatusEffects[i].Effect != null)
+				{
+					character.MyStats.RemoveStatusEffect(i);
+				}
+			}
+
+			character.MyStats.CurrentHP = 10;
+			character.Alive = true;
+
+			MyAnim.SetBool("Dead", false);
+			MyAnim.SetTrigger("Revive");
+
+
+			TextMeshPro component = npc.NamePlate.GetComponent<TextMeshPro>();
+			component.text = component.text.Replace("'s corpse", "");
 		}
 
 	}

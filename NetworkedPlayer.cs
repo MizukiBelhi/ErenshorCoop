@@ -188,6 +188,11 @@ namespace ErenshorCoop
 			GameHooks.leashing.SetValue(npc, 0f);
 			Logging.LogError($"{name} Destroyed.");
 			Logging.LogGameMessage($"{name} Disconnected.");
+
+			if (ServerConnectionManager.Instance.IsRunning)
+			{
+				Grouping.ForceRemoveFromGroup(entityID);
+			}
 		}
 
 		private IEnumerator InterpPos(Vector3 targ, float dur)
@@ -335,12 +340,14 @@ namespace ErenshorCoop
 
 		public void HandleConnectPacket(PlayerConnectionPacket packet)
 		{
-			sim.MyStats.CurrentHP = packet.health;
 			sim.MyStats.Level = packet.level;
 			sim.MyStats.CharacterClass = packet._class;
 			zone = packet.scene;
 			currentScene = packet.scene;
 			UpdateLooks(packet.lookData, packet.gearData);
+
+			sim.MyStats.CurrentHP = packet.health;
+			sim.MyStats.CurrentMana = packet.mp;
 
 			if (ServerConnectionManager.Instance.IsRunning)
 				ServerConnectionManager.Instance.OnClientConnect?.Invoke(playerID, peer);
@@ -363,6 +370,8 @@ namespace ErenshorCoop
 					SetRotation(playerDataPacket.rotation);
 				if (playerDataPacket.dataTypes.Contains(PlayerDataType.HEALTH))
 					sim.MyStats.CurrentHP = playerDataPacket.health;
+				if (playerDataPacket.dataTypes.Contains(PlayerDataType.MP))
+					sim.MyStats.CurrentMana = playerDataPacket.mp;
 				if (playerDataPacket.dataTypes.Contains(PlayerDataType.CLASS))
 					sim.MyStats.CharacterClass = playerDataPacket._class;
 				if (playerDataPacket.dataTypes.Contains(PlayerDataType.LEVEL))
@@ -603,6 +612,8 @@ namespace ErenshorCoop
 					break;
 				case AnimatorSyncType.TRIG:
 					MyAnim.SetTrigger(param);
+					if (param == "Revive")
+						HandleRespawn();
 					break;
 				case AnimatorSyncType.RSTTRIG:
 					MyAnim.ResetTrigger(param);
@@ -710,7 +721,7 @@ namespace ErenshorCoop
 
 			var ChargeFX = Instantiate(GameData.EffectDB.SpellEffects[SpellChargeFXIndex], spellEffect.transform.position, spellEffect.transform.rotation);
 			ChargeFX.transform.SetParent(spellEffect.transform);
-			spellEffect.AddComponent<DestroyObjectTimer>().TimeToDestroy = 600f;
+			//spellEffect.AddComponent<DestroyObjectTimer>().TimeToDestroy = 600f;
 		}
 
 		public void HandleSpellEffect(string spellID, short targetID, bool targetIsNPC, bool isSim)
@@ -746,12 +757,12 @@ namespace ErenshorCoop
 				case Spell.SpellType.Beneficial:
 				case Spell.SpellType.PBAE:
 				case Spell.SpellType.Heal:
-					Instantiate(GameData.EffectDB.SpellEffects[spell.SpellResolveFXIndex], targ.transform.position, Quaternion.identity)
-						.AddComponent<DestroyObjectTimer>().TimeToDestroy = 600f;
+					Instantiate(GameData.EffectDB.SpellEffects[spell.SpellResolveFXIndex], targ.transform.position, Quaternion.identity);
+						//.AddComponent<DestroyObjectTimer>().TimeToDestroy = 600f;
 					break;
 				case Spell.SpellType.Pet:
-					Instantiate(GameData.EffectDB.SpellEffects[spell.SpellResolveFXIndex], targ.transform.position, Quaternion.identity)
-						.AddComponent<DestroyObjectTimer>().TimeToDestroy = 600f;
+					Instantiate(GameData.EffectDB.SpellEffects[spell.SpellResolveFXIndex], targ.transform.position, Quaternion.identity);
+						//.AddComponent<DestroyObjectTimer>().TimeToDestroy = 600f;
 					UpdateSocialLog.LogAdd($"{playerName} summoned a companion!", "lightblue");
 
 				break;
@@ -774,6 +785,8 @@ namespace ErenshorCoop
 			{
 	
 				( bool isPlayer, var target ) = Extensions.GetCharacterFromID(healingData.targetIsNPC, healingData.targetID, healingData.targetIsSim);
+				if (target == null) continue;
+
 				if (!healingData.isMP)
 				{
 					//Note: even if each player sends their updated health, this might actually be faster

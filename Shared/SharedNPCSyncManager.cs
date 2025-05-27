@@ -73,6 +73,8 @@ namespace ErenshorCoop.Shared
 			{
 				Cleanup();
 				CollectSpawnData();
+				if (ServerConnectionManager.Instance.IsRunning)
+					ServerRemoveSims();
 			}
 			curZone = scene.name;
 
