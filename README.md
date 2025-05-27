@@ -1,5 +1,7 @@
 # Erenshor Co-Op
-Brings Co-Op to Erenshor.<br><br><br>
+Brings Co-Op to Erenshor.
+
+Please see the changelog for updates.<br><br><br>
 
 ## Current Features
 - Player sync
@@ -23,13 +25,14 @@ Brings Co-Op to Erenshor.<br><br><br>
   - When connecting or hosting you are required to re-summon for other players to see it.
 
 ## Known Bugs
-- There's an issue with xp gain when in group, we're still working on figuring out what's causing this. In the meantime, make sure the party leader actually does enough damage.
+- Other players have sim chat behaviour
+- There is a small game bug where sometimes when a player attacks an enemy with a spell, they will not get aggroed.
 
 ## Mention Worthy
 - Skin Colors are not correctly applied (game bug).
 - Interpolation is currently turned off. Expect some lagginess if you're connecting over long distances.
-- Each player requires around ~10kb/s upload.
-- The host will need around ~40kb/s upload per player.
+- Each player requires around ~20kb/s upload.
+- The host will need around ~60kb/s upload per player.
 
 ## Usage
 When in-game, use the UI that opens when pressing escape or alternatively:
@@ -42,10 +45,10 @@ When in-game, use the UI that opens when pressing escape or alternatively:
 ## FAQ
 
     Q: How much bandwidth do I require to host?
-    A: You will need around ~40kb/s upload for each player connected to you.
+    A: You will need around ~60kb/s upload for each player connected to you.
 
     Q: Can there be a standalone server?
-    A: No, due to legal issues this won't be possible.
+    A: No, due to legal reasons this won't be possible.
 
     Q: How can I report issues, bugs or make a suggestion?
     A: Please either join the Erenshor discord and post your issues in the appropriate mod channel, or create an issue on Github.
