@@ -7,6 +7,7 @@ using ErenshorCoop.Shared.Packets;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using System;
+using System.Runtime.CompilerServices;
 using System.Runtime.Remoting.Messaging;
 
 namespace ErenshorCoop.Client
@@ -92,6 +93,7 @@ namespace ErenshorCoop.Client
 			//Cleanup here, because we're setting networkedNPC to not destroy, in case we're respawning
 			//Cleanup();
 
+
 			var spawns = FindObjectsOfType<SpawnPoint>(true);
 			foreach (var spawn in spawns)
 			{
@@ -116,6 +118,7 @@ namespace ErenshorCoop.Client
 
 			//Cleanup here, because we're setting networkedNPC to not destroy, in case we're respawning
 			//Cleanup();
+
 
 			var spawns = FindObjectsOfType<SpawnPoint>(true);
 			foreach (var spawn in spawns)

@@ -63,6 +63,7 @@ namespace ErenshorCoop
 			ErenshorCoopMod.CreatePrefixHook(typeof(NPCFightEvent),              "FixedUpdate",             typeof(GameHooks), "FightFixedUpdate_Prefix");
 			ErenshorCoopMod.CreatePrefixHook(typeof(CharmedNPC),                 "GoAway",                  typeof(GameHooks), "CharmedGoAway_Prefix");
 			ErenshorCoopMod.CreatePrefixHook(typeof(SimPlayerMngr),              "CollectActiveSimData",    typeof(GameHooks), "CollectActiveSimData_Prefix");
+			ErenshorCoopMod.CreatePrefixHook(typeof(SceneChange),                "ChangeScene",             typeof(GameHooks), "ChangeScene_Prefix");
 
 
 			ErenshorCoopMod.CreatePostHook(typeof(SpawnPoint),        "SpawnNPC",         typeof(GameHooks), "SpawnPointSpawnNPC_Post");
@@ -145,6 +146,38 @@ namespace ErenshorCoop
 			}
 
 			return false;
+		}
+
+		public static bool ChangeScene_Prefix(SceneChange __instance, string _dest, Vector3 _landing, bool _useSun, float yRot)
+		{
+			if (!ClientConnectionManager.Instance.IsRunning) return true;
+
+			if (ClientConnectionManager.Instance.LocalPlayer.currentScene == _dest)
+			{
+				GameData.SimPlayerGrouping.GroupTargets.Clear();
+				GameData.SimPlayerGrouping.isPulling = false;
+				GameData.AttackingPlayer.Clear();
+				GameData.InCombat = false;
+				GameData.GroupMatesInCombat.Clear();
+				GameData.PlayerControl.GetComponent<Fishing>().resetFishing();
+				GameData.PlayerControl.HuntingMe.Clear();
+
+				__instance.Player.GetComponent<CharacterController>().enabled = false;
+
+				GameData.CharmedNPC = null;
+				__instance.SetLandingPos(_landing);
+				__instance.Player.transform.position = _landing;
+				__instance.Player.GetComponent<CharacterController>().enabled = true;
+				__instance.Player.GetComponent<PlayerControl>().enabled = true;
+				GameData.usingSun = _useSun;
+				__instance.Player.transform.eulerAngles = new Vector3(0f, yRot, 0f);
+
+				InZoneEvents.ClearNodes();
+				GameData.Zoning = false;
+				return false;
+			}
+
+			return true;
 		}
 
 

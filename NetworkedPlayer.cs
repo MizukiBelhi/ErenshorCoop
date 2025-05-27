@@ -77,6 +77,11 @@ namespace ErenshorCoop
 			AnimOverride = new AnimatorOverrideController(MyAnim.runtimeAnimatorController);
 			MyAnim.runtimeAnimatorController = AnimOverride;
 
+			character.ShoutOnDeath.Clear(); //Clear the on-death messages
+			character.DestroyOnDeath = false; //we don't want this
+			character.ShrinkColliderOnDeath = false;
+
+
 			Extensions.BuildClipLookup(npc);
 
 			sim.AllHeldItems.Clear();
@@ -245,13 +250,7 @@ namespace ErenshorCoop
 
 		private void HandleRespawn()
 		{
-			for (int i = 0; i <= 9; i++)
-			{
-				if (character.MyStats.StatusEffects[i].Effect != null)
-				{
-					character.MyStats.RemoveStatusEffect(i);
-				}
-			}
+			HandleStatusRemoval(true,false,-1);
 
 			character.MyStats.CurrentHP = character.MyStats.CurrentMaxHP;
 			character.Alive = true;
@@ -263,8 +262,10 @@ namespace ErenshorCoop
 			npc.NPCName = playerName;
 			npc.GuildName = "";
 			name = playerName;
+			//Here go 2 hours
+			gameObject.layer = 9;
 
-			TextMeshPro component = base.GetComponent<NPC>().NamePlate.GetComponent<TextMeshPro>();
+			var component = npc.NamePlate.GetComponent<TextMeshPro>();
 			component.text = component.text.Replace("'s corpse", "");
 		}
 

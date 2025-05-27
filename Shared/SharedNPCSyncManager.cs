@@ -5,6 +5,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 using ErenshorCoop.Client;
@@ -62,15 +63,17 @@ namespace ErenshorCoop.Shared
 			mobs.Clear();
 			animatorToMobID.Clear();
 
+			curZone = SceneManager.GetActiveScene().name;
+
 
 			Logging.Log($"SharedNPCSyncManager Created.");
 		}
 
 		private void OnZoneChange(Scene scene)
 		{
-
 			if (scene.name != curZone)
 			{
+				Logging.Log($"{curZone} != {scene.name}");
 				Cleanup();
 				CollectSpawnData();
 				if (ServerConnectionManager.Instance.IsRunning)
