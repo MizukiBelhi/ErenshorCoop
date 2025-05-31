@@ -119,6 +119,16 @@ namespace ErenshorCoop
 			MySummon.ReceiveRequestID(MySummon.entityID);
 		}
 
+		public void StartZoneTransfer(Zoneline zoneline)
+		{
+			StartCoroutine(DelayedZoneTransfer(zoneline));
+		}
+		public IEnumerator DelayedZoneTransfer(Zoneline zoneline)
+		{
+			yield return new WaitForSeconds(2f);
+			zoneline.CallZoning();
+		}
+
 		private void OnGameMapLoad(Scene scene)
 		{
 			currentScene = scene.name;

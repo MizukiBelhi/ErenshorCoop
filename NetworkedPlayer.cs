@@ -2,14 +2,12 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Runtime.Remoting.Messaging;
 using ErenshorCoop.Client;
 using ErenshorCoop.Server;
 using UnityEngine;
 using ErenshorCoop.Shared;
 using ErenshorCoop.Shared.Packets;
 using TMPro;
-using UnityEngine.AI;
 using UnityEngine.SceneManagement;
 
 namespace ErenshorCoop

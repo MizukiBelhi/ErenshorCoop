@@ -1,14 +1,9 @@
-﻿using ErenshorCoop.Server;
-using ErenshorCoop.Shared;
-using LiteNetLib;
+﻿using ErenshorCoop.Shared;
 using System.Collections;
 using System.Collections.Generic;
 using ErenshorCoop.Shared.Packets;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using System;
-using System.Runtime.CompilerServices;
-using System.Runtime.Remoting.Messaging;
 
 namespace ErenshorCoop.Client
 {
@@ -67,7 +62,8 @@ namespace ErenshorCoop.Client
 			NetworkedMobs.Clear();
 			spawnQueue.Clear();
 
-			Grouping.ForceClearGroup();
+			if(ClientConnectionManager.Instance.IsRunning)
+				Grouping.ForceClearGroup();
 
 			foreach (var s in NetworkedSims)
 			{

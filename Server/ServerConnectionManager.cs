@@ -1,9 +1,7 @@
 ﻿using ErenshorCoop.Shared;
 using LiteNetLib;
-using LiteNetLib.Utils;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using ErenshorCoop.Client;
@@ -94,6 +92,7 @@ namespace ErenshorCoop.Server
 			if (IsRunning)
 				Logging.LogGameMessage($"[Server] Closing Server.");
 
+			netManager.DisconnectAll();
 			netManager.Stop();
 			//Entities.Clear();
 			OnCloseServer?.Invoke();

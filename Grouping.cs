@@ -1,8 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using ErenshorCoop.Client;
 using ErenshorCoop.Server;
 using ErenshorCoop.Shared;
@@ -931,6 +928,8 @@ namespace ErenshorCoop
 
 		public static void ForceClearGroup()
 		{
+			if (!ClientConnectionManager.Instance.IsRunning) return;
+
 			bool hasChanged = false;
 			if (GameData.GroupMember1 != null)
 			{

@@ -1,14 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using System.Collections.Generic;
 using System.Net;
-using System.Net.Sockets;
-using System.Runtime.Remoting.Messaging;
-using System.Text;
-using System.Threading.Tasks;
 using ErenshorCoop.Client;
 using ErenshorCoop.Server;
-using ErenshorCoop.Shared;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -29,25 +22,21 @@ namespace ErenshorCoop.UI
 		private const float TextIndentWidth = 10f;
 		public static GameObject CreateConnectUi(Canvas canvas)
 		{
-			var x = 300f;
-			var y = 100f;
-
 			const float width = 130f;
-
 
 			var panel = new GameObject("ConnectGroup", typeof(RectTransform));
 			panel.transform.SetParent(canvas.transform);
 			var panelRt = panel.GetComponent<RectTransform>();
-			panelRt.anchorMin = new Vector2(0.5f,     0.5f);
-			panelRt.anchorMax = new Vector2(0.5f,     0.5f);
-			panelRt.pivot = new Vector2(0.5f,         0.5f);
-			panelRt.anchoredPosition = new Vector2(x, y);
+			panelRt.anchorMin = new Vector2(1f,     0.5f);
+			panelRt.anchorMax = new Vector2(1f,     0.5f);
+			panelRt.pivot = new Vector2(1f,         0.5f);
+			panelRt.anchoredPosition = new Vector2(0, 0);
 			panelRt.sizeDelta = new Vector2(width,    200f);
 
 			var panelImage = panel.AddComponent<Image>();
 			panelImage.color = new Color(1, 1, 1, 1f);
 			panelImage.raycastTarget = false;
-			panelImage.material = Base.materials["UI_OUTLINE CHAT"];
+			panelImage.material = new Material(Base.materials["UI_OUTLINE CHAT"]);
 			panelImage.sprite = Base.sprites["cosmetics_and_essentials_carv 1"];
 
 			var outline = panel.AddComponent<Outline>();
@@ -55,8 +44,8 @@ namespace ErenshorCoop.UI
 			outline.effectDistance = new Vector2(1f, -1f);
 
 
-			x = 0;
-			y = 0;
+			var x = 0f;
+			var y = 0f;
 			Base.AddLabel(panel.transform, new Vector2(x, y + 6), new Vector2(width, 30), "CO-OP");
 			var vL = Base.AddLabel(panel.transform, new Vector2(x + 30, y - 5), new Vector2(width, 30), "v."+ErenshorCoopMod.version.ToString());
 			vL.fontSize = 8f;

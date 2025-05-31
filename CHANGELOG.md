@@ -1,3 +1,9 @@
+## v1.0.5
+- Fixed UI getting pushed into the menu on small resolutions
+- Fixed Zone manager thinking you're still hosting after stopping
+- Fixed (hopefully) clients getting confused about zone ownership
+- Fixed disbanding your group on certain occasions, even if disconnected
+
 ## v1.0.4
 - Fixed desync on player respawn
 

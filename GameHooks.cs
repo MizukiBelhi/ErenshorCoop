@@ -1,13 +1,9 @@
 ﻿using HarmonyLib;
-using LiteNetLib;
-using LiteNetLib.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
-using System.Text;
-using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.AI;
 using ErenshorCoop.Shared;
@@ -2402,20 +2398,20 @@ namespace ErenshorCoop
 				if (!Grouping.IsPlayerInGroup((short)sim.myIndex, true)) return true;
 			}
 
-			if(!Grouping.IsLocalLeader())
-			{
-				thisZoning.SetValue(__instance, true);
-				GameData.Zoning = true;
-			}
-			else
-			{
-				if(ServerConnectionManager.Instance.IsRunning)
-					SharedNPCSyncManager.Instance.ServerRemoveSims();
-				__instance.CallZoning();
-			}
+
+			//thisZoning.SetValue(__instance, true);
+			//GameData.Zoning = true;
+			//
+			if(ServerConnectionManager.Instance.IsRunning)
+				SharedNPCSyncManager.Instance.ServerRemoveSims();
+			__instance.CallZoning();
+			//ClientConnectionManager.Instance.LocalPlayer.StartZoneTransfer(__instance);
+
+
 
 			return false;
 		}
+
 #endregion
 
 

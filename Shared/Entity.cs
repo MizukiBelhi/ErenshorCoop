@@ -1,11 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using ErenshorCoop.Client;
+﻿using ErenshorCoop.Client;
 using ErenshorCoop.Server;
-using ErenshorCoop.Shared;
 using ErenshorCoop.Shared.Packets;
 using LiteNetLib;
 using UnityEngine;

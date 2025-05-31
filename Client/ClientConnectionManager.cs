@@ -7,10 +7,8 @@ using System.Timers;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using ErenshorCoop.Shared;
-using LiteNetLib.Utils;
 using ErenshorCoop.Server;
 using ErenshorCoop.Shared.Packets;
-using Newtonsoft.Json.Schema;
 
 namespace ErenshorCoop.Client
 {
@@ -65,7 +63,6 @@ namespace ErenshorCoop.Client
 		public void Connect(string ip, int port)
 		{
 			Disconnect();
-
 
 			netManager.Start();
 			peer = netManager.Connect(ip, port, "");

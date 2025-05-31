@@ -1,12 +1,10 @@
-﻿using System;
+﻿using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using ErenshorCoop.Client;
 using ErenshorCoop.Shared;
 using ErenshorCoop.Shared.Packets;
 using LiteNetLib;
+using UnityEngine;
 using UnityEngine.SceneManagement;
 
 namespace ErenshorCoop.Server
@@ -15,6 +13,7 @@ namespace ErenshorCoop.Server
 	{
 		private static readonly Dictionary<string, List<short>> _zoneMembers = new();
 		private static readonly Dictionary<string, short> _zoneOwners = new();
+		private static Queue<(short peerPlayer, short newOwnerID, string zone, NetPeer peer)> packetQueue = new();
 
 		private static bool isInUse = false;
 
@@ -26,6 +25,7 @@ namespace ErenshorCoop.Server
 		{
 			_zoneOwners.Clear();
 			_zoneMembers.Clear();
+			packetQueue.Clear();
 			if (ServerConnectionManager.Instance.IsRunning)
 			{
 				ClientConnectionManager.Instance.OnClientConnect += OnClientChangeZone;
@@ -34,6 +34,8 @@ namespace ErenshorCoop.Server
 				ClientConnectionManager.Instance.OnConnect += OnHostConnect;
 				ErenshorCoopMod.OnGameMapLoad += OnGameMapLoad;
 				isInUse = true;
+
+				ServerConnectionManager.Instance.StartCoroutine(ProcessQueue());
 
 				OnClientChangeZone(ClientConnectionManager.Instance.LocalPlayerID, SceneManager.GetActiveScene().name, null);
 			}
@@ -52,13 +54,16 @@ namespace ErenshorCoop.Server
 		{
 			_zoneOwners.Clear();
 			_zoneMembers.Clear();
-
+			packetQueue.Clear();
 			if (isInUse)
 			{
+				ServerConnectionManager.Instance.StopCoroutine(ProcessQueue());
 				ClientConnectionManager.Instance.OnClientConnect -= OnClientChangeZone;
 				ClientConnectionManager.Instance.OnClientSwapZone -= OnClientChangeZone;
 				ClientConnectionManager.Instance.OnPlayerDisconnect -= OnPlayerDisconnect;
 				ClientConnectionManager.Instance.OnConnect -= OnHostConnect;
+				ErenshorCoopMod.OnGameMapLoad -= OnGameMapLoad;
+				isInUse = false;
 			}
 		}
 
@@ -173,14 +178,29 @@ namespace ErenshorCoop.Server
 
 		private static void SendZoneOwnershipPacket(short peerPlayer, short newOwnerID, string zone, NetPeer peer = null)
 		{
-			Logging.Log($"assigning {newOwnerID} as owner of {zone}");
-			var packet = PacketManager.GetOrCreatePacket<ServerInfoPacket>(peerPlayer, PacketType.SERVER_INFO);
-			packet.dataTypes.Add(ServerInfoType.ZONE_OWNERSHIP);
-			packet.SetData("zone",      zone);
-			packet.SetData("zoneOwner", newOwnerID);
-			packet.playerList = _zoneMembers[zone];
-			if (peer != null)
-				packet.SetTarget(peer);
+			packetQueue.Enqueue((peerPlayer, newOwnerID, zone, peer));
+		}
+
+
+		private static IEnumerator ProcessQueue()
+		{
+			while (true)
+			{
+				while (packetQueue.Count <= 0) yield return new WaitForSeconds(0.5f);
+
+				( short peerPlayer, short newOwnerID, string zone, NetPeer peer ) = packetQueue.Dequeue();
+
+				Logging.Log($"assigning {newOwnerID} as owner of {zone}");
+				var packet = PacketManager.GetOrCreatePacket<ServerInfoPacket>(peerPlayer, PacketType.SERVER_INFO);
+				packet.dataTypes.Add(ServerInfoType.ZONE_OWNERSHIP);
+				packet.SetData("zone",      zone);
+				packet.SetData("zoneOwner", newOwnerID);
+				packet.playerList = _zoneMembers[zone];
+				if (peer != null)
+					packet.SetTarget(peer);
+
+				yield return new WaitForSeconds(2f);
+			}
 		}
 
 		public static Dictionary<string, Dictionary<short, EntitySpawnData>> zoneEntities = new();
