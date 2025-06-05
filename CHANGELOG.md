@@ -1,3 +1,13 @@
+## v1.0.7
+- Fixed not being able to select other players
+- Fixed a duplication exploit
+- Added Weather Sync
+- Added Confirmation Window for item dropping
+- Added Toggles for:
+  - Confirmation Window
+  - Metrics
+  - Weather Sync
+
 ## v1.0.6
 - Fixed taunts not working
 - Fixed (hopefully) players sometimes not swapping visibility

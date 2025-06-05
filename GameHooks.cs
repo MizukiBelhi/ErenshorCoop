@@ -226,7 +226,7 @@ namespace ErenshorCoop
 		public static bool PlayerLeftClick_Prefix(PlayerControl __instance)
 		{
 			if (!ClientConnectionManager.Instance.IsRunning) return true;
-			
+			if (GameData.MouseSlot.MyItem == GameData.PlayerInv.Empty) return true;
 
 			var ray = __instance.camera.ScreenPointToRay(Input.mousePosition);
 			//bool flag = EventSystem.current.IsPointerOverGameObject();
@@ -265,7 +265,6 @@ namespace ErenshorCoop
 				if (GameData.MouseSlot.MyItem != GameData.PlayerInv.Empty && !GameData.Trading)
 				{
 					ClientConnectionManager.Instance.DropItem(GameData.MouseSlot.MyItem, GameData.MouseSlot.Quantity);
-					GameData.MouseSlot.SendToTrade();
 					return false;
 				}
 			}

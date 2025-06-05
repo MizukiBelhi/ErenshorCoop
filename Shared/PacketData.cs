@@ -35,7 +35,8 @@ namespace ErenshorCoop.Shared
 		
 		GROUP,
 		SERVER_GROUP,
-		ITEM_DROP
+		ITEM_DROP,
+		WEATHER_DATA
 	}
 
 	public enum PacketEntityType : byte

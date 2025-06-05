@@ -15,7 +15,7 @@ namespace ErenshorCoop.UI
 		private Text statisticsText;
 		private long lastBReceived = 0;
 		private long lastBSent = 0;
-		private GameObject statsPanel;
+		public static GameObject statsPanel;
 
 		private  const float StatsUpdateTime = 1f; // Update every 1 second
 		private float statsTimer = 0f;
@@ -179,9 +179,10 @@ namespace ErenshorCoop.UI
 			var panelGO = new GameObject("PromptPanel", typeof(Image));
 			panelGO.transform.SetParent(canvasGO.transform, false);
 			var panel = panelGO.GetComponent<Image>();
-			panel.color = new Color(0, 0, 0, 0.7f);
+			//panel.color = new Color(0, 0, 0, 0.7f);
+			panel.sprite = Base.sprites["cosmetics_and_essentials_carv 1"];
 			var panelRT = panel.GetComponent<RectTransform>();
-			panelRT.sizeDelta = new Vector2(400, 200);
+			panelRT.sizeDelta = new Vector2(300, 140);
 			panelRT.anchoredPosition = Vector2.zero;
 			panel.raycastTarget = true;
 
@@ -190,14 +191,14 @@ namespace ErenshorCoop.UI
 			textGO.transform.SetParent(panelGO.transform, false);
 			var tmp = textGO.GetComponent<TextMeshProUGUI>();
 			tmp.text = "";
-			tmp.fontSize = 16;
+			tmp.fontSize = 14;
 			tmp.alignment = TextAlignmentOptions.Center;
 			var tmpRT = tmp.GetComponent<RectTransform>();
-			tmpRT.sizeDelta = new Vector2(380, 60);
-			tmpRT.anchoredPosition = new Vector2(0, 50);
+			tmpRT.sizeDelta = new Vector2(280, 50);
+			tmpRT.anchoredPosition = new Vector2(0, 30);
 
 
-			var acceptGO = CreateButton("Accept", new Vector2(-80, -50), panelGO.transform);
+			var acceptGO = CreateButton("Accept", new Vector2(-60, -35), panelGO.transform);
 			acceptGO.GetComponent<Button>().onClick.AddListener(() => {
 				try { acceptCB?.Invoke(); }
 				catch (Exception e)
@@ -206,7 +207,7 @@ namespace ErenshorCoop.UI
 				}
 				acceptCB = null; promptPanel.SetActive(false); });
 
-			var declineGO = CreateButton("Decline", new Vector2(80, -50), panelGO.transform);
+			var declineGO = CreateButton("Decline", new Vector2(60, -35), panelGO.transform);
 			declineGO.GetComponent<Button>().onClick.AddListener(() =>
 			{
 				try { cancelCB?.Invoke(); } catch (Exception e)
@@ -225,11 +226,12 @@ namespace ErenshorCoop.UI
 			var btnGO = new GameObject(label + "Button", typeof(Button), typeof(Image));
 			btnGO.transform.SetParent(parent, false);
 			var rt = btnGO.GetComponent<RectTransform>();
-			rt.sizeDelta = new Vector2(120, 40);
+			rt.sizeDelta = new Vector2(100, 36);
 			rt.anchoredPosition = pos;
 			var btn = btnGO.GetComponent<Button>();
 			btn.interactable = true;
 			btn.enabled = true;
+			
 
 			//I'LL TRY ANYTHING!
 			var b = btnGO.AddComponent<ActivateButton>();
@@ -237,13 +239,15 @@ namespace ErenshorCoop.UI
 			var img = btnGO.GetComponent<Image>();
 			img.transform.SetParent(btnGO.transform, false);
 			img.raycastTarget = true;
+			img.sprite = Base.sprites["heading_texture"];
+			btn.targetGraphic = img;
 
 			var textGO = new GameObject("Text", typeof(TextMeshProUGUI));
 			textGO.transform.SetParent(btnGO.transform, false);
 			var tmp = textGO.GetComponent<TextMeshProUGUI>();
 			tmp.text = label;
 			tmp.alignment = TextAlignmentOptions.Center;
-			tmp.fontSize = 18;
+			tmp.fontSize = 16;
 			tmp.raycastTarget = false;
 			var tmpRT = tmp.GetComponent<RectTransform>();
 			tmpRT.anchorMin = Vector2.zero;
@@ -262,7 +266,7 @@ namespace ErenshorCoop.UI
 
 		private void OnConnect()
 		{
-			statsPanel?.SetActive(true);
+			statsPanel?.SetActive(ClientConfig.DisplayMetrics.Value);
 		}
 	}
 }

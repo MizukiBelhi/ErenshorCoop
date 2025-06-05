@@ -112,6 +112,7 @@ namespace ErenshorCoop.Shared
 				case PacketType.PLAYER_MESSAGE:
 				case PacketType.PLAYER_REQUEST:
 				case PacketType.ITEM_DROP:
+				case PacketType.WEATHER_DATA:
 					channel = 8;
 					break;
 				case PacketType.PLAYER_DATA:
@@ -151,7 +152,8 @@ namespace ErenshorCoop.Shared
 								packetType == PacketType.PLAYER_TRANSFORM ||
 								packetType == PacketType.PLAYER_MESSAGE ||
 								packetType == PacketType.PLAYER_REQUEST ||
-								packetType == PacketType.ITEM_DROP;
+								packetType == PacketType.ITEM_DROP ||
+								packetType == PacketType.WEATHER_DATA;
 
 			var basePacket = (BasePacket)packet;
 			

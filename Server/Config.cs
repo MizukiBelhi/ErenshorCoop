@@ -19,25 +19,25 @@ namespace ErenshorCoop.Server
 		{
 			EnableZoneTransfership = config.Bind(
 				"Host Settings",
-				"Enable Zone Transfership",
+				"!Enable Zone Transfership",
 				true,
 				"Lets other players take control of a zone even if the host isn't in it. The host still takes over the zone if they enter."
 			);
 			EntitySyncDistance = config.Bind(
 				"Host Settings",
-				"Entity Sync Distance",
+				"!!Entity Sync Distance",
 				40f,
 				"Minimum distance to another player to display animations."
 			);
 			IsEntitySyncDistance = config.Bind(
 				"Host Settings",
-				"Enable Entity Sync Distance",
+				"!!!Enable Entity Sync Distance",
 				false,
 				"If you enable this it can cause visual issues but give lower bandwidth usage."
 			);
 			IsPVPEnabled = config.Bind(
 				"Host Settings",
-				"Enable PVP",
+				"!!!!Enable PVP",
 				false,
 				"Enables PVP"
 			);

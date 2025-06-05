@@ -109,6 +109,7 @@ namespace ErenshorCoop.Client
 
 			OnDisconnect?.Invoke();
 			Grouping.Cleanup();
+			WeatherHandler.Stop();
 
 			ClearDroppedItems();
 		}
@@ -253,6 +254,9 @@ namespace ErenshorCoop.Client
 				case PacketType.ITEM_DROP:
 					packet = new ItemDropPacket();
 					break;
+				case PacketType.WEATHER_DATA:
+					packet = new WeatherPacket();
+					break;
 				case PacketType.ENTITY_SPAWN:
 					isPlayerPacket = false;
 					packet = new EntitySpawnPacket();
@@ -337,6 +341,15 @@ namespace ErenshorCoop.Client
 						UpdateQuantity(pack.id, pack.quality);
 					}
 				}
+
+				if (packetType == PacketType.WEATHER_DATA)
+				{
+					var pack = (WeatherPacket)packet;
+					if (pack.targetPlayerIDs.Contains(LocalPlayerID))
+					{
+						WeatherHandler.ReceiveWeatherData(pack.weatherData);
+					}
+				}
 				if (packetType == PacketType.SERVER_GROUP)
 				{
 					Grouping.HandleServerPacket((ServerGroupPacket)packet);
@@ -385,7 +398,7 @@ namespace ErenshorCoop.Client
 			}
 			else if (packetType == PacketType.SERVER_INFO)
 			{
-				Logging.Log($"{packet.GetType()}");
+				//Logging.Log($"{packet.GetType()}");
 				if (((ServerInfoPacket)packet).dataTypes.Contains(ServerInfoType.PVP_MODE))
 				{
 					foreach (var player in Players)
@@ -408,6 +421,7 @@ namespace ErenshorCoop.Client
 				LocalPlayer.playerID = LocalPlayerID;
 				LocalPlayer.entityID = LocalPlayerID;
 				OnConnect?.Invoke();
+				WeatherHandler.Init();
 
 				UI.Connect._feedbackText.text = "Connected!";
 
@@ -465,13 +479,42 @@ namespace ErenshorCoop.Client
 			}
 		}
 
+
+		private ItemIcon savedIcon;
 		public void DropItem(Item item, int quantity)
+		{
+			if (ClientConfig.ItemDropConfirm.Value)
+			{
+				savedIcon = GameData.MouseSlot;
+				GameData.MouseSlot.dragging = false;
+				//GameData.MouseSlot.MyItem = GameData.PlayerInv.Empty;
+				//GameData.MouseSlot.dragging = false;
+				//GameData.MouseSlot.UpdateSlotImage();
+
+				var hasqual = item.RequiredSlot == Item.SlotType.General;
+				UI.Main.EnablePrompt($"Are you sure you want to drop {(hasqual?quantity:"")} {item.ItemName}.", () => { ConfirmDrop(item, quantity); }, () => { GameData.MouseSlot.dragging = true;});
+			}
+			else
+			{
+				GameData.MouseSlot.SendToTrade();
+				_DropItem(item, quantity);
+			}
+		}
+
+		public static void ConfirmDrop(Item item, int quantity)
+		{
+			Instance.savedIcon.SendToTrade();
+			Instance._DropItem(item, quantity);
+		}
+
+
+		private void _DropItem(Item item, int quantity)
 		{
 			var pack = PacketManager.GetOrCreatePacket<ItemDropPacket>(LocalPlayerID, PacketType.ITEM_DROP);
 			pack.zone = SceneManager.GetActiveScene().name;
 			pack.itemID = item.Id;
 			pack.quality = quantity;
-			pack.id = GameData.CurrentCharacterSlot.CharName + ( Random.Range(0, 9999) + Random.Range(0, 9999) ).ToString();
+			pack.id = GameData.CurrentCharacterSlot.CharName + (Random.Range(0, 9999) + Random.Range(0, 9999)).ToString();
 			pack.location = LocalPlayer.transform.position + (LocalPlayer.transform.forward * 2f);
 			pack.dataTypes.Add(ItemDropType.DROP);
 
@@ -588,6 +631,8 @@ namespace ErenshorCoop.Client
 			{
 				Destroy(item.gameObject);
 			}
+
+			Variables.droppedItems.Clear();
 		}
 
 		public Entity GetPlayerFromID(short playerID)

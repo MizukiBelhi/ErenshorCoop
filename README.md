@@ -27,6 +27,7 @@ Please see the changelog for updates.<br><br><br>
     - (Still need to add a confirmation window)
   - The items get deleted if you disconnect
   - They should appear again after a zone change, if not let me know
+  - Confirmation window (can be disabled in the settings)
 
 ## Not Implemented
 - Treasure Chests

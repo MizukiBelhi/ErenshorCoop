@@ -14,7 +14,7 @@ using UnityEngine.SceneManagement;
 
 namespace ErenshorCoop
 {
-	[BepInPlugin("mizuki.coop", "Erenshor Coop", "1.0.6")]
+	[BepInPlugin("mizuki.coop", "Erenshor Coop", "1.0.7")]
 	public class ErenshorCoopMod : BaseUnityPlugin
 	{
 		public static ConfigEntry<int> someConfig;
