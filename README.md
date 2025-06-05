@@ -7,7 +7,6 @@ Please see the changelog for updates.<br><br><br>
 - Player sync
 - Enemy and NPC sync
 - Chat (Including Whispers)
-  - Group Chat is not implemented currently.
 - Grouping
 - Spell Effects
 - Sims in groups are synced (only pre-made sims! If you invite sims that are auto-generated this will not work)
@@ -23,6 +22,15 @@ Please see the changelog for updates.<br><br><br>
 - Shared group XP
 - Summons
   - When connecting or hosting you are required to re-summon for other players to see it.
+- Trading
+  - Pick up an item from the inventory or bank and drop it outside the UI
+    - (Still need to add a confirmation window)
+  - The items get deleted if you disconnect
+  - They should appear again after a zone change, if not let me know
+
+## Not Implemented
+- Treasure Chests
+- Group Chat
 
 ## Known Bugs
 - Other players have sim chat behaviour

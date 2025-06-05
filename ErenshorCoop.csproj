@@ -140,7 +140,13 @@
   <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>
-    </PostBuildEvent>
+    <PostBuildEvent>"$(TargetDir)pdb2mdb.exe" "$(TargetDir)$(TargetName).dll"
+
+
+xcopy /Y /Q "$(TargetDir)$(TargetName).dll" "F:\steam\steamapps\common\Erenshor Demo\BepInEx\scripts\"
+xcopy /Y /Q "$(TargetDir)$(TargetName).dll.mdb" "F:\steam\steamapps\common\Erenshor Demo\BepInEx\scripts\"
+
+xcopy /Y /Q "$(TargetDir)$(TargetName).dll" "F:\steam\steamapps\common\Erenshor\BepInEx\scripts\"
+xcopy /Y /Q "$(TargetDir)$(TargetName).dll.mdb" "F:\steam\steamapps\common\Erenshor\BepInEx\scripts\"</PostBuildEvent>
   </PropertyGroup>
 </Project>

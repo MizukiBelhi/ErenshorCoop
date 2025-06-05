@@ -141,7 +141,7 @@ namespace ErenshorCoop
 			//Check if other players are in same scene, this is kinda hacky but it absolutely makes sure they are visible or not
 			foreach (var p in ClientConnectionManager.Instance.Players)
 			{
-				if (p.Value.currentScene == currentScene)
+				if (p.Value.currentScene == currentScene || p.Value.zone == currentScene)
 				{
 					p.Value.gameObject.SetActive(true);
 					if(p.Value.MySummon != null && p.Value.MySummon.gameObject != null)
@@ -159,6 +159,14 @@ namespace ErenshorCoop
 			if (MySummon != null)
 			{
 				CreateSummon(GameData.SpellDatabase.GetSpellByID(MySummon.spellID), MySummon.gameObject);
+			}
+
+			if (Variables.droppedItems.TryGetValue(currentScene, out var items))
+			{
+				foreach (var itm in items)
+				{
+					ClientConnectionManager.Instance.SpawnItem(itm.item, itm.quantity, itm.pos, currentScene, itm.id,true);
+				}
 			}
 		}
 

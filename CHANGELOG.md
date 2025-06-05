@@ -1,3 +1,13 @@
+## v1.0.6
+- Fixed taunts not working
+- Fixed (hopefully) players sometimes not swapping visibility
+- Fixed Sim duplication
+- Added TRADING!
+  - Pick up an item from the inventory or bank and drop it outside the UI
+    - (Still need to add a confirmation window)
+  - The items get deleted if you disconnect
+  - They should appear again after a zone change, if not let me know
+
 ## v1.0.5
 - Fixed UI getting pushed into the menu on small resolutions
 - Fixed Zone manager thinking you're still hosting after stopping

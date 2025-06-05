@@ -35,6 +35,7 @@ namespace ErenshorCoop.Shared
 		
 		GROUP,
 		SERVER_GROUP,
+		ITEM_DROP
 	}
 
 	public enum PacketEntityType : byte
@@ -44,6 +45,13 @@ namespace ErenshorCoop.Shared
 		NPC,
 		SIM,
 		MAX
+	}
+
+	public enum ItemDropType : byte
+	{
+		DROP,
+		DESTROY,
+		NEW_QUANTITY
 	}
 
 	public enum GroupDataType : byte

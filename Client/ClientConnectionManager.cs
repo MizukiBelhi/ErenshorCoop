@@ -9,6 +9,7 @@ using UnityEngine.SceneManagement;
 using ErenshorCoop.Shared;
 using ErenshorCoop.Server;
 using ErenshorCoop.Shared.Packets;
+using Random = UnityEngine.Random;
 
 namespace ErenshorCoop.Client
 {
@@ -93,6 +94,8 @@ namespace ErenshorCoop.Client
 					Destroy(player.gameObject);
 			}
 
+			Grouping.ForceClearGroup(true);
+
 			Players.Clear();
 			netManager.Stop();
 
@@ -106,6 +109,8 @@ namespace ErenshorCoop.Client
 
 			OnDisconnect?.Invoke();
 			Grouping.Cleanup();
+
+			ClearDroppedItems();
 		}
 
 
@@ -245,6 +250,9 @@ namespace ErenshorCoop.Client
 				case PacketType.PLAYER_ACTION:
 					packet = new PlayerActionPacket();
 					break;
+				case PacketType.ITEM_DROP:
+					packet = new ItemDropPacket();
+					break;
 				case PacketType.ENTITY_SPAWN:
 					isPlayerPacket = false;
 					packet = new EntitySpawnPacket();
@@ -313,6 +321,22 @@ namespace ErenshorCoop.Client
 
 			if (isPlayerPacket)
 			{
+				if (packetType == PacketType.ITEM_DROP)
+				{
+					var pack = (ItemDropPacket)packet;
+					if (pack.dataTypes.Contains(ItemDropType.DROP))
+					{
+						var itm = GameData.ItemDB.GetItemByID(pack.itemID);
+						if (itm != GameData.PlayerInv.Empty)
+							SpawnItem(itm, pack.quality, pack.location, pack.zone, pack.id);
+					}
+					if(pack.dataTypes.Contains(ItemDropType.DESTROY))
+						ClearDroppedItem(pack.id);
+					if (pack.dataTypes.Contains(ItemDropType.NEW_QUANTITY))
+					{
+						UpdateQuantity(pack.id, pack.quality);
+					}
+				}
 				if (packetType == PacketType.SERVER_GROUP)
 				{
 					Grouping.HandleServerPacket((ServerGroupPacket)packet);
@@ -438,6 +462,131 @@ namespace ErenshorCoop.Client
 				//Logging.Log($"resending {packet.GetType()}");
 				packet.exclusions.Add(peer);
 				PacketManager.ServerAddPacket(packetType, packet);
+			}
+		}
+
+		public void DropItem(Item item, int quantity)
+		{
+			var pack = PacketManager.GetOrCreatePacket<ItemDropPacket>(LocalPlayerID, PacketType.ITEM_DROP);
+			pack.zone = SceneManager.GetActiveScene().name;
+			pack.itemID = item.Id;
+			pack.quality = quantity;
+			pack.id = GameData.CurrentCharacterSlot.CharName + ( Random.Range(0, 9999) + Random.Range(0, 9999) ).ToString();
+			pack.location = LocalPlayer.transform.position + (LocalPlayer.transform.forward * 2f);
+			pack.dataTypes.Add(ItemDropType.DROP);
+
+			//Spawn item for self
+			SpawnItem(item, quantity, pack.location, pack.zone, pack.id);
+		}
+
+		public void SpawnItem(Item item, int quantity, Vector3 location, string zone, string id, bool noRegister=false)
+		{
+			var go = new GameObject();
+			go.transform.position = location + new Vector3(0,0.25f,0); //Small height offset
+			var dpitem = go.AddComponent<DroppedItem>();
+			dpitem.zone = zone;
+			dpitem.item = item;
+			dpitem.quality = quantity;
+			dpitem.id = id;
+			dpitem.Init(noRegister);
+
+		}
+
+		public void SendItemLooted(string id)
+		{
+			var pack = PacketManager.GetOrCreatePacket<ItemDropPacket>(LocalPlayerID, PacketType.ITEM_DROP);
+			pack.dataTypes.Add(ItemDropType.DESTROY);
+			pack.id = id;
+		}
+
+		public void SendItemQuantityUpdate(string id, int quant)
+		{
+			var pack = PacketManager.GetOrCreatePacket<ItemDropPacket>(LocalPlayerID, PacketType.ITEM_DROP);
+			pack.dataTypes.Add(ItemDropType.NEW_QUANTITY);
+			pack.id = id;
+			pack.quality = quant;
+		}
+
+		public void UpdateQuantity(string id, int quant)
+		{
+			var itms = FindObjectsOfType<DroppedItem>();
+			foreach (var item in itms)
+			{
+				if (item.id != id) continue;
+				item.UpdateQuantity(quant);
+				if (Variables.lastDroppedItem == item)
+				{
+					GameData.LootWindow.CloseWindow();
+				}
+				break;
+			}
+
+			int idx = -1;
+			string keyToRemoveFrom = null;
+
+			foreach (var kvp in Variables.droppedItems)
+			{
+				foreach (var item in kvp.Value)
+				{
+					if (item.id != id) continue;
+					idx = kvp.Value.IndexOf(item);
+					keyToRemoveFrom = kvp.Key;
+					break;
+				}
+				if (idx != -1)
+					break;
+			}
+
+			if (idx != -1 && keyToRemoveFrom != null)
+			{
+				var f = Variables.droppedItems[keyToRemoveFrom][idx];
+				f.quantity = quant;
+				Variables.droppedItems[keyToRemoveFrom][idx] = f;
+			}
+		}
+
+		public void ClearDroppedItem(string id)
+		{
+			var itms = FindObjectsOfType<DroppedItem>();
+			foreach (var item in itms)
+			{
+				if (item.id != id) continue;
+				if (Variables.lastDroppedItem == item)
+				{
+					GameData.LootWindow.CloseWindow();
+				}
+				Destroy(item.gameObject);
+				break;
+			}
+
+			Variables.ItemDropData? toRemove = null;
+			string keyToRemoveFrom = null;
+
+			foreach (var kvp in Variables.droppedItems)
+			{
+				foreach (var item in kvp.Value)
+				{
+					if (item.id != id) continue;
+					toRemove = item;
+					keyToRemoveFrom = kvp.Key;
+					break;
+				}
+				if (toRemove.HasValue)
+					break;
+			}
+
+			if (toRemove.HasValue && keyToRemoveFrom != null)
+			{
+				Variables.droppedItems[keyToRemoveFrom].Remove(toRemove.Value);
+			}
+		}
+
+		public void ClearDroppedItems()
+		{
+			var itms = FindObjectsOfType<DroppedItem>();
+			foreach (var item in itms)
+			{
+				Destroy(item.gameObject);
 			}
 		}
 

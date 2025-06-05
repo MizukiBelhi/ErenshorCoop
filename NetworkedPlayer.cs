@@ -734,17 +734,17 @@ namespace ErenshorCoop
 				GameData.CamControl.ShakeScreen(spell.ShakeAmp, spell.ShakeDur);
 			}
 
-			GameObject targ = null;
+			Entity targ = null;
 			if (!targetIsNPC)
 			{
-				targ = ClientConnectionManager.Instance.GetPlayerFromID(targetID).gameObject;
+				targ = ClientConnectionManager.Instance.GetPlayerFromID(targetID);
 			}
 			else
 			{
 				if (!ClientZoneOwnership.isZoneOwner)
-					targ = ClientNPCSyncManager.Instance.GetEntityFromID(targetID, isSim).gameObject;
+					targ = ClientNPCSyncManager.Instance.GetEntityFromID(targetID, isSim);
 				else
-					targ = SharedNPCSyncManager.Instance.GetEntityFromID(targetID, isSim).gameObject;
+					targ = SharedNPCSyncManager.Instance.GetEntityFromID(targetID, isSim);
 			}
 
 			//Logging.Log($"{targetIsNPC}");
@@ -752,6 +752,14 @@ namespace ErenshorCoop
 			switch (spell.Type)
 			{
 				case Spell.SpellType.Damage:
+					
+					if (targ.character.isNPC && ClientZoneOwnership.isZoneOwner)
+					{
+						targ.character.MyNPC.ManageAggro(spell.Aggro, character);
+					}
+					Instantiate(GameData.EffectDB.SpellEffects[spell.SpellResolveFXIndex], targ.transform.position, Quaternion.identity);
+
+				break;
 				case Spell.SpellType.StatusEffect:
 				case Spell.SpellType.Beneficial:
 				case Spell.SpellType.PBAE:

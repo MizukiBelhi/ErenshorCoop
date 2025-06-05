@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using ErenshorCoop.Client;
 using UnityEngine;
 
 namespace ErenshorCoop.Shared
@@ -15,9 +16,20 @@ namespace ErenshorCoop.Shared
 
 		public static List<Character> DontCalculateDamageMitigationCharacters = new();
 		public static List<Entity> DontCheckEffectCharacters = new();
+		public static DroppedItem lastDroppedItem = new();
 
 		public static Dictionary<int, SpawnGroup> spawnData = new();
 		public static Dictionary<int, SpawnPoint> spawnPoints = new();
+
+		public static Dictionary<string, List<ItemDropData>> droppedItems = new();
+
+		public struct ItemDropData
+		{
+			public Item item;
+			public int quantity;
+			public Vector3 pos;
+			public string id;
+		}
 
 		public class SpawnMobData
 		{

@@ -6,6 +6,7 @@ using ErenshorCoop.Shared;
 using ErenshorCoop.Shared.Packets;
 using TMPro;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 
 namespace ErenshorCoop
@@ -90,7 +91,9 @@ namespace ErenshorCoop
 			foreach (var group in groups)
 			{
 				foreach (Member p in group.Value.groupList)
-					if (p.entityID == playerID && p.isSim == isSim)
+					if (p.entityID == playerID && p.isSim == isSim && p.isSim == false)
+						return p;
+					else if (p.simIndex == playerID && p.isSim == isSim)
 						return p;
 			}
 
@@ -104,7 +107,9 @@ namespace ErenshorCoop
 
 			foreach (var members in currentGroup.groupList)
 			{
-				if(members.entityID == playerID && members.isSim == isSim)
+				if(members.entityID == playerID && members.isSim == isSim && isSim == false)
+					return true;
+				else if (members.simIndex == playerID && members.isSim == isSim)
 					return true;
 			}
 			return false;
@@ -710,39 +715,35 @@ namespace ErenshorCoop
 								switch (pidx)
 								{
 									case 0:
-										if (isSim)
+
+										if (GameData.GroupMember1 != null)
 										{
-											if (GameData.GroupMember1 != null)
-											{
-												GameData.GroupMember1.Grouped = false;
-												if (GameData.GroupMember1.MyAvatar != null)
-													GameData.GroupMember1.MyAvatar.InGroup = false;
-											}
+											GameData.GroupMember1.Grouped = false;
+											if (GameData.GroupMember1.MyAvatar != null)
+												GameData.GroupMember1.MyAvatar.InGroup = false;
 										}
+
 										GameData.GroupMember1 = null;
 										break;
 									case 1:
-										if (isSim)
+
+										if (GameData.GroupMember2 != null)
 										{
-											if (GameData.GroupMember2 != null)
-											{
-												GameData.GroupMember2.Grouped = false;
-												if (GameData.GroupMember2.MyAvatar != null)
-													GameData.GroupMember2.MyAvatar.InGroup = false;
-											}
+											GameData.GroupMember2.Grouped = false;
+											if (GameData.GroupMember2.MyAvatar != null)
+												GameData.GroupMember2.MyAvatar.InGroup = false;
 										}
+										
 										GameData.GroupMember2 = null;
 										break;
 									case 2:
-										if (isSim)
+										if (GameData.GroupMember3 != null)
 										{
-											if (GameData.GroupMember3 != null)
-											{
-												GameData.GroupMember3.Grouped = false;
-												if (GameData.GroupMember3.MyAvatar != null)
-													GameData.GroupMember3.MyAvatar.InGroup = false;
-											}
+											GameData.GroupMember3.Grouped = false;
+											if (GameData.GroupMember3.MyAvatar != null)
+												GameData.GroupMember3.MyAvatar.InGroup = false;
 										}
+										
 										GameData.GroupMember3 = null; 
 										break;
 								}
@@ -788,9 +789,18 @@ namespace ErenshorCoop
 						else
 						{
 							n = GameData.SimMngr.Sims[(int)currentGroup.groupList[i].simIndex];
+							bool isSpawned = n.CurScene == SceneManager.GetActiveScene().name && n.MyAvatar != null;
+							//Make 100% sure the sim isn't already in the scene
+							var _sim = GameObject.Find(n.SimName);
+							if (_sim != null)
+								isSpawned = true;
+
+							
 							n.Grouped = true;
-							if (n.MyAvatar == null)
+							if (!isSpawned) //Spawn the sim, everything else should be handled by the sim spawn packet
 								n.SpawnMeInGame(ClientConnectionManager.Instance.LocalPlayer.transform.position);
+							
+
 							n.MyAvatar.InGroup = true;
 						}
 
@@ -926,9 +936,9 @@ namespace ErenshorCoop
 				.AddPacketData(GroupDataType.INVITE, "playerID", simPlayer.playerID);
 		}
 
-		public static void ForceClearGroup()
+		public static void ForceClearGroup(bool shutdown=false)
 		{
-			if (!ClientConnectionManager.Instance.IsRunning) return;
+			if (!ClientConnectionManager.Instance.IsRunning && !shutdown) return;
 
 			bool hasChanged = false;
 			if (GameData.GroupMember1 != null)

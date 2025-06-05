@@ -111,6 +111,7 @@ namespace ErenshorCoop.Shared
 					break;
 				case PacketType.PLAYER_MESSAGE:
 				case PacketType.PLAYER_REQUEST:
+				case PacketType.ITEM_DROP:
 					channel = 8;
 					break;
 				case PacketType.PLAYER_DATA:
@@ -149,7 +150,8 @@ namespace ErenshorCoop.Shared
 								packetType == PacketType.PLAYER_ACTION ||
 								packetType == PacketType.PLAYER_TRANSFORM ||
 								packetType == PacketType.PLAYER_MESSAGE ||
-								packetType == PacketType.PLAYER_REQUEST;
+								packetType == PacketType.PLAYER_REQUEST ||
+								packetType == PacketType.ITEM_DROP;
 
 			var basePacket = (BasePacket)packet;
 			

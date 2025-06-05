@@ -41,7 +41,8 @@ namespace ErenshorCoop.Client
 		private void OnDestroy()
 		{
 			Cleanup();
-
+			if (ClientConnectionManager.Instance.IsRunning)
+				Grouping.ForceClearGroup();
 			//ClientConnectionManager.Instance.OnConnect -= LoadAndDestroySpawns;
 			//ErenshorCoopMod.OnGameMapLoad -= _OnMapSceneLoad;
 			ClientConnectionManager.Instance.OnDisconnect -= Cleanup;
@@ -61,9 +62,6 @@ namespace ErenshorCoop.Client
 
 			NetworkedMobs.Clear();
 			spawnQueue.Clear();
-
-			if(ClientConnectionManager.Instance.IsRunning)
-				Grouping.ForceClearGroup();
 
 			foreach (var s in NetworkedSims)
 			{
@@ -439,12 +437,22 @@ namespace ErenshorCoop.Client
 
 			//is the sim on this map?
 			NetworkedNPC network;
-			if (sim.CurScene == SceneManager.GetActiveScene().name && sim.MyAvatar != null)
+
+			bool isSpawned = sim.CurScene == SceneManager.GetActiveScene().name && sim.MyAvatar != null;
+			//Make 100% sure the sim isn't already in the scene
+			var _sim = GameObject.Find(sim.SimName);
+			if (_sim != null)
+				isSpawned = true;
+
+			if (isSpawned)
 			{
+				if (sim.MyAvatar == null)
+					sim.MyAvatar = _sim.GetComponent<SimPlayer>();
 				//No need to do anything but add our sync and disable npc/sim
 				//Logging.Log($"not spawning sim");
 				network = sim.MyAvatar.gameObject.GetOrAddComponent<NetworkedNPC>();
 				sim.MyAvatar.enabled = false;
+				sim.CurScene = SceneManager.GetActiveScene().name;
 			}
 			else
 			{
@@ -455,6 +463,9 @@ namespace ErenshorCoop.Client
 				network = actualSim.gameObject.GetOrAddComponent<NetworkedNPC>();
 				actualSim.enabled = false;
 			}
+
+			//Fuck it, override
+			GameData.SimMngr.Sims[simIndex] = sim;
 
 			network.entityID = entityID;
 			network.pos = pos;

@@ -10,7 +10,9 @@ using ErenshorCoop.Shared;
 using ErenshorCoop.Client;
 using ErenshorCoop.Server;
 using ErenshorCoop.Shared.Packets;
+using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
+using Object = UnityEngine.Object;
 using Random = UnityEngine.Random;
 
 namespace ErenshorCoop
@@ -60,9 +62,12 @@ namespace ErenshorCoop
 			ErenshorCoopMod.CreatePrefixHook(typeof(CharmedNPC),                 "GoAway",                  typeof(GameHooks), "CharmedGoAway_Prefix");
 			ErenshorCoopMod.CreatePrefixHook(typeof(SimPlayerMngr),              "CollectActiveSimData",    typeof(GameHooks), "CollectActiveSimData_Prefix");
 			ErenshorCoopMod.CreatePrefixHook(typeof(SceneChange),                "ChangeScene",             typeof(GameHooks), "ChangeScene_Prefix");
+			ErenshorCoopMod.CreatePrefixHook(typeof(LootWindow),                 "CloseWindow",             typeof(GameHooks), "LootWindowClose_Prefix");
+			ErenshorCoopMod.CreatePrefixHook(typeof(PlayerControl),              "LeftClick",               typeof(GameHooks), "PlayerLeftClick_Prefix");
 
 
 			ErenshorCoopMod.CreatePostHook(typeof(SpawnPoint),        "SpawnNPC",         typeof(GameHooks), "SpawnPointSpawnNPC_Post");
+			ErenshorCoopMod.CreatePostHook(typeof(Inventory),         "Update",           typeof(GameHooks), "InventoryUpdate_Postfix");
 			ErenshorCoopMod.CreatePostHook(typeof(Character),         "DamageMe",         typeof(GameHooks), "CharacterDamageMe_Postfix");
 			ErenshorCoopMod.CreatePostHook(typeof(Character),         "MagicDamageMe",    typeof(GameHooks), "MagicDamageMe_Postfix");
 			ErenshorCoopMod.CreatePostHook(typeof(Respawn),           "RespawnPlayer",    typeof(GameHooks), "RespawnPlayer_Postfix");
@@ -126,7 +131,9 @@ namespace ErenshorCoop
 			type = typeof(NPCFightEvent);
 			_actualSpawn = type.GetField("actualSpawn", BindingFlags.NonPublic | BindingFlags.Instance);
 
-
+			type = typeof(LootWindow);
+			downCD = type.GetField("downCD", BindingFlags.NonPublic | BindingFlags.Instance);
+				
 		}
 
 		public static bool CollectActiveSimData_Prefix(SimPlayerMngr __instance)
@@ -215,6 +222,133 @@ namespace ErenshorCoop
 		}
 
 
+
+		public static bool PlayerLeftClick_Prefix(PlayerControl __instance)
+		{
+			if (!ClientConnectionManager.Instance.IsRunning) return true;
+			
+
+			var ray = __instance.camera.ScreenPointToRay(Input.mousePosition);
+			//bool flag = EventSystem.current.IsPointerOverGameObject();
+			if (Physics.Raycast(ray, out var raycastHit))
+			{
+				if (raycastHit.transform.GetComponent<NetworkedPlayer>() != null)
+					return false;
+				if (raycastHit.transform.GetComponent<Character>() != null)
+					return true;
+				if (raycastHit.transform.GetComponent<Door>() != null)
+					return true;
+				if (raycastHit.transform.tag == "Bind")
+					return true;
+				if (raycastHit.transform.tag == "Forge")
+					return true;
+				if (raycastHit.transform.tag == "Treasure")
+					return true;
+
+				List<RaycastResult> list = new();
+				PointerEventData pointerEventData = new(EventSystem.current)
+				{
+					position = Input.mousePosition
+				};
+				EventSystem.current.RaycastAll(pointerEventData, list);
+				if (list.Count > 0)
+				{
+					foreach (RaycastResult raycastResult in list)
+					{
+						if (raycastResult.gameObject.layer == LayerMask.NameToLayer("UI"))
+						{
+							return true;
+						}
+					}
+				}
+
+				if (GameData.MouseSlot.MyItem != GameData.PlayerInv.Empty && !GameData.Trading)
+				{
+					ClientConnectionManager.Instance.DropItem(GameData.MouseSlot.MyItem, GameData.MouseSlot.Quantity);
+					GameData.MouseSlot.SendToTrade();
+					return false;
+				}
+			}
+
+			return true;
+		}
+
+
+		public static FieldInfo downCD;
+
+		public static bool LootWindowClose_Prefix()
+		{
+			if (!ClientConnectionManager.Instance.IsRunning) return true;
+
+			if (Variables.lastDroppedItem == null) return true;
+
+			if (!GameData.LootWindow.WindowParent.activeSelf)
+			{
+				return true;
+			}
+			GameData.PlayerControl.GetComponent<Animator>().SetTrigger("EndLoot");
+			GameData.PlayerAud.PlayOneShot(GameData.Misc.CloseWindow, GameData.SFXVol * 0.05f);
+			if (GameData.LootWindow.WindowParent.activeSelf && !GameData.InCharSelect)
+			{
+				GameData.GM.SaveGameData(true);
+				int num = 0;
+				List<Item> list = new();
+				foreach (ItemIcon itemIcon in GameData.LootWindow.LootSlots)
+				{
+					if (itemIcon.MyItem != GameData.PlayerInv.Empty)
+					{
+						list.Add(itemIcon.MyItem);
+						num++;
+					}
+					
+					itemIcon.MyItem = GameData.PlayerInv.Empty;
+					itemIcon.UpdateSlotImage();
+					GameData.PlayerInv.ForceCloseInv();
+				}
+
+				
+				GameData.LootWindow.WindowParent.SetActive(false);
+
+				if (num <= 0 && Variables.lastDroppedItem.quality <= 0)
+				{
+					Object.Destroy(Variables.lastDroppedItem.gameObject);
+				}
+				else
+				{
+					Variables.lastDroppedItem.ReturnLoot(list);
+				}
+			}
+
+			return false;
+		}
+
+		public static void InventoryUpdate_Postfix(Inventory __instance)
+		{
+			if (!ClientConnectionManager.Instance.IsRunning) return;
+
+			if (__instance.isPlayer && Input.GetKeyDown(InputManager.Loot) && !__instance.InvWindow.activeSelf && !GameData.PlayerTyping)
+			{
+				DroppedItem nearest = null;
+				float dis = float.PositiveInfinity;
+				var allDropped = Object.FindObjectsOfType<DroppedItem>();
+				foreach (var drop in allDropped)
+				{
+					var dd = Vector3.Distance(drop.transform.position, __instance.transform.position);
+					if (dd < dis)
+					{
+						nearest = drop;
+						dis = dd;
+					}
+				}
+				
+				if (nearest != null && dis < 1.5f)
+				{
+					GameData.PlayerCombat.ForceAttackOff();
+					nearest.LoadLootTable();
+					GameData.PlayerControl.Myself.GetComponent<Animator>().SetTrigger("StartLoot");
+				}
+			}
+		}
 
 
 #region CHARMEDNPC
@@ -791,7 +925,7 @@ namespace ErenshorCoop
 			(bool IsPlayer, bool IsSim, short entityID) = GetEntityIDByCharacter(caster.MyChar);
 			if (entityID == -1)
 			{
-				Logging.Log($"no caster? {caster.name}");
+				//Logging.Log($"no caster? {caster.name}");
 				return;
 			}
 
@@ -1996,7 +2130,7 @@ namespace ErenshorCoop
 			//how?
 			if (_attacker == null)
 			{
-				Logging.LogError("no attacker");
+				//Logging.LogError("no attacker");
 				return;
 
 			}
