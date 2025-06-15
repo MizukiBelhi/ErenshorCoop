@@ -24,6 +24,8 @@ namespace ErenshorCoop.Shared.Packets
 		public LookData lookData;
 		public List<GearData> gearData;
 		public List<AnimationData> animData = new();
+		public short targetID;
+		public EntityType targetType;
 
 		public PlayerDataPacket() : base(DeliveryMethod.ReliableOrdered) {}
 
@@ -47,6 +49,11 @@ namespace ErenshorCoop.Shared.Packets
 				writer.Put((byte)level);
 			if (dataTypes.Contains(PlayerDataType.NAME))
 				writer.Put(name);
+			if (dataTypes.Contains(PlayerDataType.CURTARGET))
+			{
+				writer.Put(targetID);
+				writer.Put((byte)targetType);
+			}
 			if (dataTypes.Contains(PlayerDataType.SCENE))
 				writer.Put(scene);
 			if (dataTypes.Contains(PlayerDataType.ANIM))
@@ -95,6 +102,11 @@ namespace ErenshorCoop.Shared.Packets
 				level = reader.GetByte();
 			if(dataTypes.Contains(PlayerDataType.NAME))
 				name = reader.GetString();
+			if (dataTypes.Contains(PlayerDataType.CURTARGET))
+			{
+				targetID = reader.GetShort();
+				targetType = (EntityType)reader.GetByte();
+			}
 			if(dataTypes.Contains(PlayerDataType.SCENE))
 				scene = reader.GetString();
 			if (dataTypes.Contains(PlayerDataType.ANIM))

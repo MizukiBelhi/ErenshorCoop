@@ -553,6 +553,10 @@ namespace ErenshorCoop.Client
 						}
 						Destroy(NetworkedMobs[entityData.entityID].gameObject);
 					}
+					if(entityData.dataTypes.Contains(EntityDataType.CURTARGET))
+					{
+						NetworkedMobs[entityData.entityID].HandleTargetChange(entityData.targetID, entityData.targetType);
+					}
 				}
 				else if(NetworkedSims.ContainsKey(entityData.entityID) && entityData.entityType == EntityType.SIM)
 				{
@@ -568,6 +572,10 @@ namespace ErenshorCoop.Client
 						NetworkedSims[entityData.entityID].sim.enabled = true;
 						Destroy(NetworkedSims[entityData.entityID]);
 						NetworkedSims.Remove(entityData.entityID);
+					}
+					if (entityData.dataTypes.Contains(EntityDataType.CURTARGET))
+					{
+						NetworkedSims[entityData.entityID].HandleTargetChange(entityData.targetID, entityData.targetType);
 					}
 				}
 			}

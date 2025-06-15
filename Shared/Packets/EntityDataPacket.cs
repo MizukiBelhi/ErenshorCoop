@@ -17,6 +17,8 @@ namespace ErenshorCoop.Shared.Packets
 		public int health;
 		public int mp;
 		public List<short> targetPlayerIDs;
+		public short targetID;
+		public EntityType targetType;
 
 		public EntityDataPacket() : base(DeliveryMethod.ReliableOrdered) { }
 
@@ -47,6 +49,11 @@ namespace ErenshorCoop.Shared.Packets
 					writer.Put(a.param);
 					Extensions.WriteObject(writer, a.value);
 				}
+			}
+			if (dataTypes.Contains(EntityDataType.CURTARGET))
+			{
+				writer.Put(targetID);
+				writer.Put((byte)targetType);
 			}
 		}
 
@@ -91,6 +98,11 @@ namespace ErenshorCoop.Shared.Packets
 					};
 					animData.Add(_anim);
 				}
+			}
+			if (dataTypes.Contains(EntityDataType.CURTARGET))
+			{
+				targetID = reader.GetShort();
+				targetType = (EntityType)reader.GetByte();
 			}
 		}
 	}

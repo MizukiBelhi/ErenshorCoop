@@ -11,7 +11,7 @@ namespace ErenshorCoop.Shared.Packets
 	public class PlayerRequestPacket : BasePacket
 	{
 		public HashSet<Request> dataTypes = new();
-		public EntityType requestEntityType;
+		public List<EntityType> requestEntityType;
 
 		public PlayerRequestPacket() :base(DeliveryMethod.ReliableOrdered) { }
 
@@ -23,7 +23,11 @@ namespace ErenshorCoop.Shared.Packets
 			writer.Put(Extensions.GetSubTypeFlag(dataTypes));
 
 			if (dataTypes.Contains(Request.ENTITY_ID))
-				writer.Put((byte)requestEntityType);
+			{
+				writer.Put(requestEntityType.Count);
+				foreach (var entityType in requestEntityType)
+					writer.Put((byte)entityType);
+			}
 
 		}
 
@@ -33,7 +37,12 @@ namespace ErenshorCoop.Shared.Packets
 			dataTypes = Extensions.ReadSubTypeFlag<Request>(reader.GetUShort());
 
 			if (dataTypes.Contains(Request.ENTITY_ID))
-				requestEntityType = (EntityType)reader.GetByte();
+			{
+				requestEntityType = new();
+				var c = reader.GetInt();
+				for(int i = 0; i < c; i++)
+					requestEntityType.Add((EntityType)reader.GetByte());
+			}
 
 		}
 	}

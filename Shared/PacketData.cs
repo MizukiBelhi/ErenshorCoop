@@ -99,6 +99,7 @@ namespace ErenshorCoop.Shared
 		LEVEL,
 		CLASS,
 		MP,
+		CURTARGET,
 	}
 
 	public enum EntityDataType : byte
@@ -109,7 +110,8 @@ namespace ErenshorCoop.Shared
 		HEALTH,
 		SIM_REMOVE,
 		ENTITY_REMOVE,
-		MP
+		MP,
+		CURTARGET
 	}
 
 	public enum ActionType : byte
@@ -147,6 +149,7 @@ namespace ErenshorCoop.Shared
 		CHESS = -2,
 		SIRAETHE = -3,
 		ADDS = -4,
+		TREASURE_GUARD = -5,
 	}
 
 	public enum Request : byte

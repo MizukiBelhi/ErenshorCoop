@@ -73,6 +73,9 @@
     <Reference Include="UnityEngine.AnimationModule">
       <HintPath>Libraries\UnityEngine.AnimationModule.dll</HintPath>
     </Reference>
+    <Reference Include="UnityEngine.AudioModule">
+      <HintPath>F:\steam\steamapps\common\Erenshor\Erenshor_Data\Managed\UnityEngine.AudioModule.dll</HintPath>
+    </Reference>
     <Reference Include="UnityEngine.CoreModule">
       <HintPath>Libraries\UnityEngine.CoreModule.dll</HintPath>
     </Reference>
@@ -97,6 +100,8 @@
     <Compile Include="Client\ClientNPCSyncManager.cs" />
     <Compile Include="Client\ClientZoneOwnership.cs" />
     <Compile Include="Client\Config.cs" />
+    <Compile Include="Client\DroppedItem.cs" />
+    <Compile Include="Client\WeatherHandler.cs" />
     <Compile Include="CommandHandler.cs" />
     <Compile Include="ErenshorCoop.cs" />
     <Compile Include="GameHooks.cs" />
@@ -111,6 +116,8 @@
     <Compile Include="Server\ServerConnectionManager.cs" />
     <Compile Include="Server\ServerZoneOwnership.cs" />
     <Compile Include="Shared\Entity.cs" />
+    <Compile Include="Shared\Packets\ItemDropPacket.cs" />
+    <Compile Include="Shared\Packets\WeatherPacket.cs" />
     <Compile Include="Shared\SharedNPCSyncManager.cs" />
     <Compile Include="Shared\Extensions.cs" />
     <Compile Include="Shared\PacketData.cs" />
@@ -140,13 +147,7 @@
   <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>"$(TargetDir)pdb2mdb.exe" "$(TargetDir)$(TargetName).dll"
-
-
-xcopy /Y /Q "$(TargetDir)$(TargetName).dll" "F:\steam\steamapps\common\Erenshor Demo\BepInEx\scripts\"
-xcopy /Y /Q "$(TargetDir)$(TargetName).dll.mdb" "F:\steam\steamapps\common\Erenshor Demo\BepInEx\scripts\"
-
-xcopy /Y /Q "$(TargetDir)$(TargetName).dll" "F:\steam\steamapps\common\Erenshor\BepInEx\scripts\"
-xcopy /Y /Q "$(TargetDir)$(TargetName).dll.mdb" "F:\steam\steamapps\common\Erenshor\BepInEx\scripts\"</PostBuildEvent>
+    <PostBuildEvent>
+    </PostBuildEvent>
   </PropertyGroup>
 </Project>

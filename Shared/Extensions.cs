@@ -107,7 +107,7 @@ namespace ErenshorCoop.Shared
 		{
 			Character character = null;
 			bool isPlayer = false;
-			if (isNPC)
+			if (isNPC || isSim)
 			{
 				if (!ClientZoneOwnership.isZoneOwner)
 				{

@@ -39,7 +39,7 @@ namespace ErenshorCoop.Client
 
 		public NetStatistics GetStatistics() => Server.Statistics;
 
-		public Entity requestReceiver;
+		public List<Entity> requestReceivers;
 
 		public void Awake()
 		{
@@ -328,17 +328,21 @@ namespace ErenshorCoop.Client
 				if (packetType == PacketType.ITEM_DROP)
 				{
 					var pack = (ItemDropPacket)packet;
-					if (pack.dataTypes.Contains(ItemDropType.DROP))
+					if (pack.senderID != LocalPlayerID)
 					{
-						var itm = GameData.ItemDB.GetItemByID(pack.itemID);
-						if (itm != GameData.PlayerInv.Empty)
-							SpawnItem(itm, pack.quality, pack.location, pack.zone, pack.id);
-					}
-					if(pack.dataTypes.Contains(ItemDropType.DESTROY))
-						ClearDroppedItem(pack.id);
-					if (pack.dataTypes.Contains(ItemDropType.NEW_QUANTITY))
-					{
-						UpdateQuantity(pack.id, pack.quality);
+						if (pack.dataTypes.Contains(ItemDropType.DROP))
+						{
+							var itm = GameData.ItemDB.GetItemByID(pack.itemID);
+							if (itm != GameData.PlayerInv.Empty)
+								SpawnItem(itm, pack.quality, pack.location, pack.zone, pack.id);
+						}
+
+						if (pack.dataTypes.Contains(ItemDropType.DESTROY))
+							ClearDroppedItem(pack.id);
+						if (pack.dataTypes.Contains(ItemDropType.NEW_QUANTITY))
+						{
+							UpdateQuantity(pack.id, pack.quality);
+						}
 					}
 				}
 
@@ -432,9 +436,13 @@ namespace ErenshorCoop.Client
 				var p = (PlayerRequestPacket)packet;
 				if (p.dataTypes.Contains(Request.ENTITY_ID))
 				{
-					short reqId = SharedNPCSyncManager.Instance.GetFreeId();
+					var idL = new List<short>();
+					for(int i = 0;i< p.requestEntityType.Count;i++)
+					{
+						idL.Add(SharedNPCSyncManager.Instance.GetFreeId());
+					}
 					var pa = PacketManager.GetOrCreatePacket<ServerRequestPacket>(p.entityID, PacketType.SERVER_REQUEST);
-					pa.AddPacketData(Request.ENTITY_ID, "reqID", reqId);
+					pa.AddPacketData(Request.ENTITY_ID, "reqID", idL);
 					pa.SetTarget(peer);
 					pa.exclusions.Add(LocalPlayer.peer);
 				}
@@ -447,7 +455,29 @@ namespace ErenshorCoop.Client
 					var p = (ServerRequestPacket)packet;
 					if (p.dataTypes.Contains(Request.ENTITY_ID))
 					{
-						requestReceiver?.ReceiveRequestID(p.reqID);
+
+						var recvs = new List<Entity>(requestReceivers);
+						requestReceivers.Clear();
+						var idx = 0;
+						foreach(var r in recvs)
+						{
+							if(r != null)
+							{
+								if (idx >= p.reqID.Count)
+								{
+									//Logging.LogError($"Error receiving entityID, request failed, not enough IDs.");
+									//break;
+									r.RequestID(); //request new id
+								}
+								else
+								{
+									r.ReceiveRequestID(p.reqID[idx]);
+									idx++;
+								}
+							}
+						}
+						
+						//requestReceiver?.ReceiveRequestID(p.reqID);
 					}
 				}
 
@@ -517,6 +547,7 @@ namespace ErenshorCoop.Client
 			pack.id = GameData.CurrentCharacterSlot.CharName + (Random.Range(0, 9999) + Random.Range(0, 9999)).ToString();
 			pack.location = LocalPlayer.transform.position + (LocalPlayer.transform.forward * 2f);
 			pack.dataTypes.Add(ItemDropType.DROP);
+			pack.senderID = LocalPlayerID;
 
 			//Spawn item for self
 			SpawnItem(item, quantity, pack.location, pack.zone, pack.id);
@@ -540,6 +571,7 @@ namespace ErenshorCoop.Client
 			var pack = PacketManager.GetOrCreatePacket<ItemDropPacket>(LocalPlayerID, PacketType.ITEM_DROP);
 			pack.dataTypes.Add(ItemDropType.DESTROY);
 			pack.id = id;
+			pack.senderID = LocalPlayerID;
 		}
 
 		public void SendItemQuantityUpdate(string id, int quant)
@@ -548,6 +580,7 @@ namespace ErenshorCoop.Client
 			pack.dataTypes.Add(ItemDropType.NEW_QUANTITY);
 			pack.id = id;
 			pack.quality = quant;
+			pack.senderID = LocalPlayerID;
 		}
 
 		public void UpdateQuantity(string id, int quant)
@@ -557,10 +590,6 @@ namespace ErenshorCoop.Client
 			{
 				if (item.id != id) continue;
 				item.UpdateQuantity(quant);
-				if (Variables.lastDroppedItem == item)
-				{
-					GameData.LootWindow.CloseWindow();
-				}
 				break;
 			}
 

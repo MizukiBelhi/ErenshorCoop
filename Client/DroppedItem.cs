@@ -55,12 +55,7 @@ namespace ErenshorCoop.Client
 				_drops.Add(item);
 			}
 		}
-
-		public void OnDestroy()
-		{
-			ClientConnectionManager.Instance.SendItemLooted(id);
-		}
-
+		
 		public void LoadLootTable()
 		{
 
@@ -93,7 +88,7 @@ namespace ErenshorCoop.Client
 				if (i < LootItems.Count && LootItems[i] != null)
 				{
 					GameData.LootWindow.LootSlots[i].MyItem = LootItems[i];
-					GameData.LootWindow.LootSlots[i].Quantity = quality;
+					GameData.LootWindow.LootSlots[i].Quantity = item.RequiredSlot == Item.SlotType.General?1:quality;
 				}
 				else
 				{
@@ -129,21 +124,47 @@ namespace ErenshorCoop.Client
 
 		public void ReturnLoot(List<Item> list)
 		{
+			var prevCount = _drops.Count;
 			_drops.Clear();
 			_drops.AddRange(list);
 
 			var sendQual = quality;
+			bool added = false;
 			if (item.RequiredSlot == Item.SlotType.General && _drops.Count < 8 && quality > 0)
 			{
 				var max = Math.Min(8 - _drops.Count, quality);
 				for (int i = 0; i < max; i++)
 				{
 					_drops.Add(item);
+					added = true;
 				}
 				quality -= max;
 			}
 
-			ClientConnectionManager.Instance.SendItemQuantityUpdate(id, sendQual);
+			var l = _drops.Count + quality;
+
+			if (prevCount != _drops.Count || added)
+				ClientConnectionManager.Instance.SendItemQuantityUpdate(id, l);
+
+			Variables.lastDroppedItem = null;
+		}
+
+		public void RemoveSingleItem()
+		{
+			if (item.RequiredSlot == Item.SlotType.General)
+			{
+				quality--;
+			}
+			var l = _drops.Count + quality;
+			if (item.RequiredSlot != Item.SlotType.General || l <= 0)
+			{
+				ClientConnectionManager.Instance.SendItemLooted(id);
+			}
+
+			if (item.RequiredSlot == Item.SlotType.General)
+			{
+				ClientConnectionManager.Instance.SendItemQuantityUpdate(id, l);
+			}
 		}
 	}
 }

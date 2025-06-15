@@ -18,6 +18,7 @@ namespace ErenshorCoop
 		public int previousHealth = 0;
 		public int previousLevel = 0;
 		public int previousMP = 0;
+		public Entity previousTarget = null;
 		public short playerID = -1;
 
 		public Animator animator;
@@ -254,8 +255,42 @@ namespace ErenshorCoop
 				PacketManager.GetOrCreatePacket<PlayerDataPacket>(playerID, PacketType.PLAYER_DATA).AddPacketData(PlayerDataType.MP, "mp", stats.CurrentMana);
 				previousMP = stats.CurrentMana;
 			}
+			
 
+			var curTar = GameData.PlayerControl.CurrentTarget;
+			Entity curTarEnt = null;
+			if (curTar != null)
+				curTarEnt = curTar.GetComponent<Entity>();
 
+			if (curTarEnt != null)
+			{
+				//Logging.Log($"{name} target set {curTarEnt.name}");
+				if (previousTarget != curTarEnt)
+				{
+					var p = PacketManager.GetOrCreatePacket<PlayerDataPacket>(playerID, PacketType.PLAYER_DATA);
+					p.AddPacketData(PlayerDataType.CURTARGET, "targetID", curTarEnt.entityID);
+					p.targetType = curTarEnt.type;
+					if (curTarEnt is PlayerSync || curTarEnt is NetworkedPlayer)
+						p.targetType = EntityType.PLAYER;
+
+					previousTarget = curTarEnt;
+				}
+			}
+			else
+			{
+				if (previousTarget != null)
+				{
+					var p = PacketManager.GetOrCreatePacket<PlayerDataPacket>(playerID, PacketType.PLAYER_DATA);
+					p.AddPacketData(PlayerDataType.CURTARGET, "targetID", (short)-1);
+					p.targetType = EntityType.LOCAL_PLAYER;
+					previousTarget = null;
+				}
+				else
+				{
+					//Logging.Log($"{name} targetres invalid {curTar}");
+				}
+			}
+			
 			(bool hasChanged, LookData lookData, List<GearData> gearData ) = GetLookData();
 			if (hasChanged)
 			{

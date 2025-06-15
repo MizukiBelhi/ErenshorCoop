@@ -83,7 +83,6 @@ namespace ErenshorCoop
 			
 			if (rot != transform.rotation)
 				transform.rotation = rot;
-
 		}
 
 		public void UpdateAnimState(AnimationData data)
@@ -135,6 +134,32 @@ namespace ErenshorCoop
 			{
 				//Logging.Log($"But something was null? {attacked == null} {data.attackedIsNPC} {data.attackedID}");
 				return;
+			}
+
+
+			if (Grouping.HasGroup)
+			{
+				//Set fromPlayer to if this player is in our group and we're the leader
+				//fromPlayer = Grouping.IsLocalLeader() && Grouping.IsPlayerInGroup(entityID, false);
+				if (isPlayer && Grouping.IsPlayerInGroup(data.attackedID, false)) //If the target isn't a player and the player is in our group
+				{
+					//We add ourselves to the aggro list, this way everyone in the group is automatically in the aggro list
+					//if (data.damage > 0) //Make sure we actually did damage
+					{
+						//Logging.Log($"beep boop aggro {attacked.name} vs {name} to us");
+						npc.ManageAggro(1, ClientConnectionManager.Instance.LocalPlayer.character);
+						if (ServerConnectionManager.Instance.IsRunning)
+						{
+							if (GameData.GroupMember1 != null && GameData.GroupMember1.simIndex >= 0)
+								npc.ManageAggro(1, GameData.GroupMember1.MyStats.Myself);
+							if (GameData.GroupMember2 != null && GameData.GroupMember2.simIndex >= 0)
+								npc.ManageAggro(1, GameData.GroupMember2.MyStats.Myself);
+							if (GameData.GroupMember3 != null && GameData.GroupMember3.simIndex >= 0)
+								npc.ManageAggro(1, GameData.GroupMember3.MyStats.Myself);
+						}
+						//GameData.GroupMatesInCombat.Add(npc);
+					}
+				}
 			}
 
 			//Add attacked character to a list and remove it again after this call

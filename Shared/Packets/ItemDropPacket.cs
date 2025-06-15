@@ -15,12 +15,15 @@ namespace ErenshorCoop.Shared.Packets
 		public Vector3 location = Vector3.zero;
 		public string zone;
 		public string id;
+		public short senderID;
 
 		public ItemDropPacket() : base(DeliveryMethod.ReliableOrdered) { }
 
 		public override void Write(NetDataWriter writer)
 		{
 			writer.Put((byte)PacketType.ITEM_DROP);
+
+			writer.Put(senderID);
 
 			ushort flag = Extensions.GetSubTypeFlag(dataTypes);
 			writer.Put(flag);
@@ -44,6 +47,7 @@ namespace ErenshorCoop.Shared.Packets
 
 		public override void Read(NetPacketReader reader)
 		{
+			senderID = reader.GetShort();
 			dataTypes = Extensions.ReadSubTypeFlag<ItemDropType>(reader.GetUShort());
 			if (dataTypes.Contains(ItemDropType.DROP))
 			{

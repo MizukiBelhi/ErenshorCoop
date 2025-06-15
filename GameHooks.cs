@@ -64,20 +64,22 @@ namespace ErenshorCoop
 			ErenshorCoopMod.CreatePrefixHook(typeof(SceneChange),                "ChangeScene",             typeof(GameHooks), "ChangeScene_Prefix");
 			ErenshorCoopMod.CreatePrefixHook(typeof(LootWindow),                 "CloseWindow",             typeof(GameHooks), "LootWindowClose_Prefix");
 			ErenshorCoopMod.CreatePrefixHook(typeof(PlayerControl),              "LeftClick",               typeof(GameHooks), "PlayerLeftClick_Prefix");
+			ErenshorCoopMod.CreatePrefixHook(typeof(ItemIcon),                   "InformGroupOfLoot",       typeof(GameHooks), "InformGroupOfLoot_Prefix");
 
 
-			ErenshorCoopMod.CreatePostHook(typeof(SpawnPoint),        "SpawnNPC",         typeof(GameHooks), "SpawnPointSpawnNPC_Post");
-			ErenshorCoopMod.CreatePostHook(typeof(Inventory),         "Update",           typeof(GameHooks), "InventoryUpdate_Postfix");
-			ErenshorCoopMod.CreatePostHook(typeof(Character),         "DamageMe",         typeof(GameHooks), "CharacterDamageMe_Postfix");
-			ErenshorCoopMod.CreatePostHook(typeof(Character),         "MagicDamageMe",    typeof(GameHooks), "MagicDamageMe_Postfix");
-			ErenshorCoopMod.CreatePostHook(typeof(Respawn),           "RespawnPlayer",    typeof(GameHooks), "RespawnPlayer_Postfix");
-			ErenshorCoopMod.CreatePostHook(typeof(SimPlayerGrouping), "InviteToGroup",    typeof(GameHooks), "InviteToGroup_Postfix");
-			ErenshorCoopMod.CreatePostHook(typeof(GameManager),       "OpenEscMenu",      typeof(GameHooks), "OpenEscMenu_Postfix");
-			ErenshorCoopMod.CreatePostHook(typeof(GameManager),       "CloseEscMenu",     typeof(GameHooks), "CloseEscMenu_Postfix");
-			ErenshorCoopMod.CreatePostHook(typeof(GameManager),       "ToggleEscapeMenu", typeof(GameHooks), "ToggleEscMenu_Postfix");
-			ErenshorCoopMod.CreatePostHook(typeof(MalarothFeed),      "SpawnPiece",       typeof(GameHooks), "MSpawnPiece_Postfix");
-			ErenshorCoopMod.CreatePostHook(typeof(Chessboard),        "SpawnPiece",       typeof(GameHooks), "CSpawnPiece_Postfix");
-			ErenshorCoopMod.CreatePostHook(typeof(SiraetheEvent),     "Update",           typeof(GameHooks), "SUpdate_Postfix");
+			ErenshorCoopMod.CreatePostHook(typeof(SpawnPoint),        "SpawnNPC",           typeof(GameHooks), "SpawnPointSpawnNPC_Post");
+			ErenshorCoopMod.CreatePostHook(typeof(Inventory),         "Update",             typeof(GameHooks), "InventoryUpdate_Postfix");
+			ErenshorCoopMod.CreatePostHook(typeof(Character),         "DamageMe",           typeof(GameHooks), "CharacterDamageMe_Postfix");
+			ErenshorCoopMod.CreatePostHook(typeof(Character),         "MagicDamageMe",      typeof(GameHooks), "MagicDamageMe_Postfix");
+			ErenshorCoopMod.CreatePostHook(typeof(Respawn),           "RespawnPlayer",      typeof(GameHooks), "RespawnPlayer_Postfix");
+			ErenshorCoopMod.CreatePostHook(typeof(SimPlayerGrouping), "InviteToGroup",      typeof(GameHooks), "InviteToGroup_Postfix");
+			ErenshorCoopMod.CreatePostHook(typeof(GameManager),       "OpenEscMenu",        typeof(GameHooks), "OpenEscMenu_Postfix");
+			ErenshorCoopMod.CreatePostHook(typeof(GameManager),       "CloseEscMenu",       typeof(GameHooks), "CloseEscMenu_Postfix");
+			ErenshorCoopMod.CreatePostHook(typeof(GameManager),       "ToggleEscapeMenu",   typeof(GameHooks), "ToggleEscMenu_Postfix");
+			ErenshorCoopMod.CreatePostHook(typeof(MalarothFeed),      "SpawnPiece",         typeof(GameHooks), "MSpawnPiece_Postfix");
+			ErenshorCoopMod.CreatePostHook(typeof(Chessboard),        "SpawnPiece",         typeof(GameHooks), "CSpawnPiece_Postfix");
+			ErenshorCoopMod.CreatePostHook(typeof(SiraetheEvent),     "Update",             typeof(GameHooks), "SUpdate_Postfix");
+			ErenshorCoopMod.CreatePostHook(typeof(TreasureChestEvent),"SpawnGuardiansCont", typeof(GameHooks), "TreSpawn_Postfix");
 
 			try
 			{
@@ -133,7 +135,6 @@ namespace ErenshorCoop
 
 			type = typeof(LootWindow);
 			downCD = type.GetField("downCD", BindingFlags.NonPublic | BindingFlags.Instance);
-				
 		}
 
 		public static bool CollectActiveSimData_Prefix(SimPlayerMngr __instance)
@@ -223,6 +224,56 @@ namespace ErenshorCoop
 
 
 
+		private static List<GameObject> _prevTreGuards = new();
+		public static void TreSpawn_Postfix(TreasureChestEvent __instance, int _attackerLevel)
+		{
+			if (!ClientConnectionManager.Instance.IsRunning) return;
+
+			if(!_prevTreGuards.SequenceEqual(__instance.LiveGuardians))
+			{
+				foreach(var go in __instance.LiveGuardians)
+				{
+					var net = go.GetOrAddComponent<NetworkedNPC>();
+					if (net.entityID == -1)
+						net.RequestID();
+
+
+				}
+			}
+		}
+
+
+		public static bool InformGroupOfLoot_Prefix(ItemIcon __instance, Item _item)
+		{
+			if (!ClientConnectionManager.Instance.IsRunning) return true;
+
+			if (GameData.GroupMember1 != null && GameData.GroupMember1.simIndex >= 0 && GameData.GroupMember1.MyAvatar.IsThatAnUpgrade(_item))
+			{
+				string str = GameData.GroupMember1.MyAvatar.MyDialog.GetLootReq().Replace("II", _item.ItemName);
+				GameData.SimPlayerGrouping.AddStringForDisplay(GameData.SimPlayerGrouping.PlayerOneName.text + " tells the group: " + str, "#00B2B7");
+				GameData.GroupMember1.OpinionOfPlayer -= 0.3f;
+			}
+			if (GameData.GroupMember2 != null && GameData.GroupMember2.simIndex >= 0 && GameData.GroupMember2.MyAvatar.IsThatAnUpgrade(_item))
+			{
+				string str2 = GameData.GroupMember2.MyAvatar.MyDialog.GetLootReq().Replace("II", _item.ItemName);
+				GameData.SimPlayerGrouping.AddStringForDisplay(GameData.SimPlayerGrouping.PlayerTwoName.text + " tells the group: " + str2, "#00B2B7");
+				GameData.GroupMember2.OpinionOfPlayer -= 0.3f;
+			}
+			if (GameData.GroupMember3 != null && GameData.GroupMember3.simIndex >= 0 && GameData.GroupMember3.MyAvatar.IsThatAnUpgrade(_item))
+			{
+				string str3 = GameData.GroupMember3.MyAvatar.MyDialog.GetLootReq().Replace("II", _item.ItemName);
+				GameData.SimPlayerGrouping.AddStringForDisplay(GameData.SimPlayerGrouping.PlayerThreeName.text + " tells the group: " + str3, "#00B2B7");
+				GameData.GroupMember3.OpinionOfPlayer -= 0.3f;
+			}
+
+			if (Variables.lastDroppedItem != null && Variables.lastDroppedItem.item.Id == _item.Id)
+			{
+				Variables.lastDroppedItem.RemoveSingleItem();
+			}
+
+			return false;
+		}
+
 		public static bool PlayerLeftClick_Prefix(PlayerControl __instance)
 		{
 			if (!ClientConnectionManager.Instance.IsRunning) return true;
@@ -308,8 +359,10 @@ namespace ErenshorCoop
 				
 				GameData.LootWindow.WindowParent.SetActive(false);
 
-				if (num <= 0 && Variables.lastDroppedItem.quality <= 0)
+				if ((num <= 0 && Variables.lastDroppedItem.quality <= 0 && Variables.lastDroppedItem.item.RequiredSlot == Item.SlotType.General) 
+					|| (num <= 0 && Variables.lastDroppedItem.item.RequiredSlot != Item.SlotType.General))
 				{
+					ClientConnectionManager.Instance.SendItemLooted(Variables.lastDroppedItem.id);
 					Object.Destroy(Variables.lastDroppedItem.gameObject);
 				}
 				else
@@ -1167,6 +1220,16 @@ namespace ErenshorCoop
 						break;
 					}
 				}
+				foreach (var m in ClientNPCSyncManager.Instance.NetworkedSims)
+				{
+					if (m.Value.character.MyStats == target)
+					{
+						isNPC = true;
+						targetID = m.Key;
+						targetIsSim = true;
+						break;
+					}
+				}
 			}
 			else
 			{
@@ -1790,16 +1853,6 @@ namespace ErenshorCoop
 						duration = -1,
 					};
 
-					//if(spellID != "80328040")
-					if (spellID == "83280423440")
-						Logging.Log(
-							$"StatusEffectData 1:\n" +
-							$"- spellID: {pack.effectData.spellID}\n" +
-							$"- damageBonus: {pack.effectData.damageBonus}\n" +
-							$"- attackerIsPlayer: {pack.effectData.casterType}\n" +
-							$"- attackerID: {pack.effectData.casterID}\n" +
-							$"- duration: {pack.effectData.duration}\n"
-						);
 				}
 			}
 		}
@@ -1831,16 +1884,6 @@ namespace ErenshorCoop
 						targetID = -2,
 						duration = -1,
 					};
-
-					if (spellID == "83280423440")
-						Logging.Log(
-							$"StatusEffectData 2:\n" +
-							$"- spellID: {pack.effectData.spellID}\n" +
-							$"- damageBonus: {pack.effectData.damageBonus}\n" +
-							$"- attackerIsPlayer: {pack.effectData.casterType}\n" +
-							$"- attackerID: {pack.effectData.casterID}\n" +
-							$"- duration: {pack.effectData.duration}\n"
-						);
 				}
 				else
 				{
@@ -1860,6 +1903,9 @@ namespace ErenshorCoop
 							targetID = target.entityID,
 							targetType = target.type,
 						};
+						if (target is NetworkedPlayer)
+							pack.effectData.targetType = EntityType.PLAYER;
+
 					}
 					else //We're not the caster
 					{
@@ -1878,6 +1924,8 @@ namespace ErenshorCoop
 								targetID = target.entityID,
 								targetType = target.type,
 							};
+							if (target is NetworkedPlayer)
+								pack.effectData.targetType = EntityType.PLAYER;
 							pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
 						}
 					}
@@ -1913,15 +1961,6 @@ namespace ErenshorCoop
 						duration = _duration,
 					};
 
-					if (spellID == "83280423440")
-						Logging.Log(
-							$"StatusEffectData 3:\n" +
-							$"- spellID: {pack.effectData.spellID}\n" +
-							$"- damageBonus: {pack.effectData.damageBonus}\n" +
-							$"- attackerIsPlayer: {pack.effectData.casterType}\n" +
-							$"- attackerID: {pack.effectData.casterID}\n" +
-							$"- duration: {pack.effectData.duration}\n"
-						);
 				}
 				else
 				{
@@ -1941,6 +1980,8 @@ namespace ErenshorCoop
 							targetID = target.entityID,
 							targetType = target.type,
 						};
+						if (target is NetworkedPlayer)
+							pack.effectData.targetType = EntityType.PLAYER;
 					}
 					else //We're not the caster
 					{
@@ -1959,6 +2000,8 @@ namespace ErenshorCoop
 								targetID = target.entityID,
 								targetType = target.type,
 							};
+							if (target is NetworkedPlayer)
+								pack.effectData.targetType = EntityType.PLAYER;
 							pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
 						}
 					}
@@ -2157,7 +2200,17 @@ namespace ErenshorCoop
 			else if (characterIsNetworked)
 			{
 				attackerNpcSync.SendAttack(__result, networkedSync.playerID, false, _dmgType, _animEffect, resistMod);
-			}else if (characterIsLocalPlayer)
+				if (ServerConnectionManager.Instance.IsRunning)
+				{
+					if (GameData.GroupMember1 != null && GameData.GroupMember1.simIndex >= 0)
+						attackerNpcSync.npc.ManageAggro(1, GameData.GroupMember1.MyStats.Myself);
+					if (GameData.GroupMember2 != null && GameData.GroupMember2.simIndex >= 0)
+						attackerNpcSync.npc.ManageAggro(1, GameData.GroupMember2.MyStats.Myself);
+					if (GameData.GroupMember3 != null && GameData.GroupMember3.simIndex >= 0)
+						attackerNpcSync.npc.ManageAggro(1, GameData.GroupMember3.MyStats.Myself);
+				}
+			}
+			else if (characterIsLocalPlayer)
 			{
 				attackerNpcSync.SendAttack(__result, ClientConnectionManager.Instance.LocalPlayerID, false, _dmgType, _animEffect, resistMod);
 			}else if (characterIsOutwardNPC)

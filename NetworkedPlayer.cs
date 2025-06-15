@@ -9,6 +9,7 @@ using ErenshorCoop.Shared;
 using ErenshorCoop.Shared.Packets;
 using TMPro;
 using UnityEngine.SceneManagement;
+using System.Linq;
 
 namespace ErenshorCoop
 {
@@ -63,6 +64,7 @@ namespace ErenshorCoop
 			npc.NPCName = playerName;
 			npc.GuildName = "";
 			npc.SimPlayer = false;
+			npc.ThisSim = sim;
 			name = playerName;
 			entityName = playerName;
 			entityID = playerID;
@@ -217,6 +219,61 @@ namespace ErenshorCoop
 
 			if(rot != transform.rotation)
 				transform.rotation = rot;
+
+			HandleAggro();
+
+		}
+
+		private void HandleAggro()
+		{
+			if (npc.CurrentAggroTarget != null && character.Alive)
+			{
+				if (!npc.NameFlash.flashing)
+				{
+					npc.NameFlash.Flash(true);
+				}
+			}
+			else
+			{
+				if (npc.NameFlash.flashing)
+				{
+					npc.NameFlash.Flash(false);
+				}
+				npc.inMeleeRange = false;
+			}
+
+			if (ServerConnectionManager.Instance.IsRunning)
+			{
+
+				if (GameData.SimPlayerGrouping.GroupTargets.Count > 0 && GameData.SimPlayerGrouping.GroupTargets[0] != null && GameData.SimPlayerGrouping.GroupTargets[0].Alive)
+				{
+					//if (GameData.SimPlayerGrouping.GroupTargets[0].MyNPC.CurrentAggroTarget != null)
+					{
+						var _targ = GameData.SimPlayerGrouping.GroupTargets[0];
+						if (_targ != null && _targ.GetComponent<SimPlayer>() == null && _targ.GetComponent<PlayerControl>() == null && _targ.MyFaction != Character.Faction.Mineral)
+						{
+							if (GameData.GroupMember1 != null && GameData.GroupMember1.simIndex >= 0 && GameData.GroupMember1.MyStats.Myself.Alive && GameData.GroupMember1.MyStats.Myself.NearbyEnemies.Contains(_targ))
+							{
+								GameData.GroupMember1.MyAvatar.IgnoreAllCombat = false;
+								GameData.GroupMember1.MyAvatar.MyStats.Myself.MyNPC.ForceAggroOn(_targ);
+							}
+							if (GameData.GroupMember2 != null && GameData.GroupMember2.simIndex >= 0 && GameData.GroupMember2.MyStats.Myself.Alive && GameData.GroupMember2.MyStats.Myself.NearbyEnemies.Contains(_targ))
+							{
+								GameData.GroupMember2.MyAvatar.IgnoreAllCombat = false;
+								GameData.GroupMember2.MyAvatar.MyStats.Myself.MyNPC.ForceAggroOn(_targ);
+							}
+							if (GameData.GroupMember3 != null && GameData.GroupMember3.simIndex >= 0 && GameData.GroupMember3.MyStats.Myself.Alive && GameData.GroupMember3.MyStats.Myself.NearbyEnemies.Contains(_targ))
+							{
+								GameData.GroupMember3.MyAvatar.IgnoreAllCombat = false;
+								GameData.GroupMember3.MyAvatar.MyStats.Myself.MyNPC.ForceAggroOn(_targ);
+							}
+						}
+					}
+				}
+			}
+			npc.HailTimer = 99999f;
+
+
 		}
 
 		public void LateUpdate()
@@ -288,10 +345,24 @@ namespace ErenshorCoop
 			{
 				//Set fromPlayer to if this player is in our group and we're the leader
 				fromPlayer =  Grouping.IsLocalLeader() && Grouping.IsPlayerInGroup(entityID, false);
-				if (!isPlayer) //If the target isn't a player
+				if (!isPlayer && Grouping.IsPlayerInGroup(entityID, false)) //If the target isn't a player and the player is in our group
 				{
 					//We add ourselves to the aggro list, this way everyone in the group is automatically in the aggro list
-					attacked.MyNPC.ManageAggro(1, ClientConnectionManager.Instance.LocalPlayer.character);
+					if (data.damage > 0) //Make sure we actually did damage
+					{
+						//Logging.Log($"beep boop aggro {playerName} vs {attacked.name} to us");
+						attacked.MyNPC.ManageAggro(1, ClientConnectionManager.Instance.LocalPlayer.character);
+						if(ServerConnectionManager.Instance.IsRunning)
+						{
+							if(GameData.GroupMember1 != null && GameData.GroupMember1.simIndex >= 0)
+								attacked.MyNPC.ManageAggro(1, GameData.GroupMember1.MyStats.Myself);
+							if (GameData.GroupMember2 != null && GameData.GroupMember2.simIndex >= 0)
+								attacked.MyNPC.ManageAggro(1, GameData.GroupMember2.MyStats.Myself);
+							if (GameData.GroupMember3 != null && GameData.GroupMember3.simIndex >= 0)
+								attacked.MyNPC.ManageAggro(1, GameData.GroupMember3.MyStats.Myself);
+						}
+						//GameData.GroupMatesInCombat.Add(npc);
+					}
 				}
 			}
 
@@ -403,6 +474,10 @@ namespace ErenshorCoop
 				if (playerDataPacket.dataTypes.Contains(PlayerDataType.GEAR))
 				{
 					UpdateLooks(playerDataPacket.lookData, playerDataPacket.gearData);
+				}
+				if(playerDataPacket.dataTypes.Contains(PlayerDataType.CURTARGET))
+				{
+					HandleTargetChange(playerDataPacket.targetID, playerDataPacket.targetType);
 				}
 			}
 
@@ -648,6 +723,11 @@ namespace ErenshorCoop
 				else
 				{
 					t = ClientNPCSyncManager.Instance.GetEntityFromID(effectData.targetID,effectData.targetType == EntityType.SIM);
+				}
+
+				if(t == null)
+				{
+					t = ClientConnectionManager.Instance.GetPlayerFromID(effectData.targetID);
 				}
 
 				if (t == null) return;

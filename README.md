@@ -24,7 +24,6 @@ Please see the changelog for updates.<br><br><br>
   - When connecting or hosting you are required to re-summon for other players to see it.
 - Trading
   - Pick up an item from the inventory or bank and drop it outside the UI
-    - (Still need to add a confirmation window)
   - The items get deleted if you disconnect
   - They should appear again after a zone change, if not let me know
   - Confirmation window (can be disabled in the settings)
@@ -35,7 +34,7 @@ Please see the changelog for updates.<br><br><br>
 
 ## Known Bugs
 - Other players have sim chat behaviour
-- There is a small game bug where sometimes when a player attacks an enemy with a spell, they will not get aggroed.
+
 
 ## Mention Worthy
 - Skin Colors are not correctly applied (game bug).

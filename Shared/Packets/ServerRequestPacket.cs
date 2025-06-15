@@ -7,7 +7,7 @@ namespace ErenshorCoop.Shared.Packets
 	public class ServerRequestPacket : BasePacket
 	{
 		public HashSet<Request> dataTypes = new();
-		public short reqID;
+		public List<short> reqID;
 
 		public ServerRequestPacket() : base(DeliveryMethod.ReliableOrdered) { }
 
@@ -19,7 +19,11 @@ namespace ErenshorCoop.Shared.Packets
 			writer.Put(Extensions.GetSubTypeFlag(dataTypes));
 
 			if (dataTypes.Contains(Request.ENTITY_ID))
-				writer.Put(reqID);
+			{
+				writer.Put(reqID.Count);
+				foreach(var r in reqID)
+					writer.Put(r);
+			}
 
 		}
 
@@ -29,7 +33,12 @@ namespace ErenshorCoop.Shared.Packets
 			dataTypes = Extensions.ReadSubTypeFlag<Request>(reader.GetUShort());
 
 			if (dataTypes.Contains(Request.ENTITY_ID))
-				reqID = reader.GetShort();
+			{
+				reqID = new();
+				var c = reader.GetInt();
+				for (int i = 0; i < c; i++)
+					reqID.Add(reader.GetShort());
+			}
 		}
 		
 	}
