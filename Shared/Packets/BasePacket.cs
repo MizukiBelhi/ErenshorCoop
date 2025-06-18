@@ -23,6 +23,7 @@ namespace ErenshorCoop.Shared.Packets
 		public bool singleTarget = false;
 		public List<NetPeer> exclusions = new();
 		public short entityID;
+		public List<short> targetPlayerIDs;
 
 		public BasePacket(DeliveryMethod deliveryMethod) { this.deliveryMethod = deliveryMethod; }
 

@@ -279,7 +279,7 @@ namespace ErenshorCoop.Client
 			{
 				var tSpawnMobID = 0;
 
-				if ((CustomSpawnID)spawnID == CustomSpawnID.ADDS)
+				if ((CustomSpawnID)spawnID == CustomSpawnID.ADDS || (CustomSpawnID)spawnID == CustomSpawnID.TREASURE_GUARD)
 					tSpawnMobID = int.Parse(spawnMobID.Split(',')[0]);
 				else
 					tSpawnMobID = int.Parse(spawnMobID);
@@ -339,6 +339,14 @@ namespace ErenshorCoop.Client
 							}
 						}
 						break;
+					case CustomSpawnID.TREASURE_GUARD:
+						var guardID = int.Parse(spawnMobID.Split(',')[1]);
+						var guard = GameHooks.GetChestGuardPrefab(tSpawnMobID, guardID);
+						if (guard != null)
+						{
+							prefab = guard;
+						}
+						break;
 				}
 
 				isSpecial = true;
@@ -394,7 +402,9 @@ namespace ErenshorCoop.Client
 			}
 
 			var component = Instantiate(prefab, pos, rot).GetComponent<NPC>();
-			component.GetComponent<Stats>().Level += Variables.spawnData[spawnID].levelMod;
+
+			if(!isSpecial)
+				component.GetComponent<Stats>().Level += Variables.spawnData[spawnID].levelMod;
 
 
 			//SpawnedNPC = component;
@@ -551,6 +561,7 @@ namespace ErenshorCoop.Client
 						{
 							//NetworkedMobs[entityData.entityID].owner.MySummon = null;
 						}
+						Logging.Log($"ent rem {NetworkedMobs[entityData.entityID].name}");
 						Destroy(NetworkedMobs[entityData.entityID].gameObject);
 					}
 					if(entityData.dataTypes.Contains(EntityDataType.CURTARGET))

@@ -14,7 +14,6 @@ namespace ErenshorCoop.Shared.Packets
 		public List<EntitySpawnData> spawnData;
 
 		public EntitySpawnPacket() : base(DeliveryMethod.ReliableOrdered) { }
-		public List<short> targetPlayerIDs;
 
 		public override void Write(NetDataWriter writer)
 		{

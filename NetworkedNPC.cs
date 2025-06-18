@@ -71,6 +71,7 @@ namespace ErenshorCoop
 			//if (npc.behDo != null)
 			//	StartCoroutine(npc.behDo);
 			//	GameHooks.leashing.SetValue(npc, false);
+			HandleEndSpell();
 			GameHooks.leashing.SetValue(npc, 0f);
 			ClientNPCSyncManager.Instance.OnClientMobDestroyed(entityID);
 		}
@@ -215,10 +216,19 @@ namespace ErenshorCoop
 			}
 			else
 			{
-				if (!ClientZoneOwnership.isZoneOwner)
-					targ = ClientNPCSyncManager.Instance.GetEntityFromID(targetID, isSim).gameObject;
-				else
-					targ = SharedNPCSyncManager.Instance.GetEntityFromID(targetID, isSim).gameObject;
+				Entity f = ClientNPCSyncManager.Instance.GetEntityFromID(targetID, isSim);
+				
+				if(f == null)
+					f = SharedNPCSyncManager.Instance.GetEntityFromID(targetID, isSim);
+
+				if (f != null)
+					targ = f.gameObject;
+			}
+
+			if (targ == null)
+			{
+				Instantiate(GameData.EffectDB.SpellEffects[spell.SpellResolveFXIndex], transform.position, Quaternion.identity);
+				return;
 			}
 
 			switch (spell.Type)
@@ -264,8 +274,11 @@ namespace ErenshorCoop
 				if (!healingData.isMP)
 				{
 					//Note: even if each player sends their updated health, this might actually be faster
-					bool targetIsLocal = healingData.targetID == ClientConnectionManager.Instance.LocalPlayerID;
-					UpdateSocialLog.LogAdd($"{name}'s {(healingData.isCrit ? "CRITICAL " : "")}healing spell restores {healingData.amount} of {(targetIsLocal ? "your" : target.name + "'s")} life!", "green");
+					if (type != EntityType.ENEMY)
+					{
+						bool targetIsLocal = healingData.targetID == ClientConnectionManager.Instance.LocalPlayerID;
+						UpdateSocialLog.LogAdd($"{name}'s {(healingData.isCrit ? "CRITICAL " : "")}healing spell restores {healingData.amount} of {(targetIsLocal ? "your" : target.name + "'s")} life!", "green");
+					}
 
 					target.MyStats.HealMe(healingData.amount);
 				}

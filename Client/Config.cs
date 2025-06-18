@@ -48,7 +48,7 @@ namespace ErenshorCoop.Client
 			SavedPort = config.Bind(
 				"Client Settings",
 				"Port",
-				"",
+				"7777",
 				""
 			);
 			DisplayMetrics.SettingChanged += OnMetricsSettingChanged;

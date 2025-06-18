@@ -35,10 +35,10 @@ namespace ErenshorCoop
 			//	UpdateSocialLog.CombatLogAdd($"[COOP] {message}", "red");
 		}
 
-		public static void LogGameMessage(string message)
+		public static void LogGameMessage(string message, bool error=false)
 		{
 			if (GameData.ChatLog != null)
-				UpdateSocialLog.CombatLogAdd($"[COOP] {message}", "#006666");
+				UpdateSocialLog.CombatLogAdd($"[COOP] {message}", error?"red":GameData.ReadableBlue);
 		}
 
 		public static void HandleMessage(Entity from, PlayerMessagePacket packet)
@@ -55,7 +55,9 @@ namespace ErenshorCoop
 					UpdateSocialLog.LogAdd($"{from.entityName} says: {mes}");
 					UpdateSocialLog.LocalLogAdd($"{from.entityName} says: {mes}");
 					break;
-				case MessageType.GROUP: //TODO:
+				case MessageType.GROUP:
+					if(Grouping.HasGroup && Grouping.IsPlayerInGroup(from.entityID, false))
+						UpdateSocialLog.LogAdd($"{from.entityName} tells the group: {mes}", "#00B2B7");
 					break;
 				case MessageType.SHOUT:
 					UpdateSocialLog.LogAdd($"{from.entityName} shouts: {mes}", "orange");
@@ -66,6 +68,8 @@ namespace ErenshorCoop
 					{
 						UpdateSocialLog.LogAdd($"[WHISPER FROM] {from.entityName}: {mes}", "#FB09FF");
 						UpdateSocialLog.LocalLogAdd($"[WHISPER FROM] {from.entityName}: {mes}", "#FB09FF");
+						GameData.TextInput.LastPlayerMsg = from.entityName;
+						GameData.PlayerAud.PlayOneShot(GameData.Misc.ReceiveTell, GameData.PlayerAud.volume * 0.5f * GameData.SFXVol);
 					}
 					break;
 				case MessageType.INFO:

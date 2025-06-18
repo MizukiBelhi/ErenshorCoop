@@ -47,6 +47,7 @@ namespace ErenshorCoop
 		private Coroutine interpRoutine;
 
 		private GameObject spellEffect;
+		
 
 		public void Init(Vector3 position, Quaternion rotation, string pName, string scene, short playerID, NetPeer peer)
 		{
@@ -101,6 +102,8 @@ namespace ErenshorCoop
 			//character.Alive = false;
 			//GameHooks.leashing.SetValue(npc, true);
 			GameHooks.leashing.SetValue(npc, 100f);
+
+			type = EntityType.PLAYER;
 		}
 
 		//Hack: Change the sims models to the player ones
@@ -226,7 +229,7 @@ namespace ErenshorCoop
 
 		private void HandleAggro()
 		{
-			if (npc.CurrentAggroTarget != null && character.Alive)
+			if (npc.CurrentAggroTarget != null && character.Alive && aggroTarget != null && aggroTarget.type == EntityType.ENEMY)
 			{
 				if (!npc.NameFlash.flashing)
 				{
@@ -821,11 +824,13 @@ namespace ErenshorCoop
 			}
 			else
 			{
-				if (!ClientZoneOwnership.isZoneOwner)
-					targ = ClientNPCSyncManager.Instance.GetEntityFromID(targetID, isSim);
-				else
+				if(targ == null)
 					targ = SharedNPCSyncManager.Instance.GetEntityFromID(targetID, isSim);
+				if (targ == null)
+					targ = ClientNPCSyncManager.Instance.GetEntityFromID(targetID, isSim);
 			}
+
+			if (targ == null) return;
 
 			//Logging.Log($"{targetIsNPC}");
 

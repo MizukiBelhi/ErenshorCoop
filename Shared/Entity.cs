@@ -11,13 +11,16 @@ namespace ErenshorCoop.Shared
 	{
 		public string entityName = "";
 		public NetPeer peer;
-		public short entityID;
+		public short entityID = -1;
 		public Character character;
 		public string currentScene = "";
 		public EntityType type = EntityType.ENEMY;
 		public string zone = "";
+		protected Entity aggroTarget;
 
 		public bool isGuardian = false;
+		public int guardianId = 0;
+		public int treasureChestID = 0;
 
 		//Summon
 		public Entity MySummon;
@@ -37,16 +40,19 @@ namespace ErenshorCoop.Shared
 
 		public void RequestID()
 		{
-			ClientConnectionManager.Instance.requestReceivers.Add(this);
+			
 			//ask server for an id
 			if (!ServerConnectionManager.Instance.IsRunning)
 			{
-				var pa = PacketManager.GetOrCreatePacket<PlayerRequestPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_REQUEST, true);
+				ClientConnectionManager.Instance.requestReceivers.Add(this);
+
+				var pa = PacketManager.GetOrCreatePacket<PlayerRequestPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_REQUEST);
 				if (pa.requestEntityType == null)
 					pa.requestEntityType = new();
+				pa.dataTypes.Add(Request.ENTITY_ID);
 				pa.requestEntityType.Add(type);
-				pa.CanSend();
-				//Logging.Log($"Sending entityID request");
+				//pa.CanSend();
+				Logging.Log($"Sending entityID request");
 			}
 			else
 			{
@@ -54,12 +60,16 @@ namespace ErenshorCoop.Shared
 				if (type == EntityType.PET)
 					SharedNPCSyncManager.Instance.ServerSpawnPet(gameObject, owner.entityID, entityID, spellID);
 				else
-					SharedNPCSyncManager.Instance.ServerSpawnMob(gameObject, (int)CustomSpawnID.TREASURE_GUARD, 0, false, transform.position, transform.rotation);
+				{
+					if(isGuardian)
+						SharedNPCSyncManager.Instance.ServerSpawnMob(gameObject, (int)CustomSpawnID.TREASURE_GUARD, $"{treasureChestID},{guardianId}", false, transform.position, transform.rotation);
+				}
 			}
 		}
 
 		public void ReceiveRequestID(short id)
 		{
+			Logging.Log($"received entityID request {id}");
 			if (GetType() != typeof(NPCSync))
 				return;
 			if (id == -1) return;
@@ -68,6 +78,11 @@ namespace ErenshorCoop.Shared
 
 			if (type == EntityType.PET)
 				SharedNPCSyncManager.Instance.ServerSpawnPet(gameObject, owner.entityID, id, spellID);
+			else
+			{
+				if(isGuardian)
+					SharedNPCSyncManager.Instance.ServerSpawnMob(gameObject, (int)CustomSpawnID.TREASURE_GUARD, $"{treasureChestID},{guardianId}", false, transform.position, transform.rotation);
+			}
 		}
 
 		public void CreateSummon(Spell spell, GameObject o)
@@ -107,14 +122,27 @@ namespace ErenshorCoop.Shared
 				character.MyNPC.CurrentAggroTarget = null;
 				return;
 			}
-			(bool isPlayer, var target) = Extensions.GetCharacterFromID(targetType==EntityType.ENEMY, targetID, targetType==EntityType.SIM);
+			(bool isPlayer, var target) = Extensions.GetEntityFromID(targetType==EntityType.ENEMY, targetID, targetType==EntityType.SIM);
 			if (target == null)
 			{
 				character.MyNPC.CurrentAggroTarget = null;
 				return;
 			}
+
+			if(type != EntityType.ENEMY)
+			{
+				if (targetType != EntityType.ENEMY)
+					return;
+			}
+
+			if(type == EntityType.ENEMY)
+			{
+				if (targetType == EntityType.ENEMY)
+					return;
+			}
 			
-			character.MyNPC.CurrentAggroTarget = target;
+			character.MyNPC.CurrentAggroTarget = target.character;
+			aggroTarget = target;
 		}
 
 		public void SendAttack(int damage, short attackerID, bool attackerNPC, GameData.DamageType dmgType, bool animEffect, float resistMod)

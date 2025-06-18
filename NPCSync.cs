@@ -51,8 +51,11 @@ namespace ErenshorCoop
 			//Destroy summon if it isn't our summon..
 			if (MySummon == null || MySummon.character.MyNPC != character.MyCharmedNPC)
 			{
-				if(character.MyCharmedNPC != null)
+				if (character.MyCharmedNPC != null)
+				{
+					Logging.Log($"Destr sum {character.MyCharmedNPC.name}");
 					Destroy(character.MyCharmedNPC.gameObject);
+				}
 			}
 			if (MySummon != null)
 			{
@@ -113,6 +116,11 @@ namespace ErenshorCoop
 				previousRotation = transform.rotation;
 			}
 
+			isCloseToPlayer = true;
+
+
+			if (type == EntityType.PET) return;
+
 			var curTar = npc?.GetCurrentTarget();
 			var curTarEnt = curTar?.GetComponent<Entity>();
 			if (curTarEnt != null)
@@ -147,18 +155,20 @@ namespace ErenshorCoop
 
 			
 
-			isCloseToPlayer = true;
+			
 		}
 
 		public void LateUpdate()
 		{
+			if (type == EntityType.PET) return;
+
 			var curTar = npc?.GetCurrentTarget();
 			var curTarEnt = curTar?.GetComponent<Entity>();
 			if (character != null && npc.CurrentAggroTarget != null && character.Alive && curTarEnt != null)
 			{
 				//GameData.GroupMatesInCombat.Add(npc);
 				//Logging.Log($" {curTarEnt.ToString()} {character.ToString()} {GameData.SimPlayerGrouping.GroupTargets.Contains(character)} ");
-				if (npc.CurrentAggroTarget.MyNPC.ThisSim != null && !GameData.AttackingPlayer.Contains(npc) && curTarEnt != null && npc.CurrentAggroTarget.MyNPC.ThisSim.InGroup)
+				if (npc.CurrentAggroTarget != null && npc.CurrentAggroTarget.MyNPC != null && npc.CurrentAggroTarget.MyNPC.ThisSim != null && !GameData.AttackingPlayer.Contains(npc) && curTarEnt != null && npc.CurrentAggroTarget.MyNPC.ThisSim.InGroup)
 				{
 
 					GameData.AttackingPlayer.Add(npc);

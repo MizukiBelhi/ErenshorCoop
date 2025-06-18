@@ -249,7 +249,7 @@ namespace ErenshorCoop.Shared
 
 		public void CollectSpawnData()
 		{
-			Logging.Log("collecting");
+			//Logging.Log("collecting");
 
 			var spawns = FindObjectsOfType<SpawnPoint>(true);
 
@@ -543,13 +543,14 @@ namespace ErenshorCoop.Shared
 		/// <summary>
 		/// Spawns a single mob.
 		/// </summary>
-		public void ServerSpawnMob(GameObject spawnedNPC, int spawnID, int spawnMobID, bool isRare, Vector3 pos, Quaternion rot)
+		public void ServerSpawnMob(GameObject spawnedNPC, int spawnID, string spawnMobID, bool isRare, Vector3 pos, Quaternion rot)
 		{
 			if (!CanRun || !ClientZoneOwnership.isZoneOwner) return;
 
 			var s = spawnedNPC.GetOrAddComponent<NPCSync>();
 			s.type = EntityType.ENEMY;
-			s.entityID = GetFreeId();
+			if(s.entityID == -1)
+				s.entityID = GetFreeId();
 			s.zone = SceneManager.GetActiveScene().name;
 
 			mobs[s.entityID] = s;
@@ -560,7 +561,7 @@ namespace ErenshorCoop.Shared
 			{
 				CreateEntitySpawnData(
 					s.entityID,
-					spawnMobID.ToString(),
+					spawnMobID,
 					spawnID,
 					isRare,
 					pos,

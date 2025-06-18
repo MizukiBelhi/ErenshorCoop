@@ -15,7 +15,6 @@ namespace ErenshorCoop.Shared.Packets
 
 		public Vector3 position;
 		public Quaternion rotation;
-		public List<short> targetPlayerIDs;
 
 		public EntityTransformPacket() : base(DeliveryMethod.Sequenced) { }
 

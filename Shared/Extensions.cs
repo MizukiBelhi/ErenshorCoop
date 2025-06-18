@@ -109,17 +109,15 @@ namespace ErenshorCoop.Shared
 			bool isPlayer = false;
 			if (isNPC || isSim)
 			{
-				if (!ClientZoneOwnership.isZoneOwner)
-				{
-					var ent = ClientNPCSyncManager.Instance.GetEntityFromID(entityID, isSim);
-					character = ent != null ? ent.character : null;
+				var ent = ClientNPCSyncManager.Instance.GetEntityFromID(entityID, isSim);
+				character = ent != null ? ent.character : null;
 
-				}
-				else
+				if (character == null)
 				{
-					var ent = SharedNPCSyncManager.Instance.GetEntityFromID(entityID, isSim);
+					ent = SharedNPCSyncManager.Instance.GetEntityFromID(entityID, isSim);
 					character = ent != null ? ent.character : null;
 				}
+				
 				if (ClientConnectionManager.Instance.LocalPlayer.MySummon != null)
 				{
 					if (ClientConnectionManager.Instance.LocalPlayer.MySummon.entityID == entityID)
@@ -140,6 +138,45 @@ namespace ErenshorCoop.Shared
 			}
 
 			return ( isPlayer, character );
+		}
+
+		public static (bool isPlayer, Entity entity) GetEntityFromID(bool isNPC, short entityID, bool isSim)
+		{
+			Entity character = null;
+			bool isPlayer = false;
+			if (isNPC || isSim)
+			{
+				if (!ClientZoneOwnership.isZoneOwner)
+				{
+					var ent = ClientNPCSyncManager.Instance.GetEntityFromID(entityID, isSim);
+					character = ent != null ? ent : null;
+
+				}
+				else
+				{
+					var ent = SharedNPCSyncManager.Instance.GetEntityFromID(entityID, isSim);
+					character = ent != null ? ent : null;
+				}
+				if (ClientConnectionManager.Instance.LocalPlayer.MySummon != null)
+				{
+					if (ClientConnectionManager.Instance.LocalPlayer.MySummon.entityID == entityID)
+						character = ClientConnectionManager.Instance.LocalPlayer.MySummon;
+				}
+			}
+			else
+			{
+				if (entityID == ClientConnectionManager.Instance.LocalPlayerID)
+					character = ClientConnectionManager.Instance.LocalPlayer;
+				else
+				{
+					var ent = ClientConnectionManager.Instance.GetPlayerFromID(entityID);
+					character = ent != null ? ent : null;
+				}
+
+				isPlayer = true;
+			}
+
+			return (isPlayer, character);
 		}
 
 		public static Dictionary<string, AnimationClip> clipLookup = new();

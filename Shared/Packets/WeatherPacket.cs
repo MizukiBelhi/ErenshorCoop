@@ -8,7 +8,6 @@ namespace ErenshorCoop.Shared.Packets
 	public class WeatherPacket : BasePacket
 	{
 		public WeatherPacket() : base(DeliveryMethod.ReliableOrdered) { }
-		public List<short> targetPlayerIDs;
 		public WeatherHandler.WeatherData weatherData;
 
 		public override void Write(NetDataWriter writer)

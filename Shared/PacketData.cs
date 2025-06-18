@@ -141,6 +141,8 @@ namespace ErenshorCoop.Shared
 		WEATHER,
 		PVP_MODE,
 		ZONE_OWNERSHIP,
+		SERVER_SETTINGS,
+		HOST_MODS,
 	}
 
 	public enum CustomSpawnID

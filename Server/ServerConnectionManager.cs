@@ -132,6 +132,16 @@ namespace ErenshorCoop.Server
 			var p = PacketManager.GetOrCreatePacket<ServerInfoPacket>(0, PacketType.SERVER_INFO);
 			p.AddPacketData(ServerInfoType.PVP_MODE, "pvpMode", ServerConfig.IsPVPEnabled.Value);
 			p.SetTarget(peer);
+			p.dataTypes.Add(ServerInfoType.SERVER_SETTINGS);
+			p.serverSettings = new()
+			{
+				xpMod = GameData.ServerXPMod,
+				dmgMod = GameData.ServerDMGMod,
+				hpMod = GameData.ServerHPMod,
+				lootMod = GameData.ServerLootRate
+			};
+			p.dataTypes.Add(ServerInfoType.HOST_MODS);
+			p.plugins = ErenshorCoopMod.loadedPlugins;
 			PacketManager.GetOrCreatePacket<ServerConnectPacket>(PlayerIDNum, PacketType.SERVER_CONNECT).SetTarget(peer);
 		}
 

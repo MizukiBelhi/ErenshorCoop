@@ -18,6 +18,7 @@ Please see the changelog for updates.<br><br><br>
   - Malaroths
   - Chessboard
   - Siraethe wards
+  - Treasure Guardians
 - Buffs/Debuffs
 - Shared group XP
 - Summons
@@ -30,7 +31,8 @@ Please see the changelog for updates.<br><br><br>
 
 ## Not Implemented
 - Treasure Chests
-- Group Chat
+  - Guardians are synced
+
 
 ## Known Bugs
 - Other players have sim chat behaviour
@@ -40,7 +42,7 @@ Please see the changelog for updates.<br><br><br>
 - Skin Colors are not correctly applied (game bug).
 - Interpolation is currently turned off. Expect some lagginess if you're connecting over long distances.
 - Each player requires around ~20kb/s upload.
-- The host will need around ~60kb/s upload per player.
+- The host will need around ~80kb/s upload per player.
 
 ## Usage
 When in-game, use the UI that opens when pressing escape or alternatively:
@@ -53,7 +55,7 @@ When in-game, use the UI that opens when pressing escape or alternatively:
 ## FAQ
 
     Q: How much bandwidth do I require to host?
-    A: You will need around ~60kb/s upload for each player connected to you.
+    A: You will need around ~80kb/s upload for each player connected to you.
 
     Q: Can there be a standalone server?
     A: No, due to legal reasons this won't be possible.

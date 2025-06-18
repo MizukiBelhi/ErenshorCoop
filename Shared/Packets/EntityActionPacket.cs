@@ -19,7 +19,6 @@ namespace ErenshorCoop.Shared.Packets
 		public short targetID;
 		public bool targetIsNPC;
 		public bool targetIsSim;
-		public List<short> targetPlayerIDs;
 		public List<HealingData> healingData;
 		public StatusEffectData effectData;
 		public bool RemoveAllStatus = false;

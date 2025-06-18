@@ -14,7 +14,7 @@ using UnityEngine.SceneManagement;
 
 namespace ErenshorCoop
 {
-	[BepInPlugin("mizuki.coop", "Erenshor Coop", "1.0.9")]
+	[BepInPlugin("mizuki.coop", "Erenshor Coop", "1.5.0")]
 	public class ErenshorCoopMod : BaseUnityPlugin
 	{
 		public static ConfigEntry<int> someConfig;
@@ -37,6 +37,9 @@ namespace ErenshorCoop
 
 		public static Version version;
 
+		private GameObject mainGO;
+		private GameObject ui;
+
 		public void Awake()
 		{
 			version = Info.Metadata.Version;
@@ -46,7 +49,7 @@ namespace ErenshorCoop
 			OnGameMapLoad += OnGameLoad;
 			OnGameMenuLoad += OnMenuLoad;
 
-			GameObject mainGO = new("Erenshor Coop");
+			mainGO = new("Erenshor Coop");
 			mainGO.transform.SetParent(transform);
 
 			ClientConfig.Load(Config);
@@ -57,9 +60,9 @@ namespace ErenshorCoop
 			mainGO.AddComponent<ClientNPCSyncManager>();
 			mainGO.AddComponent<SharedNPCSyncManager>();
 
-			GameObject ui = new("CoopUI");
+			ui = new("CoopUI");
 			ModMain = ui.AddComponent<UI.Main>();
-			ModMain.transform.SetParent(mainGO.transform);
+			ui.transform.SetParent(mainGO.transform);
 
 			EnableHooks();
 
@@ -94,10 +97,28 @@ namespace ErenshorCoop
 
 		private void OnDestroy()
 		{
+			OnGameMapLoad -= OnGameLoad;
+			OnGameMenuLoad -= OnMenuLoad;
+
 			SceneManager.sceneLoaded -= OnSceneLoaded;
-			//Networking.Disconnect();
+			if (ClientConnectionManager.Instance != null)
+				ClientConnectionManager.Instance.Disconnect();
+			if(ServerConnectionManager.Instance != null)
+				ServerConnectionManager.Instance.Disconnect();
+
+			var p = FindObjectOfType<PlayerSync>();
+			if (p != null)
+				Destroy(p);
+
+			Destroy(ui);
+			Destroy(mainGO);
+
 			harm.UnpatchSelf();
-			//if (mobSyncMngr != null) Destroy(mobSyncMngr.gameObject);
+
+			//Make absolutely sure there's no more syncs
+			var s = FindObjectsOfType<NPCSync>();
+			foreach (var n in s)
+				Destroy(n);
 		}
 
 
@@ -113,7 +134,7 @@ namespace ErenshorCoop
 				};
 				loadedPlugins.Add(pluginData);
 
-				Logger.LogInfo($"Loaded Mods: {pluginData.name} v{pluginData.version}");
+			//	Logger.LogInfo($"Loaded Mods: {pluginData.name} v{pluginData.version}");
 			}
 		}
 
@@ -256,6 +277,8 @@ namespace ErenshorCoop
 		{
 			public string name;
 			public Version version;
+			public int diff;
+			public Version other;
 		}
 	}
 }

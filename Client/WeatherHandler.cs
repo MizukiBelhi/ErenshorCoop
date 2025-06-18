@@ -1,27 +1,23 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Collections;
 using ErenshorCoop.Shared;
 using ErenshorCoop.Shared.Packets;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace ErenshorCoop.Client
 {
 	public static class WeatherHandler
 	{
 		private static WeatherData lastData = new();
+		private static Coroutine _cr;
 		public static void Init()
 		{
-			ClientConnectionManager.Instance.StartCoroutine(UpdateWeather());
+			_cr = ClientConnectionManager.Instance.StartCoroutine(UpdateWeather());
 		}
 
 		public static void Stop()
 		{
-			ClientConnectionManager.Instance.StopCoroutine(UpdateWeather());
+			if(_cr != null && ClientConnectionManager.Instance != null)
+				ClientConnectionManager.Instance.StopCoroutine(_cr);
 		}
 
 		static IEnumerator UpdateWeather()
@@ -29,8 +25,6 @@ namespace ErenshorCoop.Client
 			while (ClientConnectionManager.Instance.IsRunning)
 			{
 				yield return new WaitForSeconds(5);
-
-				
 
 				if (ClientZoneOwnership.isZoneOwner)
 				{

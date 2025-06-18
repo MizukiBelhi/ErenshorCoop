@@ -16,7 +16,6 @@ namespace ErenshorCoop.Shared.Packets
 		public List<AnimationData> animData = new();
 		public int health;
 		public int mp;
-		public List<short> targetPlayerIDs;
 		public short targetID;
 		public EntityType targetType;
 

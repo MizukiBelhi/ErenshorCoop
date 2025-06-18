@@ -56,6 +56,8 @@ namespace ErenshorCoop
 			previousLevel = GameData.PlayerStats.Level;
 			entityName = GameData.CurrentCharacterSlot.CharName;
 			currentScene = SceneManager.GetActiveScene().name;
+
+			type = EntityType.PLAYER;
 		}
 
 		

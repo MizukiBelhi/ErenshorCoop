@@ -10,6 +10,7 @@ using ErenshorCoop.Shared;
 using ErenshorCoop.Server;
 using ErenshorCoop.Shared.Packets;
 using Random = UnityEngine.Random;
+using System.Linq;
 
 namespace ErenshorCoop.Client
 {
@@ -39,7 +40,9 @@ namespace ErenshorCoop.Client
 
 		public NetStatistics GetStatistics() => Server.Statistics;
 
-		public List<Entity> requestReceivers;
+		public List<Entity> requestReceivers = new();
+
+		private ServerSettings savedSettings;
 
 		public void Awake()
 		{
@@ -112,6 +115,15 @@ namespace ErenshorCoop.Client
 			WeatherHandler.Stop();
 
 			ClearDroppedItems();
+
+			if(savedSettings != null)
+			{
+				GameData.ServerXPMod = savedSettings.xpMod;
+				GameData.ServerDMGMod = savedSettings.dmgMod;
+				GameData.ServerHPMod = savedSettings.hpMod;
+				GameData.ServerLootRate = savedSettings.lootMod;
+			}
+			savedSettings = null;
 		}
 
 
@@ -413,6 +425,120 @@ namespace ErenshorCoop.Client
 
 					ServerConfig.clientIsPvpEnabled = ((ServerInfoPacket)packet).pvpMode;
 				}
+				if (((ServerInfoPacket)packet).dataTypes.Contains(ServerInfoType.SERVER_SETTINGS))
+				{
+					var p = (ServerInfoPacket)packet;
+					if(savedSettings == null) //we dont have saved settings, we can apply
+					{
+						savedSettings = new()
+						{
+							xpMod = GameData.ServerXPMod,
+							dmgMod = GameData.ServerDMGMod,
+							hpMod = GameData.ServerHPMod,
+							lootMod = GameData.ServerLootRate
+						};
+
+						GameData.ServerXPMod = p.serverSettings.xpMod;
+						GameData.ServerDMGMod = p.serverSettings.dmgMod;
+						GameData.ServerHPMod = p.serverSettings.hpMod;
+						GameData.ServerLootRate = p.serverSettings.lootMod;
+					}
+				}
+				if (((ServerInfoPacket)packet).dataTypes.Contains(ServerInfoType.HOST_MODS))
+				{
+					//We just put it here
+					Logging.LogGameMessage($"Connected!");
+
+					var p = (ServerInfoPacket)packet;
+					List<ErenshorCoopMod.PluginData> differentPlugins = new();
+
+					ErenshorCoopMod.PluginData coopMod = new();
+
+					bool isMissingPlugin = false;
+					bool coopDiff = false;
+					foreach(var plugin in p.plugins)
+					{
+						var found = false;
+						foreach(var ownPlugin in ErenshorCoopMod.loadedPlugins)
+						{
+							if(plugin.name == ownPlugin.name)
+							{
+								found = true;
+								var cmp = plugin.version.CompareTo(ownPlugin.version);
+								if (cmp != 0)
+								{
+									differentPlugins.Add(new()
+									{
+										name = plugin.name,
+										version = ownPlugin.version,
+										other = plugin.version,
+										diff = cmp
+									});
+
+									if(plugin.name == "Erenshor Coop")
+									{
+										coopDiff = true;
+									}
+								}
+							}
+						}
+						if (!found)
+							isMissingPlugin = true;
+					}
+
+					
+
+					if (p.plugins.Count != ErenshorCoopMod.loadedPlugins.Count)
+					{
+						isMissingPlugin = true;
+
+						foreach (var ownPlugin in ErenshorCoopMod.loadedPlugins)
+						{
+							if (!p.plugins.Any(x => x.name == ownPlugin.name))
+							{
+								differentPlugins.Add(new()
+								{
+									name = ownPlugin.name,
+									version = ownPlugin.version,
+									other = null
+								});
+							}
+						}
+
+						foreach (var plugin in p.plugins)
+						{
+							if (!ErenshorCoopMod.loadedPlugins.Any(x => x.name == plugin.name))
+							{
+								differentPlugins.Add(new()
+								{
+									name = plugin.name,
+									version = null,
+									other = plugin.version
+								});
+							}
+						}
+					}
+
+					if(coopDiff)
+					{
+						Logging.LogGameMessage($"Your COOP version differs from the hosts, this will cause major issues!", true);
+					}else if (isMissingPlugin)
+					{
+						Logging.LogGameMessage($"Your mods differ from the hosts, this could cause issues.", true);
+					}
+					if(differentPlugins.Count > 0)
+					{
+						foreach(var plugin in differentPlugins)
+						{
+							if(plugin.other != null && plugin.version != null)
+								Logging.LogGameMessage($"\"{plugin.name}\" You: v{plugin.version.ToString()} - Host: v{plugin.other.ToString()}", true);
+							if(plugin.other == null && plugin.version != null)
+								Logging.LogGameMessage($"\"{plugin.name}\" You: v{plugin.version.ToString()} - Host: None", true);
+							if (plugin.other != null && plugin.version == null)
+								Logging.LogGameMessage($"\"{plugin.name}\" You: None - Host: v{plugin.other.ToString()}", true);
+						}
+					}
+				}
 				if (((ServerInfoPacket)packet).dataTypes.Contains(ServerInfoType.ZONE_OWNERSHIP))
 				{
 					OnZoneOwnerChange?.Invoke(((ServerInfoPacket)packet).zoneOwner, ((ServerInfoPacket)packet).zone, ((ServerInfoPacket)packet).playerList);
@@ -434,12 +560,14 @@ namespace ErenshorCoop.Client
 			else if (packetType == PacketType.PLAYER_REQUEST)
 			{
 				var p = (PlayerRequestPacket)packet;
+
 				if (p.dataTypes.Contains(Request.ENTITY_ID))
 				{
 					var idL = new List<short>();
 					for(int i = 0;i< p.requestEntityType.Count;i++)
 					{
-						idL.Add(SharedNPCSyncManager.Instance.GetFreeId());
+						var fid = SharedNPCSyncManager.Instance.GetFreeId();
+						idL.Add(fid);
 					}
 					var pa = PacketManager.GetOrCreatePacket<ServerRequestPacket>(p.entityID, PacketType.SERVER_REQUEST);
 					pa.AddPacketData(Request.ENTITY_ID, "reqID", idL);
@@ -489,6 +617,7 @@ namespace ErenshorCoop.Client
 			}
 			else
 			{
+				
 				var bp = (EntityBasePacket)packet;
 				if (!ClientZoneOwnership.isZoneOwner || bp.entityType == EntityType.PET)
 				{
@@ -503,8 +632,16 @@ namespace ErenshorCoop.Client
 
 			if (ServerConnectionManager.Instance.IsRunning)
 			{
-				//Logging.Log($"resending {packet.GetType()}");
 				packet.exclusions.Add(peer);
+				//Make sure we only send the packet to whoever should actually receive it
+				if(packet.targetPlayerIDs != null && packet.targetPlayerIDs.Count > 0)
+				{
+					foreach(var p in Players)
+					{
+						if (!packet.targetPlayerIDs.Contains(p.Key))
+							packet.exclusions.Add(p.Value.peer);
+					}
+				}
 				PacketManager.ServerAddPacket(packetType, packet);
 			}
 		}

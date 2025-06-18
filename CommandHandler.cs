@@ -46,7 +46,7 @@ namespace ErenshorCoop
 						}
 						return false;
 					case "connect" when spl.Length == 1:
-						ClientConnectionManager.Instance.Connect("localhost", 1234);
+						ClientConnectionManager.Instance.Connect("localhost", 7777);
 						return false;
 					case "connect" when spl.Length < 3:
 						Logging.LogError($"Not enough arguments for \"connect\". Usage: /connect ip port");

@@ -140,16 +140,6 @@ namespace ErenshorCoop
 		public static bool CollectActiveSimData_Prefix(SimPlayerMngr __instance)
 		{
 			return true;
-			foreach (SimPlayer simPlayer in __instance.ActiveSimInstances)
-			{
-				if (simPlayer != null)
-				{
-					Logging.Log($"saving sim {simPlayer.name}");
-					simPlayer.SaveSim();
-				}
-			}
-
-			return false;
 		}
 
 		public static bool ChangeScene_Prefix(SceneChange __instance, string _dest, Vector3 _landing, bool _useSun, float yRot)
@@ -225,19 +215,53 @@ namespace ErenshorCoop
 
 
 		private static List<GameObject> _prevTreGuards = new();
+		public static int GetChestID(List<GameObject> guardList)
+		{
+			if (guardList.SequenceEqual(GameData.Misc.TreasureChest0_10.GetComponent<TreasureChestEvent>().Guardians))
+				return 0;
+			if (guardList.SequenceEqual(GameData.Misc.TreasureChest10_20.GetComponent<TreasureChestEvent>().Guardians))
+				return 1;
+			if (guardList.SequenceEqual(GameData.Misc.TreasureChest20_30.GetComponent<TreasureChestEvent>().Guardians))
+				return 2;
+			if (guardList.SequenceEqual(GameData.Misc.TreasureChest30_35.GetComponent<TreasureChestEvent>().Guardians))
+				return 3;
+			return -1;
+		}
+
+		public static GameObject GetChestGuardPrefab(int treasureID, int guardID)
+		{
+			if (treasureID == 0 && GameData.Misc.TreasureChest0_10.GetComponent<TreasureChestEvent>().Guardians.Count > guardID)
+				return GameData.Misc.TreasureChest0_10.GetComponent<TreasureChestEvent>().Guardians[guardID];
+			if (treasureID == 1 && GameData.Misc.TreasureChest10_20.GetComponent<TreasureChestEvent>().Guardians.Count > guardID)
+				return GameData.Misc.TreasureChest10_20.GetComponent<TreasureChestEvent>().Guardians[guardID];
+			if (treasureID == 2 && GameData.Misc.TreasureChest20_30.GetComponent<TreasureChestEvent>().Guardians.Count > guardID)
+				return GameData.Misc.TreasureChest20_30.GetComponent<TreasureChestEvent>().Guardians[guardID];
+			if (treasureID == 3 && GameData.Misc.TreasureChest30_35.GetComponent<TreasureChestEvent>().Guardians.Count > guardID)
+				return GameData.Misc.TreasureChest30_35.GetComponent<TreasureChestEvent>().Guardians[guardID];
+			return null;
+		}
+
 		public static void TreSpawn_Postfix(TreasureChestEvent __instance, int _attackerLevel)
 		{
 			if (!ClientConnectionManager.Instance.IsRunning) return;
 
-			if(!_prevTreGuards.SequenceEqual(__instance.LiveGuardians))
+			//if(!_prevTreGuards.SequenceEqual(__instance.LiveGuardians))
 			{
 				foreach(var go in __instance.LiveGuardians)
 				{
-					var net = go.GetOrAddComponent<NetworkedNPC>();
-					if (net.entityID == -1)
-						net.RequestID();
+					var net = go.GetOrAddComponent<NPCSync>();
+					net.treasureChestID = GetChestID(__instance.Guardians);
+					var gid = 0;
+					foreach(var grd in __instance.Guardians)
+					{
+						if (grd.GetComponent<NPC>().NPCName.Contains(go.GetComponent<NPC>().NPCName))
+							break;
+						gid++;
+					}
 
-
+					net.guardianId = gid;//__instance.Guardians.IndexOf(go);
+					net.isGuardian = true;
+					net.RequestID();
 				}
 			}
 		}
@@ -431,7 +455,7 @@ namespace ErenshorCoop
 		public static bool FightFixedUpdate_Prefix(NPCFightEvent __instance)
 		{
 			if (!ClientConnectionManager.Instance.IsRunning) return true;
-			if (!ClientZoneOwnership.isZoneOwner) return true;
+			if (!ClientZoneOwnership.isZoneOwner) return false;
 
 			bool runSpawn = false;
 
@@ -586,7 +610,7 @@ namespace ErenshorCoop
 			var mal = _malarothSpawn.GetValue(__instance) as Character;
 			if (mal != null)
 			{
-				SharedNPCSyncManager.Instance.ServerSpawnMob(mal.gameObject, (int)CustomSpawnID.MALAROTH, 0, isMalaroth, mal.transform.position, mal.transform.rotation);
+				SharedNPCSyncManager.Instance.ServerSpawnMob(mal.gameObject, (int)CustomSpawnID.MALAROTH, "0", isMalaroth, mal.transform.position, mal.transform.rotation);
 			}
 		}
 		public static void CSpawnPiece_Postfix(Chessboard __instance, GameObject _npc)
@@ -596,7 +620,7 @@ namespace ErenshorCoop
 			var ch = _chessSpawn.GetValue(__instance) as Character;
 			if (ch != null)
 			{
-				SharedNPCSyncManager.Instance.ServerSpawnMob(ch.gameObject, (int)CustomSpawnID.CHESS, chessSpawn, false, ch.transform.position, ch.transform.rotation);
+				SharedNPCSyncManager.Instance.ServerSpawnMob(ch.gameObject, (int)CustomSpawnID.CHESS, chessSpawn.ToString(), false, ch.transform.position, ch.transform.rotation);
 			}
 		}
 
@@ -609,7 +633,7 @@ namespace ErenshorCoop
 
 			if (__instance.WardOne != null && !hasWardOne)
 			{
-				SharedNPCSyncManager.Instance.ServerSpawnMob(__instance.WardOne, (int)CustomSpawnID.SIRAETHE, 1, false, __instance.WardOne.transform.position, __instance.WardOne.transform.rotation);
+				SharedNPCSyncManager.Instance.ServerSpawnMob(__instance.WardOne, (int)CustomSpawnID.SIRAETHE, "1", false, __instance.WardOne.transform.position, __instance.WardOne.transform.rotation);
 				hasWardOne = true;
 			}else if (__instance.WardOne == null && hasWardOne)
 			{
@@ -617,7 +641,7 @@ namespace ErenshorCoop
 			}
 			if (__instance.WardTwo != null && !hasWardTwo)
 			{
-				SharedNPCSyncManager.Instance.ServerSpawnMob(__instance.WardTwo, (int)CustomSpawnID.SIRAETHE,2, false, __instance.WardTwo.transform.position, __instance.WardTwo.transform.rotation);
+				SharedNPCSyncManager.Instance.ServerSpawnMob(__instance.WardTwo, (int)CustomSpawnID.SIRAETHE, "2", false, __instance.WardTwo.transform.position, __instance.WardTwo.transform.rotation);
 				hasWardTwo = true;
 			}else if (__instance.WardTwo == null && hasWardTwo)
 			{
@@ -625,7 +649,7 @@ namespace ErenshorCoop
 			}
 			if (__instance.WardThree != null && !hasWardThree)
 			{
-				SharedNPCSyncManager.Instance.ServerSpawnMob(__instance.WardThree, (int)CustomSpawnID.SIRAETHE, 3, false, __instance.WardThree.transform.position, __instance.WardThree.transform.rotation);
+				SharedNPCSyncManager.Instance.ServerSpawnMob(__instance.WardThree, (int)CustomSpawnID.SIRAETHE, "3", false, __instance.WardThree.transform.position, __instance.WardThree.transform.rotation);
 				hasWardThree = true;
 			}else if (__instance.WardThree == null && hasWardThree)
 			{
@@ -667,29 +691,10 @@ namespace ErenshorCoop
 			}
 
 			var codes = new List<CodeInstruction>(instructions);
-			Label healCase = new();
-			Label lastCase = new();
 
 
 			for (int i = 0; i < codes.Count; i++)
 			{
-				//Make sure we're in the heal case
-				
-				bool isInHealCase = false;
-				if (codes[i].opcode == OpCodes.Switch && codes[i].operand is Label[] labelArray)
-				{
-					healCase = labelArray[6];
-					lastCase = labelArray[7];
-				}
-
-				if (codes[i].labels.Contains(healCase))
-					isInHealCase = true;
-
-				if (codes[i].labels.Contains(lastCase))
-					isInHealCase = false;
-
-				//if (!isInHealCase) continue;
-
 				var IsField = codes[i].operand is FieldInfo;
 				var field = codes[i].operand as FieldInfo;
 
@@ -1198,7 +1203,16 @@ namespace ErenshorCoop
 				}
 				else
 				{
-					return;
+					//are we a pet?
+					var n = chara.GetComponent<NPCSync>();
+					if (n != null && n.type == EntityType.PET)
+					{
+						isUserPlayer = false;
+						entityID = n.entityID;
+						sourceType = n.type;
+					}
+					else
+						return;
 				}
 			}
 
@@ -1209,17 +1223,18 @@ namespace ErenshorCoop
 			short targetID = -1;
 			bool targetIsSim = false;
 
-			if (!ClientZoneOwnership.isZoneOwner)
+
+			foreach (var m in ClientNPCSyncManager.Instance.NetworkedMobs)
 			{
-				foreach (var m in ClientNPCSyncManager.Instance.NetworkedMobs)
+				if (m.Value.character.MyStats == target)
 				{
-					if (m.Value.character.MyStats == target)
-					{
-						isNPC = true;
-						targetID = m.Key;
-						break;
-					}
+					isNPC = true;
+					targetID = m.Key;
+					break;
 				}
+			}
+			if (targetID == -1)
+			{
 				foreach (var m in ClientNPCSyncManager.Instance.NetworkedSims)
 				{
 					if (m.Value.character.MyStats == target)
@@ -1231,7 +1246,7 @@ namespace ErenshorCoop
 					}
 				}
 			}
-			else
+			if (targetID == -1)
 			{
 				foreach (var m in SharedNPCSyncManager.Instance.mobs)
 				{
@@ -1242,6 +1257,9 @@ namespace ErenshorCoop
 						break;
 					}
 				}
+			}
+			if (targetID == -1)
+			{
 				foreach (var m in SharedNPCSyncManager.Instance.sims)
 				{
 					if (m.Value.character.MyStats == target)
@@ -1253,6 +1271,7 @@ namespace ErenshorCoop
 					}
 				}
 			}
+			
 
 			if (targetID == -1)
 			{
@@ -1267,11 +1286,32 @@ namespace ErenshorCoop
 
 				if (targetID == -1 && target == ClientConnectionManager.Instance.LocalPlayer.stats)
 					targetID = ClientConnectionManager.Instance.LocalPlayerID;
+
+				if(targetID == -1)
+				{
+					//are we our pet?
+					var n = target.GetComponent<NPCSync>();
+					if (n != null && n.type == EntityType.PET)
+					{
+						targetID = n.entityID;
+						isNPC = true;
+					}
+				}
+				if (targetID == -1)
+				{
+					//are we a pet?
+					var n = target.GetComponent<NetworkedNPC>();
+					if (n != null && n.type == EntityType.PET)
+					{
+						targetID = n.entityID;
+						isNPC = true;
+					}
+				}
 			}
 
 			if (targetID == -1)
 			{
-				Logging.Log($"no valid target? {target.name}");
+				//Logging.Log($"no valid target? {target.name}");
 				return;
 			}
 
@@ -1343,7 +1383,16 @@ namespace ErenshorCoop
 				}
 				else
 				{
-					return;
+					//are we a pet?
+					var n = chara.GetComponent<NPCSync>();
+					if (n != null && n.type == EntityType.PET)
+					{
+						isUserPlayer = false;
+						entityID = n.entityID;
+						sourceType = n.type;
+					}
+					else
+						return;
 				}
 			}
 
@@ -1422,7 +1471,16 @@ namespace ErenshorCoop
 				}
 				else
 				{
-					return;
+					//are we a pet?
+					var n = chara.GetComponent<NPCSync>();
+					if(n != null && n.type == EntityType.PET)
+					{
+						isUserPlayer = false;
+						entityID = n.entityID;
+						sourceType = n.type;
+					}
+					else
+						return;
 				}
 			}
 
@@ -1687,6 +1745,14 @@ namespace ErenshorCoop
 				if (player.Value.character == _char)
 				{
 					return (true, false, player.Value.entityID);
+				}
+			}
+
+			foreach (var mob in SharedNPCSyncManager.Instance.mobs)
+			{
+				if (mob.Value.character == _char)
+				{
+					return (false, true, mob.Value.entityID);
 				}
 			}
 
@@ -2465,7 +2531,7 @@ namespace ErenshorCoop
 				var spawnMobData = spawnData.GetMobData(npc.gameObject);
 				if (spawnMobData == null) return;
 
-				SharedNPCSyncManager.Instance.ServerSpawnMob(npc.gameObject, spawnID, spawnMobData.mobID, spawnMobData.isRare, npc.transform.position, npc.transform.rotation);
+				SharedNPCSyncManager.Instance.ServerSpawnMob(npc.gameObject, spawnID, spawnMobData.mobID.ToString(), spawnMobData.isRare, npc.transform.position, npc.transform.rotation);
 			}
 		}
 #endregion
@@ -2634,6 +2700,8 @@ namespace ErenshorCoop
 
 		private static void SendMobAnimData(short mobID, string param, object value, AnimatorSyncType syncType, bool issim = false)
 		{
+			if (issim && !SharedNPCSyncManager.Instance.sims.ContainsKey(mobID)) return;
+			if (!issim && !SharedNPCSyncManager.Instance.mobs.ContainsKey(mobID)) return;
 			if (issim && !SharedNPCSyncManager.Instance.sims[mobID].isCloseToPlayer) return;
 			if (!issim && !SharedNPCSyncManager.Instance.mobs[mobID].isCloseToPlayer) return;
 
