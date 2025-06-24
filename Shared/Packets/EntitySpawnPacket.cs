@@ -34,9 +34,22 @@ namespace ErenshorCoop.Shared.Packets
 				writer.Put(s.position);
 				writer.Put(s.rotation);
 				writer.Put((byte)s.entityType);
+				writer.Put(s.syncStats);
 				if (s.entityType == EntityType.PET)
 				{
 					writer.Put(s.ownerID);
+				}
+				if(s.syncStats)
+				{
+					writer.Put(s.level);
+					writer.Put(s.baseAC);
+					writer.Put(s.baseHP);
+					writer.Put(s.baseMR);
+					writer.Put(s.basePR);
+					writer.Put(s.baseVR);
+					writer.Put(s.baseER);
+					writer.Put(s.baseDMG);
+					writer.Put(s.mhatkDelay);
 				}
 			}
 		}
@@ -66,9 +79,23 @@ namespace ErenshorCoop.Shared.Packets
 					isRare = reader.GetBool(),
 					position = reader.GetVector3(),
 					rotation = reader.GetRotation(),
-					entityType = (EntityType)reader.GetByte()
+					entityType = (EntityType)reader.GetByte(),
+					syncStats = reader.GetBool()
 				};
 				s.ownerID = s.entityType == EntityType.PET ? reader.GetShort() : (short)-1;
+				if (s.syncStats)
+				{
+					s.level = reader.GetInt();
+					s.baseAC = reader.GetInt();
+					s.baseHP = reader.GetInt();
+					s.baseMR = reader.GetInt();
+					s.basePR = reader.GetInt();
+					s.baseVR = reader.GetInt();
+					s.baseER = reader.GetInt();
+					s.baseDMG = reader.GetInt();
+					s.mhatkDelay = reader.GetFloat();
+				}
+
 				spawnData.Add(s);
 			}
 		}
@@ -84,5 +111,15 @@ namespace ErenshorCoop.Shared.Packets
 		public Quaternion rotation;
 		public EntityType entityType;
 		public short ownerID;
+		public bool syncStats = false;
+		public int level;
+		public int baseHP;
+		public int baseAC;
+		public int baseMR;
+		public int baseER;
+		public int baseVR;
+		public int basePR;
+		public int baseDMG;
+		public float mhatkDelay;
 	}
 }

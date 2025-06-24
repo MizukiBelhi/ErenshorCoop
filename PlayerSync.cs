@@ -80,7 +80,7 @@ namespace ErenshorCoop
 					character = GetComponent<Character>();
 					var pc = GetComponent<PlayerControl>();
 					var com = GetComponent<PlayerCombat>();
-					AnimOverride = GetComponent<PlayerControl>().AnimOverride;
+					AnimOverride = pc.AnimOverride;
 					Extensions.BuildPlayerClipLookup(pc, com);
 					previousLevel = GameData.PlayerStats.Level;
 					entityName = GameData.CurrentCharacterSlot.CharName;
@@ -97,7 +97,7 @@ namespace ErenshorCoop
 					.SetData("gearData", gear)
 					.SetData("level",    GameData.PlayerStats.Level)
 					.SetData("health",   stats.CurrentHP)
-					.SetData("mp", stats.CurrentMana);
+					.SetData("mp",       stats.CurrentMana);
 
 				packet.CanSend();
 

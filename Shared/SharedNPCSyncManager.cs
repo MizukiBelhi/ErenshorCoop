@@ -566,7 +566,9 @@ namespace ErenshorCoop.Shared
 					isRare,
 					pos,
 					rot,
-					EntityType.ENEMY
+					EntityType.ENEMY,
+					0,
+					s.isGuardian?s:null
 				)
 			};
 
@@ -742,9 +744,9 @@ namespace ErenshorCoop.Shared
 		/// <summary>
 		/// Helper method to create an EntitySpawnData object.
 		/// </summary>
-		private EntitySpawnData CreateEntitySpawnData(short entityID, string npcID, int spawnerID, bool isRare, Vector3 position, Quaternion rotation, EntityType type, short ownerID = 0)
+		private EntitySpawnData CreateEntitySpawnData(short entityID, string npcID, int spawnerID, bool isRare, Vector3 position, Quaternion rotation, EntityType type, short ownerID = 0, NPCSync sync = null)
 		{
-			return new EntitySpawnData
+			var es = new EntitySpawnData
 			{
 				entityID = entityID,
 				npcID = npcID,
@@ -755,6 +757,36 @@ namespace ErenshorCoop.Shared
 				entityType = type,
 				ownerID = ownerID
 			};
+
+			if(sync != null && sync.isGuardian)
+			{
+
+				es.syncStats = true;
+				es.level = sync.character.MyStats.Level;
+				es.baseAC = sync.character.MyStats.BaseAC;
+				es.baseER = sync.character.MyStats.BaseER;
+				es.baseHP = sync.character.MyStats.BaseHP;
+				es.baseMR = sync.character.MyStats.BaseMR;
+				es.basePR = sync.character.MyStats.BasePR;
+				es.baseVR = sync.character.MyStats.BaseVR;
+				es.baseDMG = sync.npc.BaseAtkDmg;
+				es.mhatkDelay = sync.character.MyStats.BaseMHAtkDelay;
+
+				Debug.Log($@"
+						ID: {entityID}\n
+						Level:        {es.level}\n
+						BaseAC:       {es.baseAC}\n
+						BaseER:       {es.baseER}\n
+						BaseHP:       {es.baseHP}\n
+						BaseMR:       {es.baseMR}\n
+						BasePR:       {es.basePR}\n
+						BaseVR:       {es.baseVR}\n
+						MHAtkDelay:   {es.mhatkDelay}\n
+						BaseDMG:      {es.baseDMG}
+						");
+			}
+
+			return es;
 		}
 
 	}

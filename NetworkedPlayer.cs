@@ -28,6 +28,9 @@ namespace ErenshorCoop
 		public Quaternion rot;
 		public Vector3 pos;
 
+		private int _savedMP;
+		private int _savedHP;
+
 		public NPC npc;
 		private Animator MyAnim;
 		private Inventory inventory;
@@ -297,10 +300,10 @@ namespace ErenshorCoop
 				sim.MyStats.CalcStats();
 
 				HackUpdateModels();
-				//Set health to full
-				sim.MyStats.CurrentHP = sim.MyStats.CurrentMaxHP;
 
-				
+				sim.MyStats.CurrentHP = _savedHP;
+				sim.MyStats.CurrentMana = _savedMP;
+
 			}
 			if (requiresSimUpdate) isNextFrame = true;
 		}
@@ -351,7 +354,7 @@ namespace ErenshorCoop
 				if (!isPlayer && Grouping.IsPlayerInGroup(entityID, false)) //If the target isn't a player and the player is in our group
 				{
 					//We add ourselves to the aggro list, this way everyone in the group is automatically in the aggro list
-					if (data.damage > 0) //Make sure we actually did damage
+					//if (data.damage > 0) //Make sure we actually did damage
 					{
 						//Logging.Log($"beep boop aggro {playerName} vs {attacked.name} to us");
 						attacked.MyNPC.ManageAggro(1, ClientConnectionManager.Instance.LocalPlayer.character);
@@ -421,6 +424,8 @@ namespace ErenshorCoop
 
 			sim.MyStats.CurrentHP = packet.health;
 			sim.MyStats.CurrentMana = packet.mp;
+			_savedMP = packet.mp;
+			_savedHP = packet.health;
 
 			if (ServerConnectionManager.Instance.IsRunning)
 				ServerConnectionManager.Instance.OnClientConnect?.Invoke(playerID, peer);
@@ -442,9 +447,15 @@ namespace ErenshorCoop
 				if (playerDataPacket.dataTypes.Contains(PlayerDataType.ROTATION))
 					SetRotation(playerDataPacket.rotation);
 				if (playerDataPacket.dataTypes.Contains(PlayerDataType.HEALTH))
+				{
 					sim.MyStats.CurrentHP = playerDataPacket.health;
+					_savedHP = playerDataPacket.health;
+				}
 				if (playerDataPacket.dataTypes.Contains(PlayerDataType.MP))
+				{
 					sim.MyStats.CurrentMana = playerDataPacket.mp;
+					_savedMP = playerDataPacket.mp;
+				}
 				if (playerDataPacket.dataTypes.Contains(PlayerDataType.CLASS))
 					sim.MyStats.CharacterClass = playerDataPacket._class;
 				if (playerDataPacket.dataTypes.Contains(PlayerDataType.LEVEL))
@@ -477,6 +488,10 @@ namespace ErenshorCoop
 				if (playerDataPacket.dataTypes.Contains(PlayerDataType.GEAR))
 				{
 					UpdateLooks(playerDataPacket.lookData, playerDataPacket.gearData);
+					//reapply hp and mp
+					sim.MyStats.CurrentHP = _savedHP;
+					sim.MyStats.CurrentMana = _savedMP;
+
 				}
 				if(playerDataPacket.dataTypes.Contains(PlayerDataType.CURTARGET))
 				{

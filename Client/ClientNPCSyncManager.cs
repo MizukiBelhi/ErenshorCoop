@@ -12,7 +12,7 @@ namespace ErenshorCoop.Client
 		public Dictionary<short, NetworkedNPC> NetworkedMobs = new();
 		public Dictionary<short, NetworkedNPC> NetworkedSims = new();
 
-		private readonly Queue<(int spawnID, string spawnMobID, bool isRare, short mobID, Vector3 pos, Quaternion rot)> spawnQueue = new();
+		private readonly Queue<(int spawnID, string spawnMobID, bool isRare, short mobID, Vector3 pos, Quaternion rot, EntitySpawnData data)> spawnQueue = new();
 		private Coroutine spawnRoutine;
 
 		public static ClientNPCSyncManager Instance;
@@ -185,9 +185,9 @@ namespace ErenshorCoop.Client
 			if (NetworkedMobs.ContainsKey(data.entityID)) return;
 
 			if (!spawnInstant)
-				spawnQueue.Enqueue(( data.spawnerID, data.npcID, data.isRare, data.entityID, data.position, data.rotation ));
+				spawnQueue.Enqueue(( data.spawnerID, data.npcID, data.isRare, data.entityID, data.position, data.rotation, data ));
 			else
-				SpawnMob(data.spawnerID, data.npcID, data.isRare, data.entityID, data.position, data.rotation);
+				SpawnMob(data.spawnerID, data.npcID, data.isRare, data.entityID, data.position, data.rotation, data);
 		}
 
 		private bool SpawnPet(EntitySpawnData data)
@@ -256,8 +256,8 @@ namespace ErenshorCoop.Client
 			{
 				if (spawnQueue.Count > 0)
 				{
-					(int spawnID, string spawnMobID, bool isRare, short entityID, var pos, var rot) = spawnQueue.Dequeue();
-					if (!SpawnMob(spawnID, spawnMobID, isRare, entityID, pos, rot))
+					(int spawnID, string spawnMobID, bool isRare, short entityID, var pos, var rot, var data) = spawnQueue.Dequeue();
+					if (!SpawnMob(spawnID, spawnMobID, isRare, entityID, pos, rot, data))
 					{
 						//Put it back on the queue, in case we're not on the same scene as the host
 						//spawnQueue.Enqueue((spawnID, spawnMobID, isRare, entityID, pos, rot));
@@ -267,7 +267,7 @@ namespace ErenshorCoop.Client
 			}
 		}
 
-		private bool SpawnMob(int spawnID, string spawnMobID, bool isRare, short entityID, Vector3 pos, Quaternion rot)
+		private bool SpawnMob(int spawnID, string spawnMobID, bool isRare, short entityID, Vector3 pos, Quaternion rot, EntitySpawnData data)
 		{
 			if (!CanRun) return true;
 			if (NetworkedMobs.ContainsKey(entityID)) return true;
@@ -421,6 +421,22 @@ namespace ErenshorCoop.Client
 			s.zone = SceneManager.GetActiveScene().name;
 			NetworkedMobs.Add(entityID, s);
 			//DontDestroyOnLoad(component.gameObject);
+			if(data.syncStats)
+			{
+				s.character.MyStats.Level = data.level;
+				s.character.MyStats.BaseAC = data.baseAC;
+				s.character.MyStats.BaseER = data.baseER;
+				s.character.MyStats.BaseHP = data.baseHP;
+				s.character.MyStats.BaseMR = data.baseMR;
+				s.character.MyStats.BasePR = data.basePR;
+				s.character.MyStats.BaseVR = data.baseVR;
+				s.character.MyStats.BaseMHAtkDelay = data.mhatkDelay;
+				s.npc.BaseAtkDmg = data.baseDMG;
+				s.character.MyStats.CurrentMaxHP = data.baseHP;
+				s.character.MyStats.CurrentHP = data.baseHP;
+
+				s.spData = data;
+			}
 			return true;
 		}
 
@@ -561,7 +577,6 @@ namespace ErenshorCoop.Client
 						{
 							//NetworkedMobs[entityData.entityID].owner.MySummon = null;
 						}
-						Logging.Log($"ent rem {NetworkedMobs[entityData.entityID].name}");
 						Destroy(NetworkedMobs[entityData.entityID].gameObject);
 					}
 					if(entityData.dataTypes.Contains(EntityDataType.CURTARGET))

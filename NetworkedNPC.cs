@@ -32,6 +32,9 @@ namespace ErenshorCoop
 
 		public int associatedSpawner = -1;
 
+		//Saving stats here
+		public EntitySpawnData spData;
+
 		public void Awake()
 		{
 			npc = GetComponent<NPC>();
@@ -84,6 +87,34 @@ namespace ErenshorCoop
 			
 			if (rot != transform.rotation)
 				transform.rotation = rot;
+
+			//Not strictly necessary but can be used for the future, if there will ever be stat changes during fights
+			if (isGuardian && (
+				character.MyStats.Level != spData.level ||
+				character.MyStats.BaseAC != spData.baseAC ||
+				character.MyStats.BaseER != spData.baseER ||
+				character.MyStats.BaseMR != spData.baseMR ||
+				character.MyStats.BasePR != spData.basePR ||
+				character.MyStats.BaseVR != spData.baseVR ||
+				character.MyStats.BaseMHAtkDelay != spData.mhatkDelay ||
+				npc.BaseAtkDmg != spData.baseDMG))
+			{
+				character.MyStats.Level = spData.level;
+				character.MyStats.BaseAC = spData.baseAC;
+				character.MyStats.BaseER = spData.baseER;
+				character.MyStats.BaseMR = spData.baseMR;
+				character.MyStats.BasePR = spData.basePR;
+				character.MyStats.BaseVR = spData.baseVR;
+				character.MyStats.BaseMHAtkDelay = spData.mhatkDelay;
+				npc.BaseAtkDmg = spData.baseDMG;
+				if(character.MyStats.CurrentMaxHP != spData.baseHP)
+				{
+
+					if (character.MyStats.CurrentHP == character.MyStats.CurrentMaxHP)
+						character.MyStats.CurrentHP = spData.baseHP;
+					character.MyStats.CurrentMaxHP = spData.baseHP;
+				}
+			}
 		}
 
 		public void UpdateAnimState(AnimationData data)
@@ -142,6 +173,7 @@ namespace ErenshorCoop
 			{
 				//Set fromPlayer to if this player is in our group and we're the leader
 				//fromPlayer = Grouping.IsLocalLeader() && Grouping.IsPlayerInGroup(entityID, false);
+				//FIXME: attacked could be a sim
 				if (isPlayer && Grouping.IsPlayerInGroup(data.attackedID, false)) //If the target isn't a player and the player is in our group
 				{
 					//We add ourselves to the aggro list, this way everyone in the group is automatically in the aggro list
@@ -274,7 +306,7 @@ namespace ErenshorCoop
 				if (!healingData.isMP)
 				{
 					//Note: even if each player sends their updated health, this might actually be faster
-					if (type != EntityType.ENEMY)
+					if (type != EntityType.ENEMY) //!We don't want mobs to spam the chat with their healing
 					{
 						bool targetIsLocal = healingData.targetID == ClientConnectionManager.Instance.LocalPlayerID;
 						UpdateSocialLog.LogAdd($"{name}'s {(healingData.isCrit ? "CRITICAL " : "")}healing spell restores {healingData.amount} of {(targetIsLocal ? "your" : target.name + "'s")} life!", "green");

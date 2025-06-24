@@ -53,7 +53,6 @@ namespace ErenshorCoop
 			{
 				if (character.MyCharmedNPC != null)
 				{
-					Logging.Log($"Destr sum {character.MyCharmedNPC.name}");
 					Destroy(character.MyCharmedNPC.gameObject);
 				}
 			}

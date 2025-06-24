@@ -1,3 +1,8 @@
+## v1.5.1
+- Fixed non-damaging spells not adding aggro
+- Fixed (hopefully) MP not properly being displayed when player joins
+- Fixed treasure guards not syncing their stats
+
 ## v1.5.0
 - Added treasure guardian sync
   - Stats are not synced, but should not cause issues
