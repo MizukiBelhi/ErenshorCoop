@@ -80,6 +80,7 @@ namespace ErenshorCoop
 			ErenshorCoopMod.CreatePostHook(typeof(Chessboard),        "SpawnPiece",         typeof(GameHooks), "CSpawnPiece_Postfix");
 			ErenshorCoopMod.CreatePostHook(typeof(SiraetheEvent),     "Update",             typeof(GameHooks), "SUpdate_Postfix");
 			ErenshorCoopMod.CreatePostHook(typeof(TreasureChestEvent),"SpawnGuardiansCont", typeof(GameHooks), "TreSpawn_Postfix");
+			ErenshorCoopMod.CreatePostHook(typeof(SimPlayerTracking), "SpawnMeInGame",      typeof(GameHooks), "SimSpawn_Postfix");
 
 			try
 			{
@@ -146,7 +147,7 @@ namespace ErenshorCoop
 		{
 			if (!ClientConnectionManager.Instance.IsRunning) return true;
 
-			if (ClientConnectionManager.Instance.LocalPlayer.currentScene == _dest)
+			if (ClientConnectionManager.Instance.LocalPlayer.zone == _dest)
 			{
 				GameData.SimPlayerGrouping.GroupTargets.Clear();
 				GameData.SimPlayerGrouping.isPulling = false;
@@ -212,6 +213,61 @@ namespace ErenshorCoop
 			return player;
 		}
 
+		public static NetworkedSim CreateSim(int playerID, Vector3 pos, Quaternion rot)
+		{
+			var sims = GameData.SimMngr.ActualSims;
+			if (sims.Count == 0)
+			{
+				Logging.LogError($"Could not create player for {playerID}. No Sim instances.");
+				return null;
+			}
+			var sim = sims[0];
+			if (sim == null)
+			{
+				Logging.LogError($"Could not create player for {playerID}. No Sim.");
+				return null;
+			}
+
+			//Logging.Log($"Sim Name: {sim.name}");
+			GameObject _player = UnityEngine.Object.Instantiate(sim.gameObject, pos, rot);
+			//_player.SetActive(false); //immediately hide this player, could be optimized by only creating the player if they're in the same zone.
+			var pCon = _player.GetComponent<SimPlayer>();
+			if (pCon == null)
+			{
+				Logging.LogError($"Could not create player for {playerID}.");
+				return null;
+			}
+			pCon.enabled = false;
+			var nMeshAgent = _player.GetComponent<NavMeshAgent>();
+			if (nMeshAgent != null) nMeshAgent.enabled = false;
+
+			NetworkedSim player = _player.AddComponent<NetworkedSim>();
+			player.sim = pCon;
+			player.pos = pos;
+			player.rot = rot;
+
+			return player;
+		}
+
+
+
+
+		public static void SimSpawn_Postfix(SimPlayerTracking __instance, ref SimPlayer __result, Vector3 pos)
+		{
+			if (!ClientConnectionManager.Instance.IsRunning) return;
+			var ent = __result.GetComponent<SimSync>();
+
+			//If it exists already that probably means this sim zoned
+			if(ent != null)
+			{
+				UnityEngine.Object.Destroy(ent);
+			}
+
+			ent = __result.gameObject.AddComponent<SimSync>();
+			ent.type = EntityType.SIM;
+			//ent.entityID = SharedNPCSyncManager.Instance.GetFreeId();
+			
+		}
 
 
 		private static List<GameObject> _prevTreGuards = new();
@@ -1529,33 +1585,36 @@ namespace ErenshorCoop
 		//Yes it's annoying to have to do each individually, the game should really be using indices to address group members.
 		public static bool DismissMember1_Prefix(SimPlayerGrouping __instance)
 		{
-			if (ClientConnectionManager.Instance.IsRunning)
+			if (!ClientConnectionManager.Instance.IsRunning) return true;
+
+			if (GameData.GroupMember1 != null && GameData.GroupMember1.MyAvatar != null && GameData.GroupMember1.simIndex < 0)
 			{
-				if (GameData.GroupMember1 != null && GameData.GroupMember1.MyAvatar != null && GameData.GroupMember1.simIndex < 0)
+				int pid = Math.Abs(GameData.GroupMember1.simIndex) - 1;
+				var player = ClientConnectionManager.Instance.GetPlayerFromID((short)pid);
+				if (player != null)
 				{
-					int pid = Math.Abs(GameData.GroupMember1.simIndex) - 1;
-					var player = ClientConnectionManager.Instance.GetPlayerFromID((short)pid);
-					if (player != null)
+					//we also need to check something else here, because the simindex can be the same as a player id
+					if (( (NetworkedPlayer)player ).sim.MyStats == GameData.GroupMember1.MyStats)
 					{
-						//we also need to check something else here, because the simindex can be the same as a player id
-						if (( (NetworkedPlayer)player ).sim.MyStats == GameData.GroupMember1.MyStats)
-						{
-							Grouping.RemoveFromGroup((short)pid);
-							return false;
-						}
+						Grouping.RemoveFromGroup((short)pid);
+						return false;
 					}
 				}
 			}
+			
 
-			if (ServerConnectionManager.Instance.IsRunning)
+			//if (ServerConnectionManager.Instance.IsRunning)
 			{
 				if (GameData.GroupMember1 != null && GameData.GroupMember1.MyAvatar != null && GameData.GroupMember1.simIndex >= 0)
 				{
-					var npcsync = GameData.GroupMember1.MyAvatar.GetComponent<NPCSync>();
+					Entity npcsync = GameData.GroupMember1.MyAvatar.GetComponent<SimSync>();
+					if (npcsync == null)
+						npcsync = GameData.GroupMember1.MyAvatar.GetComponent<NetworkedSim>();
 					if (npcsync != null)
 					{
-						SharedNPCSyncManager.Instance.ServerRemoveSim(npcsync.entityID);
-						Grouping.RemoveSim(GameData.GroupMember1);
+						//SharedNPCSyncManager.Instance.ServerRemoveSim(npcsync.entityID);
+						Grouping.RemoveFromGroup(npcsync.entityID);
+						return false;
 					}
 				}
 			}
@@ -1565,33 +1624,36 @@ namespace ErenshorCoop
 
 		public static bool DismissMember2_Prefix(SimPlayerGrouping __instance)
 		{
-			if (ClientConnectionManager.Instance.IsRunning)
+			if (!ClientConnectionManager.Instance.IsRunning) return true;
+
+			if (GameData.GroupMember2 != null && GameData.GroupMember2.MyAvatar != null && GameData.GroupMember2.simIndex < 0)
 			{
-				if (GameData.GroupMember2 != null && GameData.GroupMember2.MyAvatar != null && GameData.GroupMember2.simIndex < 0)
+				int pid = Math.Abs(GameData.GroupMember2.simIndex) - 1;
+				var player = ClientConnectionManager.Instance.GetPlayerFromID((short)pid);
+				if (player != null)
 				{
-					int pid = Math.Abs(GameData.GroupMember2.simIndex) - 1;
-					var player = ClientConnectionManager.Instance.GetPlayerFromID((short)pid);
-					if (player != null)
+					//we also need to check something else here, because the simindex can be the same as a player id
+					if (( (NetworkedPlayer)player ).sim.MyStats == GameData.GroupMember2.MyStats)
 					{
-						//we also need to check something else here, because the simindex can be the same as a player id
-						if (( (NetworkedPlayer)player ).sim.MyStats == GameData.GroupMember2.MyStats)
-						{
-							Grouping.RemoveFromGroup((short)pid);
-							return false;
-						}
+						Grouping.RemoveFromGroup((short)pid);
+						return false;
 					}
 				}
 			}
+			
 
-			if (ServerConnectionManager.Instance.IsRunning)
+			//if (ServerConnectionManager.Instance.IsRunning)
 			{
 				if (GameData.GroupMember2 != null && GameData.GroupMember2.MyAvatar != null && GameData.GroupMember2.simIndex >= 0)
 				{
-					var npcsync = GameData.GroupMember2.MyAvatar.GetComponent<NPCSync>();
+					Entity npcsync = GameData.GroupMember2.MyAvatar.GetComponent<SimSync>();
+					if (npcsync == null)
+						npcsync = GameData.GroupMember2.MyAvatar.GetComponent<NetworkedSim>();
 					if (npcsync != null)
 					{
-						SharedNPCSyncManager.Instance.ServerRemoveSim(npcsync.entityID);
-						Grouping.RemoveSim(GameData.GroupMember2);
+						//SharedNPCSyncManager.Instance.ServerRemoveSim(npcsync.entityID);
+						Grouping.RemoveFromGroup(npcsync.entityID);
+						return false;
 					}
 				}
 			}
@@ -1600,33 +1662,37 @@ namespace ErenshorCoop
 		}
 		public static bool DismissMember3_Prefix(SimPlayerGrouping __instance)
 		{
-			if (ClientConnectionManager.Instance.IsRunning)
+			if (!ClientConnectionManager.Instance.IsRunning) return true;
+
+			
+			if (GameData.GroupMember3 != null && GameData.GroupMember3.MyAvatar != null && GameData.GroupMember3.simIndex < 0)
 			{
-				if (GameData.GroupMember3 != null && GameData.GroupMember3.MyAvatar != null && GameData.GroupMember3.simIndex < 0)
+				int pid = Math.Abs(GameData.GroupMember3.simIndex) - 1;
+				var player = ClientConnectionManager.Instance.GetPlayerFromID((short)pid);
+				if (player != null)
 				{
-					int pid = Math.Abs(GameData.GroupMember3.simIndex) - 1;
-					var player = ClientConnectionManager.Instance.GetPlayerFromID((short)pid);
-					if (player != null)
+					//we also need to check something else here, because the simindex can be the same as a player id
+					if (( (NetworkedPlayer)player ).sim.MyStats == GameData.GroupMember3.MyStats)
 					{
-						//we also need to check something else here, because the simindex can be the same as a player id
-						if (( (NetworkedPlayer)player ).sim.MyStats == GameData.GroupMember3.MyStats)
-						{
-							Grouping.RemoveFromGroup((short)pid);
-							return false;
-						}
+						Grouping.RemoveFromGroup((short)pid);
+						return false;
 					}
 				}
 			}
+			
 
-			if (ServerConnectionManager.Instance.IsRunning)
+			//if (ServerConnectionManager.Instance.IsRunning)
 			{
 				if (GameData.GroupMember3 != null && GameData.GroupMember3.MyAvatar != null && GameData.GroupMember3.simIndex >= 0)
 				{
-					var npcsync = GameData.GroupMember3.MyAvatar.GetComponent<NPCSync>();
+					Entity npcsync = GameData.GroupMember3.MyAvatar.GetComponent<SimSync>();
+					if(npcsync == null)
+						npcsync = GameData.GroupMember3.MyAvatar.GetComponent<NetworkedSim>();
 					if (npcsync != null)
 					{
-						SharedNPCSyncManager.Instance.ServerRemoveSim(npcsync.entityID);
-						Grouping.RemoveSim(GameData.GroupMember3);
+						//SharedNPCSyncManager.Instance.ServerRemoveSim(npcsync.entityID);
+						Grouping.RemoveFromGroup(npcsync.entityID);
+						return false;
 					}
 				}
 			}
@@ -1634,28 +1700,44 @@ namespace ErenshorCoop
 			return true;
 		}
 
-
+		private static bool noInvitePostFix = false;
 		//At this point we know we haven't invited a player
 		public static void InviteToGroup_Postfix(SimPlayerGrouping __instance)
 		{
-			if (ServerConnectionManager.Instance.IsRunning)
+
+			if (!noInvitePostFix)
 			{
+				Logging.Log($"pf run");
 				//We know if it's a sim if the index is geater or equal to 0 because we're writing negatives for players
 				if (GameData.GroupMember1 != null && GameData.GroupMember1.simIndex >= 0)
 				{
-					Grouping.InviteSim(GameData.GroupMember1);
+					Entity npcsync = GameData.GroupMember1.MyAvatar.GetComponent<SimSync>();
+					if (npcsync == null)
+						npcsync = GameData.GroupMember1.MyAvatar.GetComponent<NetworkedSim>();
+					if(npcsync != null && !Grouping.IsPlayerInGroup(npcsync.entityID, true))
+						Grouping.InvitePlayer(npcsync);
 				}
 
 				if (GameData.GroupMember2 != null && GameData.GroupMember2.simIndex >= 0)
 				{
-					Grouping.InviteSim(GameData.GroupMember2);
+					Entity npcsync = GameData.GroupMember2.MyAvatar.GetComponent<SimSync>();
+					if (npcsync == null)
+						npcsync = GameData.GroupMember2.MyAvatar.GetComponent<NetworkedSim>();
+					if (npcsync != null && !Grouping.IsPlayerInGroup(npcsync.entityID, true))
+						Grouping.InvitePlayer(npcsync);
 				}
 
 				if (GameData.GroupMember3 != null && GameData.GroupMember3.simIndex >= 0)
 				{
-					Grouping.InviteSim(GameData.GroupMember3);
+					Entity npcsync = GameData.GroupMember3.MyAvatar.GetComponent<SimSync>();
+					if (npcsync == null)
+						npcsync = GameData.GroupMember3.MyAvatar.GetComponent<NetworkedSim>();
+					if (npcsync != null && !Grouping.IsPlayerInGroup(npcsync.entityID, true))
+						Grouping.InvitePlayer(npcsync);
 				}
 			}
+
+			noInvitePostFix = false;
 
 		}
 
@@ -1664,20 +1746,24 @@ namespace ErenshorCoop
 			if (ClientConnectionManager.Instance.IsRunning)
 			{
 				Character currentTarget = GameData.PlayerControl.CurrentTarget;
-				NetworkedPlayer simPlayer = null;
+				Entity simPlayer = null;
 				if (currentTarget != null && ( simPlayer = currentTarget.GetComponent<NetworkedPlayer>() ) != null)
 				{
 					if (!GameData.PlayerControl.Myself.Alive) return true;
 
 					Grouping.InvitePlayer(simPlayer);
+					noInvitePostFix = true;
 
 					return false;
 				}
-				else if (currentTarget != null)
+				else if (currentTarget != null && simPlayer == null)
 				{
-					if (!ServerConnectionManager.Instance.IsRunning)
+					if (currentTarget.GetComponent<SimSync>()) return true;
+					simPlayer = currentTarget.GetComponent<NetworkedSim>();
+					if (simPlayer != null)
 					{
-						Logging.LogGameMessage("[Grouping] Only the host can invite sims.");
+						Grouping.InvitePlayer(simPlayer);
+						noInvitePostFix = true;
 						return false;
 					}
 				}
@@ -2683,11 +2769,11 @@ namespace ErenshorCoop
 		public static FieldInfo animatorController;
 
 		//I think we can do it like this, even if the param changes multiple times a frame we should keep a record of it and send it
-		private static void SendAnimData(string param, object value, AnimatorSyncType syncType)
+		private static void SendAnimData(string param, object value, AnimatorSyncType syncType, bool isSim=false, short simEntId=-1)
 		{
-			var pack = PacketManager.GetOrCreatePacket<PlayerDataPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_DATA);
+			var pack = PacketManager.GetOrCreatePacket<PlayerDataPacket>(isSim?simEntId:ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_DATA);
 			pack.AddType(PlayerDataType.ANIM);
-
+			pack.isSim = isSim;
 			AnimationData animData = new()
 			{
 				param = param,
@@ -2695,7 +2781,6 @@ namespace ErenshorCoop
 				syncType = syncType
 			};
 			pack.animData.Add(animData);
-
 		}
 
 		private static void SendMobAnimData(short mobID, string param, object value, AnimatorSyncType syncType, bool issim = false)
@@ -2743,23 +2828,23 @@ namespace ErenshorCoop
 					SendMobAnimData(ClientConnectionManager.Instance.LocalPlayer.MySummon.entityID, name, value.name, AnimatorSyncType.OVERRIDE);
 			}
 
-			if (ClientZoneOwnership.isZoneOwner && ServerConnectionManager.Instance.IsRunning)
+			//if (ClientConnectionManager.Instance.LocalPlayer != null && ClientConnectionManager.Instance.LocalPlayer.AnimOverride != null && ClientConnectionManager.Instance.LocalPlayer.AnimOverride == __instance)
 			{
-				
 				bool hasSim = false;
-				short simentid = 0;
+				short simentid = -1;
 				foreach (var sim in SharedNPCSyncManager.Instance.sims)
 				{
-					if (sim.Value.anim.runtimeAnimatorController == __instance)
+					if (sim.Value.animator.runtimeAnimatorController == __instance)
 					{
 						hasSim = true;
 						simentid = sim.Key;
 						break;
 					}
 				}
-				if(hasSim)
-					SendMobAnimData(simentid, name, value.name, AnimatorSyncType.OVERRIDE, true);
+				if (hasSim)
+					SendAnimData(name, value.name, AnimatorSyncType.OVERRIDE, true, simentid);
 			}
+
 		}
 		public static void SetBool_Prefix(Animator __instance, string name, bool value)
 		{
@@ -2782,13 +2867,13 @@ namespace ErenshorCoop
 					SendMobAnimData(ClientConnectionManager.Instance.LocalPlayer.MySummon.entityID, name, value, AnimatorSyncType.BOOL);
 			}
 
-			if (ServerConnectionManager.Instance.IsRunning)
+			//if (ServerConnectionManager.Instance.IsRunning)
 			{
 				var hasSim = false;
 				short simentid = 0;
 				foreach (var sim in SharedNPCSyncManager.Instance.sims)
 				{
-					if (sim.Value.anim == __instance)
+					if (sim.Value.animator == __instance)
 					{
 						hasSim = true;
 						simentid = sim.Key;
@@ -2796,7 +2881,7 @@ namespace ErenshorCoop
 					}
 				}
 				if (hasSim)
-					SendMobAnimData(simentid, name, value, AnimatorSyncType.BOOL, true);
+					SendAnimData(name, value, AnimatorSyncType.BOOL, true, simentid);
 			}
 		}
 
@@ -2821,13 +2906,13 @@ namespace ErenshorCoop
 					SendMobAnimData(ClientConnectionManager.Instance.LocalPlayer.MySummon.entityID, name, value, AnimatorSyncType.FLOAT);
 			}
 
-			if (ClientZoneOwnership.isZoneOwner)
+			//if (ClientZoneOwnership.isZoneOwner)
 			{
 				bool hasSim = false;
 				short simentid = 0;
 				foreach (var sim in SharedNPCSyncManager.Instance.sims)
 				{
-					if (sim.Value.anim == __instance)
+					if (sim.Value.animator == __instance)
 					{
 						hasSim = true;
 						simentid = sim.Key;
@@ -2835,7 +2920,7 @@ namespace ErenshorCoop
 					}
 				}
 				if (hasSim)
-					SendMobAnimData(simentid, name, value, AnimatorSyncType.FLOAT, true);
+					SendAnimData(name, value, AnimatorSyncType.FLOAT, true, simentid);
 			}
 		}
 
@@ -2861,13 +2946,13 @@ namespace ErenshorCoop
 					SendMobAnimData(ClientConnectionManager.Instance.LocalPlayer.MySummon.entityID, name, value, AnimatorSyncType.INT);
 			}
 
-			if (ClientZoneOwnership.isZoneOwner)
+			//if (ClientZoneOwnership.isZoneOwner)
 			{
 				bool hasSim = false;
 				short simentid = 0;
 				foreach (var sim in SharedNPCSyncManager.Instance.sims)
 				{
-					if (sim.Value.anim == __instance)
+					if (sim.Value.animator == __instance)
 					{
 						hasSim = true;
 						simentid = sim.Key;
@@ -2875,7 +2960,7 @@ namespace ErenshorCoop
 					}
 				}
 				if (hasSim)
-					SendMobAnimData(simentid, name, value, AnimatorSyncType.INT, true);
+					SendAnimData(name, value, AnimatorSyncType.INT, true, simentid);
 			}
 		}
 
@@ -2897,13 +2982,13 @@ namespace ErenshorCoop
 					SendMobAnimData(ClientConnectionManager.Instance.LocalPlayer.MySummon.entityID, name, true, AnimatorSyncType.TRIG);
 			}
 
-			if (ClientZoneOwnership.isZoneOwner)
+			//if (ClientZoneOwnership.isZoneOwner)
 			{
 				bool hasSim = false;
 				short simentid = 0;
 				foreach (var sim in SharedNPCSyncManager.Instance.sims)
 				{
-					if (sim.Value.anim == __instance)
+					if (sim.Value.animator == __instance)
 					{
 						hasSim = true;
 						simentid = sim.Key;
@@ -2911,7 +2996,7 @@ namespace ErenshorCoop
 					}
 				}
 				if (hasSim)
-					SendMobAnimData(simentid, name, true, AnimatorSyncType.TRIG, true);
+					SendAnimData(name, true, AnimatorSyncType.TRIG, true, simentid);
 			}
 		}
 
@@ -2933,13 +3018,13 @@ namespace ErenshorCoop
 					SendMobAnimData(ClientConnectionManager.Instance.LocalPlayer.MySummon.entityID, name, false, AnimatorSyncType.RSTTRIG);
 			}
 
-			if (ClientZoneOwnership.isZoneOwner)
+			//if (ClientZoneOwnership.isZoneOwner)
 			{
 				bool hasSim = false;
 				short simentid = 0;
 				foreach (var sim in SharedNPCSyncManager.Instance.sims)
 				{
-					if (sim.Value.anim == __instance)
+					if (sim.Value.animator == __instance)
 					{
 						hasSim = true;
 						simentid = sim.Key;
@@ -2947,7 +3032,7 @@ namespace ErenshorCoop
 					}
 				}
 				if (hasSim)
-					SendMobAnimData(simentid, name, false, AnimatorSyncType.RSTTRIG, true);
+					SendAnimData(name, false, AnimatorSyncType.RSTTRIG, true, simentid);
 			}
 		}
 #endregion

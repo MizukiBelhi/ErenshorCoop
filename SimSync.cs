@@ -1,18 +1,18 @@
-﻿using UnityEngine;
-using UnityEngine.SceneManagement;
-using System.Collections.Generic;
-using System;
-using System.Collections;
-using System.Linq;
-using ErenshorCoop.Client;
+﻿using ErenshorCoop.Client;
 using ErenshorCoop.Shared;
 using ErenshorCoop.Shared.Packets;
-using ErenshorCoop.Server;
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace ErenshorCoop
 {
-	//Local player
-	public class PlayerSync : Entity
+	public class SimSync : Entity
 	{
 		public Vector3 previousPosition = Vector3.zero;
 		public Quaternion previousRotation = Quaternion.identity;
@@ -20,21 +20,27 @@ namespace ErenshorCoop
 		public int previousLevel = 0;
 		public int previousMP = 0;
 		public Entity previousTarget = null;
-		public short playerID = 0;
+		//public short entityID = -1;
 
 		public Animator animator;
 		public Inventory inventory;
 		public Stats stats;
-		public AnimatorOverrideController AnimOverride;
+		//public AnimatorOverrideController AnimOverride;
+		public NPC npc;
+		public SimPlayer sim;
+
+		public ModularParts mod;
+		public ModularPar modPar;
+
+		public int simIndex = -1;
 
 		public bool hasSentConnect = false;
 
-		private static PlayerSync _instance;
+		public bool isCloseToPlayer = true;
+
 		public void Awake()
 		{
-			if(_instance != null) Destroy(this);
 
-			_instance = this;
 			ErenshorCoopMod.OnGameMenuLoad += OnGameMenuLoad;
 			ErenshorCoopMod.OnGameMapLoad += OnGameMapLoad;
 			ClientConnectionManager.Instance.OnClientConnect += OnClientConnect;
@@ -44,26 +50,25 @@ namespace ErenshorCoop
 			inventory = GetComponent<Inventory>();
 			stats = GetComponent<Stats>();
 			character = GetComponent<Character>();
-			var pc = GetComponent<PlayerControl>();
-			var com = GetComponent<PlayerCombat>();
-			AnimOverride = GetComponent<PlayerControl>().AnimOverride;
+			npc = GetComponent<NPC>();
+			sim = GetComponent<SimPlayer>();
+			modPar = GetComponentInChildren<ModularPar>();
 
-			Extensions.BuildPlayerClipLookup(pc, com);
+			simIndex = sim.myIndex;
 
-			previousLevel = GameData.PlayerStats.Level;
-			entityName = GameData.CurrentCharacterSlot.CharName;
+			Extensions.BuildClipLookup(npc);
+
+			previousLevel = stats.Level;
+			entityName = npc.NPCName + $" [{GameData.CurrentCharacterSlot.CharName}]";
 			zone = SceneManager.GetActiveScene().name;
 
-			type = EntityType.PLAYER;
-
-			
+			type = EntityType.SIM;
 		}
 
-		
+
 
 		private void OnClientConnect(short __, string ___, string ____)
 		{
-			//Logging.Log("hurrdurr");
 			var sceneIDX = SceneManager.GetActiveScene().name;
 
 			//Not sure why putting this in a try-catch fixes it failing to send the packet, but here we are
@@ -77,28 +82,31 @@ namespace ErenshorCoop
 					inventory = GetComponent<Inventory>();
 					stats = GetComponent<Stats>();
 					character = GetComponent<Character>();
-					var pc = GetComponent<PlayerControl>();
-					var com = GetComponent<PlayerCombat>();
-					AnimOverride = pc.AnimOverride;
-					Extensions.BuildPlayerClipLookup(pc, com);
-					previousLevel = GameData.PlayerStats.Level;
-					entityName = GameData.CurrentCharacterSlot.CharName;
+					npc = GetComponent<NPC>();
+					sim = GetComponent<SimPlayer>();
+					modPar = GetComponentInChildren<ModularPar>();
+					Extensions.BuildClipLookup(npc);
+					simIndex = sim.myIndex;
+					previousLevel = stats.Level;
+					entityName = npc.NPCName + $" [{GameData.CurrentCharacterSlot.CharName}]";
 					zone = SceneManager.GetActiveScene().name;
 				}
 
-				var packet = PacketManager.GetOrCreatePacket<PlayerConnectionPacket>(playerID, PacketType.PLAYER_CONNECT, true)
-					.SetData("scene",    sceneIDX)
-					.SetData("name",     GameData.CurrentCharacterSlot.CharName)
+				var packet = PacketManager.GetOrCreatePacket<PlayerConnectionPacket>(entityID, PacketType.PLAYER_CONNECT, true)
+					.SetData("scene", sceneIDX)
+					.SetData("name", entityName)
 					.SetData("position", transform.position)
 					.SetData("rotation", transform.rotation)
-					.SetData("_class",   GameData.PlayerStats.CharacterClass)
+					.SetData("_class", stats.CharacterClass)
 					.SetData("lookData", l)
 					.SetData("gearData", gear)
-					.SetData("level",    GameData.PlayerStats.Level)
-					.SetData("health",   stats.CurrentHP)
-					.SetData("mp",       stats.CurrentMana);
-
+					.SetData("level", stats.Level)
+					.SetData("health", stats.CurrentHP)
+					.SetData("mp", stats.CurrentMana);
+				packet.isSim = true;
 				packet.CanSend();
+
+				Logging.Log($"sending sim client con {entityName}");
 
 				//Do we have a summon?
 				if (MySummon != null)
@@ -112,7 +120,7 @@ namespace ErenshorCoop
 				Logging.LogError($"{ex.Message} \r\n {ex.StackTrace}");
 			}
 
-			
+
 		}
 
 		public IEnumerator DelayedSendPet()
@@ -121,128 +129,106 @@ namespace ErenshorCoop
 			MySummon.ReceiveRequestID(MySummon.entityID);
 		}
 
-		public void StartZoneTransfer(Zoneline zoneline)
-		{
-			StartCoroutine(DelayedZoneTransfer(zoneline));
-		}
-		public IEnumerator DelayedZoneTransfer(Zoneline zoneline)
-		{
-			yield return new WaitForSeconds(2f);
-			zoneline.CallZoning();
-		}
-
 		private void OnGameMapLoad(Scene scene)
 		{
-			zone = scene.name;
+			/*currentScene = scene.name;
 
 			if (!ClientConnectionManager.Instance.IsRunning) return;
 			if (!hasSentConnect) return;
 
-			PacketManager.GetOrCreatePacket<PlayerDataPacket>(playerID, PacketType.PLAYER_DATA).AddPacketData(PlayerDataType.SCENE, "scene", zone);
-
-			//Check if other players are in same scene, this is kinda hacky but it absolutely makes sure they are visible or not
-			foreach (var p in ClientConnectionManager.Instance.Players)
-			{
-				if (p.Value.zone == zone || p.Value.zone == zone)
-				{
-					p.Value.gameObject.SetActive(true);
-					if(p.Value.MySummon != null && p.Value.MySummon.gameObject != null)
-						p.Value.MySummon.gameObject.SetActive(true);
-				}
-				else
-				{
-					p.Value.gameObject.SetActive(false);
-					if (p.Value.MySummon != null && p.Value.MySummon.gameObject != null)
-						p.Value.MySummon.gameObject.SetActive(false);
-				}
-			}
+			var p = PacketManager.GetOrCreatePacket<PlayerDataPacket>(entityID, PacketType.PLAYER_DATA).AddPacketData(PlayerDataType.SCENE, "scene", currentScene);
+			p.isSim = true;
 
 			//Do we have a summon?
 			if (MySummon != null)
 			{
 				CreateSummon(GameData.SpellDatabase.GetSpellByID(MySummon.spellID), MySummon.gameObject);
-			}
+			}*/
 
-			if (Variables.droppedItems.TryGetValue(zone, out var items))
-			{
-				foreach (var itm in items)
-				{
-					ClientConnectionManager.Instance.SpawnItem(itm.item, itm.quantity, itm.pos, zone, itm.id,true);
-				}
-			}
 		}
 
 		private void OnGameConnect()
 		{
-			SendConnectData();
+			//SendConnectData();
 		}
 
 		public void SendConnectData()
 		{
-			//Logging.Log("edabadabadadeee");
 			//Tells others to create our player with this data, if they don't already have us
 			var sceneIDX = SceneManager.GetActiveScene().name;
 			(_, LookData l, List<GearData> gear) = GetLookData(true);
 
-			var packet = PacketManager.GetOrCreatePacket<PlayerConnectionPacket>(playerID, PacketType.PLAYER_CONNECT, true)
-				.SetData("scene",    sceneIDX)
-				.SetData("name",     GameData.CurrentCharacterSlot.CharName)
+			var packet = PacketManager.GetOrCreatePacket<PlayerConnectionPacket>(entityID, PacketType.PLAYER_CONNECT, true)
+				.SetData("scene", sceneIDX)
+				.SetData("name", entityName)
 				.SetData("position", transform.position)
 				.SetData("rotation", transform.rotation)
-				.SetData("_class",   GameData.PlayerStats.CharacterClass)
+				.SetData("_class", stats.CharacterClass)
 				.SetData("lookData", l)
 				.SetData("gearData", gear)
-				.SetData("level",    GameData.PlayerStats.Level)
-				.SetData("health",   stats.CurrentHP)
-				.SetData("mp",   stats.CurrentMana);
-
+				.SetData("level", stats.Level)
+				.SetData("health", stats.CurrentHP)
+				.SetData("mp", stats.CurrentMana);
+			packet.isSim = true;
 			packet.CanSend();
 			hasSentConnect = true;
 		}
 
 		private void OnGameMenuLoad(Scene scene)
 		{
-			ClientConnectionManager.Instance.Disconnect();
+			//ClientConnectionManager.Instance.Disconnect();
 			Destroy(this);
 		}
 
 		public void SendLevelUpdate()
 		{
-			PacketManager.GetOrCreatePacket<PlayerDataPacket>(playerID, PacketType.PLAYER_DATA).AddPacketData(PlayerDataType.LEVEL, "level", GameData.PlayerStats.Level);
+			var p = PacketManager.GetOrCreatePacket<PlayerDataPacket>(entityID, PacketType.PLAYER_DATA).AddPacketData(PlayerDataType.LEVEL, "level", GameData.PlayerStats.Level);
+			p.isSim = true;
 		}
 
 		private void OnDestroy()
 		{
-			ClientConnectionManager.Instance.Disconnect();
+			//ClientConnectionManager.Instance.Disconnect();
 			ErenshorCoopMod.OnGameMenuLoad -= OnGameMenuLoad;
 			ErenshorCoopMod.OnGameMapLoad -= OnGameMapLoad;
 			ClientConnectionManager.Instance.OnClientConnect -= OnClientConnect;
 			ClientConnectionManager.Instance.OnConnect -= OnGameConnect;
+
+			var p = PacketManager.GetOrCreatePacket<PlayerDataPacket>(entityID, PacketType.PLAYER_DATA);
+			p.dataTypes.Add(PlayerDataType.DESTR_SIM);
+			p.isSim = true;
+
+			if (SharedNPCSyncManager.Instance != null && SharedNPCSyncManager.Instance.sims.ContainsKey(entityID))
+			{
+				SharedNPCSyncManager.Instance.sims.Remove(entityID);
+			}
+
 			Logging.LogError("Destroyed.");
 		}
 		public void Update()
 		{
-			if (ServerConnectionManager.Instance != null && ServerConnectionManager.Instance.IsRunning)
-				hasSentConnect = true;
-
 			if (!ClientConnectionManager.Instance.IsRunning) return;
 			if (!hasSentConnect) return;
 
+
 			//if (Vector3.Distance(transform.position,previousPosition) > 0.1f && lastInterpTime >= interpCall)
-			if(transform.position != previousPosition)
+			if (transform.position != previousPosition)
 			{
-				PacketManager.GetOrCreatePacket<PlayerTransformPacket>(playerID, PacketType.PLAYER_TRANSFORM).AddPacketData(PlayerDataType.POSITION, "position", transform.position);
+				var p = PacketManager.GetOrCreatePacket<PlayerTransformPacket>(entityID, PacketType.PLAYER_TRANSFORM).AddPacketData(PlayerDataType.POSITION, "position", transform.position);
+				p.isSim = true;
 				previousPosition = transform.position;
 			}
 			if (previousRotation != transform.rotation)
 			{
-				PacketManager.GetOrCreatePacket<PlayerTransformPacket>(playerID, PacketType.PLAYER_TRANSFORM).AddPacketData(PlayerDataType.ROTATION, "rotation", transform.rotation);
+				var p = PacketManager.GetOrCreatePacket<PlayerTransformPacket>(entityID, PacketType.PLAYER_TRANSFORM).AddPacketData(PlayerDataType.ROTATION, "rotation", transform.rotation);
+				p.isSim = true;
 				previousRotation = transform.rotation;
 			}
 
 			if (previousHealth != stats.CurrentHP)
 			{
-				PacketManager.GetOrCreatePacket<PlayerDataPacket>(playerID, PacketType.PLAYER_DATA).AddPacketData(PlayerDataType.HEALTH, "health", stats.CurrentHP);
+				var p = PacketManager.GetOrCreatePacket<PlayerDataPacket>(entityID, PacketType.PLAYER_DATA).AddPacketData(PlayerDataType.HEALTH, "health", stats.CurrentHP);
+				p.isSim = true;
 				previousHealth = stats.CurrentHP;
 			}
 
@@ -254,12 +240,13 @@ namespace ErenshorCoop
 
 			if (previousMP != stats.CurrentMana)
 			{
-				PacketManager.GetOrCreatePacket<PlayerDataPacket>(playerID, PacketType.PLAYER_DATA).AddPacketData(PlayerDataType.MP, "mp", stats.CurrentMana);
+				var p = PacketManager.GetOrCreatePacket<PlayerDataPacket>(entityID, PacketType.PLAYER_DATA).AddPacketData(PlayerDataType.MP, "mp", stats.CurrentMana);
+				p.isSim = true;
 				previousMP = stats.CurrentMana;
 			}
-			
 
-			var curTar = GameData.PlayerControl.CurrentTarget;
+
+			var curTar = npc.GetCurrentTarget();
 			Entity curTarEnt = null;
 			if (curTar != null)
 				curTarEnt = curTar.GetComponent<Entity>();
@@ -269,9 +256,10 @@ namespace ErenshorCoop
 				//Logging.Log($"{name} target set {curTarEnt.name}");
 				if (previousTarget != curTarEnt)
 				{
-					var p = PacketManager.GetOrCreatePacket<PlayerDataPacket>(playerID, PacketType.PLAYER_DATA);
+					var p = PacketManager.GetOrCreatePacket<PlayerDataPacket>(entityID, PacketType.PLAYER_DATA);
 					p.AddPacketData(PlayerDataType.CURTARGET, "targetID", curTarEnt.entityID);
 					p.targetType = curTarEnt.type;
+					p.isSim = true;
 					if (curTarEnt is PlayerSync || curTarEnt is NetworkedPlayer)
 						p.targetType = EntityType.PLAYER;
 
@@ -282,8 +270,9 @@ namespace ErenshorCoop
 			{
 				if (previousTarget != null)
 				{
-					var p = PacketManager.GetOrCreatePacket<PlayerDataPacket>(playerID, PacketType.PLAYER_DATA);
+					var p = PacketManager.GetOrCreatePacket<PlayerDataPacket>(entityID, PacketType.PLAYER_DATA);
 					p.AddPacketData(PlayerDataType.CURTARGET, "targetID", (short)-1);
+					p.isSim = true;
 					p.targetType = EntityType.LOCAL_PLAYER;
 					previousTarget = null;
 				}
@@ -292,13 +281,14 @@ namespace ErenshorCoop
 					//Logging.Log($"{name} targetres invalid {curTar}");
 				}
 			}
-			
-			(bool hasChanged, LookData lookData, List<GearData> gearData ) = GetLookData();
+
+			(bool hasChanged, LookData lookData, List<GearData> gearData) = GetLookData();
 			if (hasChanged)
 			{
-				PacketManager.GetOrCreatePacket<PlayerDataPacket>(playerID, PacketType.PLAYER_DATA)
+				var p = PacketManager.GetOrCreatePacket<PlayerDataPacket>(entityID, PacketType.PLAYER_DATA)
 					.AddPacketData(PlayerDataType.GEAR, "lookData", lookData)
 					.SetData("gearData", gearData);
+				p.isSim = true;
 			}
 		}
 
@@ -306,7 +296,7 @@ namespace ErenshorCoop
 		{
 			if (!hasSentConnect) return;
 
-			PacketManager.GetOrCreatePacket<PlayerActionPacket>(playerID, PacketType.PLAYER_ACTION).AddPacketData(ActionType.ATTACK, "attackData", 
+			var p = PacketManager.GetOrCreatePacket<PlayerActionPacket>(entityID, PacketType.PLAYER_ACTION).AddPacketData(ActionType.ATTACK, "attackData",
 				new PlayerAttackData()
 				{
 					attackedID = attackedID,
@@ -316,6 +306,7 @@ namespace ErenshorCoop
 					effect = effect,
 					resistMod = resistMod
 				});
+			p.isSim = true;
 		}
 
 
@@ -326,8 +317,7 @@ namespace ErenshorCoop
 			public string Id;
 			public int quant;
 		}
-		private string charm_slot_id = "";
-		private string aura_slot_id = "";
+
 		public (bool, LookData, List<GearData>) GetLookData(bool force = false)
 		{
 			var numSlots = 0;
@@ -342,14 +332,15 @@ namespace ErenshorCoop
 			var ringCount = 0;
 
 			//Loop through equip
-			for (var i = 0; i < inventory.EquipmentSlots.Count; i++)
+			for (var i = 0; i < sim.MyEquipment.Count; i++)
 			{
-				var slot = inventory.EquipmentSlots[i];
+				var slot = sim.MyEquipment[i];
+				if (slot == null) continue;
 				var slotType = slot.ThisSlotType;
 				string itemID = slot.MyItem.Id;
 				var slotKey = $"{slotType}_{i}";
 
-				gear_check_data gc = new() { Id = itemID, quant = slot.Quantity };
+				gear_check_data gc = new() { Id = itemID, quant = slot.Quant };
 
 				switch (slotType)
 				{
@@ -358,12 +349,12 @@ namespace ErenshorCoop
 						break;
 					case Item.SlotType.Secondary:
 						weaponGear["Secondary_0"] = gc;
-					break;
+						break;
 					case Item.SlotType.Bracer:
 						if (bracerCount < 2 && includedBracerIDs.Add(slotKey))
 						{
 							newGear[slotKey] = gc;
-						bracerCount++;
+							bracerCount++;
 						}
 						break;
 					case Item.SlotType.Ring:
@@ -373,11 +364,11 @@ namespace ErenshorCoop
 							ringCount++;
 						}
 						break;
-					case Item.SlotType.Aura: break; //skip
-					case Item.SlotType.Charm: break;
+					//case Item.SlotType.Aura: break; //skip
+					//case Item.SlotType.Charm: break;
 					default:
 						newGear[slotKey] = gc;
-						break;
+					break;
 				}
 			}
 
@@ -391,13 +382,13 @@ namespace ErenshorCoop
 				break;
 			}
 
-            if (inventory.AuraSlot.MyItem.Id != aura_slot_id)
-            {
-				anyChanges = true;
-            }
-			if (inventory.CharmSlot.MyItem.Id != charm_slot_id)
+			//if (inventory.AuraSlot.MyItem.Id != aura_slot_id)
 			{
-				anyChanges = true;
+			//	anyChanges = true;
+			}
+			//if (inventory.CharmSlot.MyItem.Id != charm_slot_id)
+			{
+			//	anyChanges = true;
 			}
 
 			//Logging.Log($"Changes {anyChanges}");
@@ -435,37 +426,38 @@ namespace ErenshorCoop
 			}
 
 			//Aura
-			GearData _gd = new()
-			{
-				itemID = inventory.AuraSlot.MyItem.Id,
-				slotType = Item.SlotType.Aura,
-				quality = 1
-			};
-			gearData.Add(_gd);
+			//GearData _gd = new()
+			//{
+			//	itemID = inventory.AuraSlot.MyItem.Id,
+			//	slotType = Item.SlotType.Aura,
+			//	quality = 1
+			//};
+			//gearData.Add(_gd);
 
-			aura_slot_id = inventory.AuraSlot.MyItem.Id;
-			numSlots++;
+			//aura_slot_id = inventory.AuraSlot.MyItem.Id;
+			//numSlots++;
 
 			//Charm
-			_gd = new()
-			{
-				itemID = inventory.CharmSlot.MyItem.Id,
-				slotType = Item.SlotType.Charm,
-				quality = 1
-			};
-			gearData.Add(_gd);
+			//_gd = new()
+			//{
+			//	itemID = inventory.CharmSlot.MyItem.Id,
+			//	slotType = Item.SlotType.Charm,
+			//	quality = 1
+			//};
+			//gearData.Add(_gd);
 
-			charm_slot_id = inventory.CharmSlot.MyItem.Id;
-			numSlots++;
+			//charm_slot_id = inventory.CharmSlot.MyItem.Id;
+			//numSlots++;
 
-
+			bool isMale = modPar.Female.enabled? false: true;
+			ModularParts activePar = isMale ? modPar.Female : modPar.Male;
 			//It's super expensive to always attach these, but this isn't done very often
 			var lookData = new LookData
 			{
-				hairName = GameData.CurrentCharacterSlot.HairName,
-				isMale = GameData.CurrentCharacterSlot.isMale,
-				hairColor = GameData.CurrentCharacterSlot.HairColor,
-				skinColor = GameData.CurrentCharacterSlot.SkinColor,
+				hairName = activePar.HairName,
+				isMale = isMale,
+				hairColor = activePar.HairCol,
+				skinColor = activePar.SkinCol,
 			};
 
 			return (true, lookData, gearData);
@@ -474,11 +466,12 @@ namespace ErenshorCoop
 		//Sends packet when we're using a healing spell (mp or hp)
 		public void SendHeal(HealingData hd)
 		{
-			var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(playerID, PacketType.PLAYER_ACTION);
+			var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(entityID, PacketType.PLAYER_ACTION);
 			var healingData = pack.healingData ?? new();
 			healingData.Add(hd);
 			pack.dataTypes.Add(ActionType.HEAL);
 			pack.healingData = healingData;
+			pack.isSim = true;
 		}
 	}
 }

@@ -9,13 +9,10 @@ using ErenshorCoop.Shared;
 using ErenshorCoop.Shared.Packets;
 using TMPro;
 using UnityEngine.SceneManagement;
-using System.Linq;
-using Steamworks;
 
 namespace ErenshorCoop
 {
-	//Other peers
-	public class NetworkedPlayer : Entity
+	public class NetworkedSim : Entity
 	{
 		public bool sceneChanged = false;
 		public string playerName = "";
@@ -45,35 +42,23 @@ namespace ErenshorCoop
 		SimInvSlot OH = new(Item.SlotType.Secondary) { Quant = 1 };
 
 		private GameObject spellEffect;
-		
 
-		public void Init(Vector3 position, Quaternion rotation, string pName, string scene, short playerID, NetPeer peer)
-		{
-			this.peer = peer;
-			_Init(position, rotation, pName, scene, playerID);
-		}
 
-		public void Init(Vector3 position, Quaternion rotation, string pName, string scene, short playerID, CSteamID steamID)
-		{
-			this.steamID = steamID;
-			_Init(position, rotation, pName, scene, playerID);
-		}
-
-		private void _Init(Vector3 position, Quaternion rotation, string pName, string scene, short playerID)
+		public void Init(Vector3 position, Quaternion rotation, string pName, string scene, short simID)
 		{
 			rot = rotation;
 			playerName = pName;
 			zone = scene;
 			sceneChanged = true;
-			this.playerID = playerID;
-
+			entityID = simID;
+			playerID = simID;
 			transform.position = position;
 			transform.rotation = rotation;
 
 			npc = GetComponent<NPC>();
 			npc.NPCName = playerName;
 			npc.GuildName = "";
-			npc.SimPlayer = false;
+			npc.SimPlayer = true;
 			npc.ThisSim = sim;
 			name = playerName;
 			entityName = playerName;
@@ -87,7 +72,7 @@ namespace ErenshorCoop
 			AnimOverride = new AnimatorOverrideController(MyAnim.runtimeAnimatorController);
 			MyAnim.runtimeAnimatorController = AnimOverride;
 
-			character.ShoutOnDeath.Clear(); //Clear the on-death messages
+			//character.ShoutOnDeath.Clear(); //Clear the on-death messages
 			character.DestroyOnDeath = false; //we don't want this
 			character.ShrinkColliderOnDeath = false;
 
@@ -99,82 +84,17 @@ namespace ErenshorCoop
 			sim.MyStats.OverrideHPforNPC = false;
 			DontDestroyOnLoad(gameObject);
 
-			if (ServerConnectionManager.Instance.IsRunning)
-				character.MyFaction = ServerConfig.IsPVPEnabled.Value ? Character.Faction.PC : Character.Faction.Player;
-			else
-				character.MyFaction = ServerConfig.clientIsPvpEnabled ? Character.Faction.PC : Character.Faction.Player;
-			character.isNPC = false;
-
-			Logging.LogGameMessage($"{name} Connected.");
+			//Logging.LogGameMessage($"{name} Connected.");
 
 			//Forces behaviour update stop
 			//character.Alive = false;
 			//GameHooks.leashing.SetValue(npc, true);
 			GameHooks.leashing.SetValue(npc, 100f);
 
-			type = EntityType.PLAYER;
+			type = EntityType.SIM;
 		}
 
-		//Hack: Change the sims models to the player ones
-		private void HackUpdateModels()
-		{
-			var playerMod = GameData.PlayerInv.GetComponentInChildren<ModularPar>();
-			var playerFem = playerMod.FemaleBase;
-			var playerMal = playerMod.MaleBase;
-			var simFem = modPar.FemaleBase;
-			var simMal = modPar.MaleBase;
-
-			//Get all components
-			SkinnedMeshRenderer[] pM = playerMal.GetComponentsInChildren<SkinnedMeshRenderer>(includeInactive: true);
-			SkinnedMeshRenderer[] pF = playerFem.GetComponentsInChildren<SkinnedMeshRenderer>(includeInactive: true);
-
-			SkinnedMeshRenderer[] sM = simMal.GetComponentsInChildren<SkinnedMeshRenderer>(includeInactive: true);
-			SkinnedMeshRenderer[] sF = simFem.GetComponentsInChildren<SkinnedMeshRenderer>(includeInactive: true);
-
-			string GetTransformPath(Transform t)
-			{
-				return t.parent.name + "/" + t.name;
-			}
-
-			foreach (SkinnedMeshRenderer pRen in pM)
-			{
-				string pPath = GetTransformPath(pRen.transform);
-
-				foreach (SkinnedMeshRenderer sRen in sM)
-				{
-					string sPath = GetTransformPath(sRen.transform);
-
-					if (sPath == pPath && sRen.sharedMesh != pRen.sharedMesh)
-					{
-						sRen.sharedMesh = pRen.sharedMesh;
-					}
-				}
-			}
-
-			int foundCount = 0;
-			foreach (SkinnedMeshRenderer pRen in pF)
-			{
-				string pPath = GetTransformPath(pRen.transform);
-				foreach (SkinnedMeshRenderer sRen in sF)
-				{
-					string sPath = GetTransformPath(sRen.transform);
-
-
-					if (sPath == pPath && sRen.sharedMesh != pRen.sharedMesh)
-					{
-						//Debug.Log($"found {sPath} == {pPath}");
-						sRen.sharedMesh = pRen.sharedMesh;
-						foundCount++;
-					}
-				}
-			}
-
-			if (pF.Length < foundCount)
-			{
-				Debug.Log($"Didn't find {pF.Length - foundCount} renderers.");
-			}
-		}
-
+		
 		public void SetPosition(Vector3 pos)
 		{
 			//transform.position = pos;
@@ -202,23 +122,18 @@ namespace ErenshorCoop
 		{
 			//GameHooks.leashing.SetValue(npc, false);
 			//character.Alive = true;
-			GameHooks.leashing.SetValue(npc, 0f);
+			//GameHooks.leashing.SetValue(npc, 0f);
 			Logging.LogError($"{name} Destroyed.");
-			Logging.LogGameMessage($"{name} Disconnected.");
-
-			if (ServerConnectionManager.Instance.IsRunning)
-			{
-				Grouping.ForceRemoveFromGroup(entityID);
-			}
+			//Logging.LogGameMessage($"{name} Disconnected.");
 		}
 
 		private IEnumerator InterpPos(Vector3 targ, float dur)
 		{
 			float time = 0f;
 			Vector3 start = transform.position;
-			while(time < dur)
+			while (time < dur)
 			{
-				transform.position = Vector3.Lerp(start, targ, time/dur);
+				transform.position = Vector3.Lerp(start, targ, time / dur);
 				time += Time.deltaTime;
 				yield return null;
 			}
@@ -229,7 +144,7 @@ namespace ErenshorCoop
 		{
 			transform.position = pos;
 
-			if(rot != transform.rotation)
+			if (rot != transform.rotation)
 				transform.rotation = rot;
 
 			HandleAggro();
@@ -305,8 +220,6 @@ namespace ErenshorCoop
 				sim.MyStats.CalcSimStats();
 				sim.MyStats.CalcStats();
 
-				HackUpdateModels();
-
 				sim.MyStats.CurrentHP = _savedHP;
 				sim.MyStats.CurrentMana = _savedMP;
 
@@ -317,11 +230,11 @@ namespace ErenshorCoop
 
 		private void HandleRespawn()
 		{
-			HandleStatusRemoval(true,false,-1);
+			HandleStatusRemoval(true, false, -1);
 
 			character.MyStats.CurrentHP = character.MyStats.CurrentMaxHP;
 			character.Alive = true;
-			
+
 
 			MyAnim.SetBool("Dead", false);
 			MyAnim.SetTrigger("Revive");
@@ -329,7 +242,6 @@ namespace ErenshorCoop
 			npc.NPCName = playerName;
 			npc.GuildName = "";
 			name = playerName;
-			//Here go 2 hours
 			gameObject.layer = 9;
 
 			var component = npc.NamePlate.GetComponent<TextMeshPro>();
@@ -342,7 +254,7 @@ namespace ErenshorCoop
 			//TODO: attacked could potentially be a sim with PVP mod
 			(bool isPlayer, var attacked) = Extensions.GetCharacterFromID(data.attackedIsNPC, data.attackedID, false);
 
-			
+
 
 			if (attacked == null)
 			{
@@ -351,22 +263,22 @@ namespace ErenshorCoop
 			}
 
 			bool fromPlayer = false; //This should be false by default, otherwise every player that receives this will be
-									//Adding player damage to the enemy, which would cause everyone to get xp
-			//Check if we are in a group
+									 //Adding player damage to the enemy, which would cause everyone to get xp
+									 //Check if we are in a group
 			if (Grouping.HasGroup)
 			{
 				//Set fromPlayer to if this player is in our group and we're the leader
-				fromPlayer =  Grouping.IsLocalLeader() && Grouping.IsPlayerInGroup(entityID, false);
-				if (!isPlayer && Grouping.IsPlayerInGroup(entityID, false)) //If the target isn't a player and the player is in our group
+				fromPlayer = Grouping.IsLocalLeader() && Grouping.IsPlayerInGroup(entityID, true);
+				if (!isPlayer && Grouping.IsPlayerInGroup(entityID, true)) //If the target isn't a player and the player is in our group
 				{
 					//We add ourselves to the aggro list, this way everyone in the group is automatically in the aggro list
 					//if (data.damage > 0) //Make sure we actually did damage
 					{
 						//Logging.Log($"beep boop aggro {playerName} vs {attacked.name} to us");
 						attacked.MyNPC.ManageAggro(1, ClientConnectionManager.Instance.LocalPlayer.character);
-						if(ServerConnectionManager.Instance.IsRunning)
+						if (ServerConnectionManager.Instance.IsRunning)
 						{
-							if(GameData.GroupMember1 != null && GameData.GroupMember1.simIndex >= 0)
+							if (GameData.GroupMember1 != null && GameData.GroupMember1.simIndex >= 0)
 								attacked.MyNPC.ManageAggro(1, GameData.GroupMember1.MyStats.Myself);
 							if (GameData.GroupMember2 != null && GameData.GroupMember2.simIndex >= 0)
 								attacked.MyNPC.ManageAggro(1, GameData.GroupMember2.MyStats.Myself);
@@ -380,7 +292,7 @@ namespace ErenshorCoop
 
 			//Add attacked character to a list and remove it again after this call
 			//This way we can skip the mitigation calculation
-			
+
 			Variables.DontCalculateDamageMitigationCharacters.Add(attacked);
 
 			if (data.damageType == GameData.DamageType.Physical)
@@ -431,12 +343,9 @@ namespace ErenshorCoop
 			sim.MyStats.CurrentMana = packet.mp;
 			_savedMP = packet.mp;
 			_savedHP = packet.health;
-
-			if (ServerConnectionManager.Instance.IsRunning)
-				ServerConnectionManager.Instance.OnClientConnect?.Invoke(playerID, peer);
 		}
 
-		public void OnPlayerDataReceive<T>(T packet) where T : BasePacket
+		public void OnSimDataReceive<T>(T packet) where T : BasePacket
 		{
 			if (packet is PlayerTransformPacket playerTransformPacket)
 			{
@@ -445,7 +354,7 @@ namespace ErenshorCoop
 				if (playerTransformPacket.dataTypes.Contains(PlayerDataType.ROTATION))
 					SetRotation(playerTransformPacket.rotation);
 			}
-			if(packet is PlayerDataPacket playerDataPacket)
+			if (packet is PlayerDataPacket playerDataPacket)
 			{
 				if (playerDataPacket.dataTypes.Contains(PlayerDataType.POSITION))
 					SetPosition(playerDataPacket.position);
@@ -476,7 +385,7 @@ namespace ErenshorCoop
 					if (zone != playerDataPacket.scene)
 					{
 						sceneChanged = true;
-						if(ServerConnectionManager.Instance.IsRunning)
+						if (ServerConnectionManager.Instance.IsRunning)
 							ServerConnectionManager.Instance.OnClientSwapZone?.Invoke(playerID, peer);
 					}
 
@@ -497,10 +406,15 @@ namespace ErenshorCoop
 					sim.MyStats.CurrentMana = _savedMP;
 
 				}
-				if(playerDataPacket.dataTypes.Contains(PlayerDataType.CURTARGET))
+				if (playerDataPacket.dataTypes.Contains(PlayerDataType.CURTARGET))
 				{
 					HandleTargetChange(playerDataPacket.targetID, playerDataPacket.targetType);
 				}
+
+
+
+				if (playerDataPacket.dataTypes.Contains(PlayerDataType.DESTR_SIM))
+					Destroy(gameObject);
 			}
 
 			if (packet is PlayerActionPacket playerActionPacket)
@@ -509,7 +423,7 @@ namespace ErenshorCoop
 				{
 					HandlePlayerAttack(playerActionPacket.attackData);
 				}
-				if(playerActionPacket.dataTypes.Contains(ActionType.REVIVE))
+				if (playerActionPacket.dataTypes.Contains(ActionType.REVIVE))
 					HandleRespawn();
 				if (playerActionPacket.dataTypes.Contains(ActionType.DAMAGE_TAKEN))
 				{
@@ -519,13 +433,13 @@ namespace ErenshorCoop
 				{
 					HandleSpellCharge(playerActionPacket.SpellChargeFXIndex);
 				}
-				if(playerActionPacket.dataTypes.Contains(ActionType.SPELL_EFFECT))
+				if (playerActionPacket.dataTypes.Contains(ActionType.SPELL_EFFECT))
 					HandleSpellEffect(playerActionPacket.spellID, playerActionPacket.targetID, playerActionPacket.targetIsNPC, playerActionPacket.targetIsSim);
-				if(playerActionPacket.dataTypes.Contains(ActionType.SPELL_END))
+				if (playerActionPacket.dataTypes.Contains(ActionType.SPELL_END))
 					HandleEndSpell();
-				if(playerActionPacket.dataTypes.Contains(ActionType.STATUS_EFFECT_APPLY))
+				if (playerActionPacket.dataTypes.Contains(ActionType.STATUS_EFFECT_APPLY))
 					HandleStatusEffectApply(playerActionPacket.effectData);
-				if(playerActionPacket.dataTypes.Contains(ActionType.STATUS_EFFECT_REMOVE))
+				if (playerActionPacket.dataTypes.Contains(ActionType.STATUS_EFFECT_REMOVE))
 					HandleStatusRemoval(playerActionPacket.RemoveAllStatus, playerActionPacket.RemoveBreakable, playerActionPacket.statusID);
 				if (playerActionPacket.dataTypes.Contains(ActionType.HEAL))
 					HandleHeal(playerActionPacket.healingData);
@@ -533,7 +447,7 @@ namespace ErenshorCoop
 
 		}
 
-		
+
 
 		static Dictionary<string, int> equipSlotIndices;
 		private bool hasClearedEquip = false;
@@ -695,6 +609,8 @@ namespace ErenshorCoop
 			string param = data.param;
 			object value = data.value;
 
+			//Logging.Log($"{name} received anim update {param}={value.ToString()}");
+
 			switch (syncType)
 			{
 				case AnimatorSyncType.FLOAT:
@@ -744,10 +660,10 @@ namespace ErenshorCoop
 				}
 				else
 				{
-					t = ClientNPCSyncManager.Instance.GetEntityFromID(effectData.targetID,effectData.targetType == EntityType.SIM);
+					t = ClientNPCSyncManager.Instance.GetEntityFromID(effectData.targetID, effectData.targetType == EntityType.SIM);
 				}
 
-				if(t == null)
+				if (t == null)
 				{
 					t = ClientConnectionManager.Instance.GetPlayerFromID(effectData.targetID);
 				}
@@ -763,7 +679,7 @@ namespace ErenshorCoop
 
 			if (effectData.targetID >= 0)
 			{
-				
+
 
 				if (effectData.duration >= 0)
 					targetChar.MyStats.AddStatusEffect(spell, true, effectData.damageBonus, character, effectData.duration);
@@ -782,11 +698,11 @@ namespace ErenshorCoop
 			}
 			else
 			{
-				if(effectData.targetID == -1)
+				if (effectData.targetID == -1)
 					targetChar.MyStats.AddStatusEffect(spell, true, effectData.damageBonus);
-				if(effectData.targetID == -2)
+				if (effectData.targetID == -2)
 					targetChar.MyStats.AddStatusEffect(spell, true, effectData.damageBonus, character);
-				if(effectData.targetID == -3)
+				if (effectData.targetID == -3)
 					targetChar.MyStats.AddStatusEffect(spell, true, effectData.damageBonus, character, effectData.duration);
 			}
 
@@ -813,7 +729,7 @@ namespace ErenshorCoop
 		{
 			if (zone != SceneManager.GetActiveScene().name) return;
 
-			if(spellEffect != null)
+			if (spellEffect != null)
 				DestroyImmediate(spellEffect);
 
 			spellEffect = new GameObject();
@@ -843,7 +759,7 @@ namespace ErenshorCoop
 			}
 			else
 			{
-				if(targ == null)
+				if (targ == null)
 					targ = SharedNPCSyncManager.Instance.GetEntityFromID(targetID, isSim);
 				if (targ == null)
 					targ = ClientNPCSyncManager.Instance.GetEntityFromID(targetID, isSim);
@@ -856,27 +772,26 @@ namespace ErenshorCoop
 			switch (spell.Type)
 			{
 				case Spell.SpellType.Damage:
-					
+
 					if (targ.character.isNPC && ClientZoneOwnership.isZoneOwner)
 					{
 						targ.character.MyNPC.ManageAggro(spell.Aggro, character);
 					}
 					Instantiate(GameData.EffectDB.SpellEffects[spell.SpellResolveFXIndex], targ.transform.position, Quaternion.identity);
 
-				break;
+					break;
 				case Spell.SpellType.StatusEffect:
 				case Spell.SpellType.Beneficial:
 				case Spell.SpellType.PBAE:
 				case Spell.SpellType.Heal:
 					Instantiate(GameData.EffectDB.SpellEffects[spell.SpellResolveFXIndex], targ.transform.position, Quaternion.identity);
-						//.AddComponent<DestroyObjectTimer>().TimeToDestroy = 600f;
+					//.AddComponent<DestroyObjectTimer>().TimeToDestroy = 600f;
 					break;
 				case Spell.SpellType.Pet:
 					Instantiate(GameData.EffectDB.SpellEffects[spell.SpellResolveFXIndex], targ.transform.position, Quaternion.identity);
-						//.AddComponent<DestroyObjectTimer>().TimeToDestroy = 600f;
+					//.AddComponent<DestroyObjectTimer>().TimeToDestroy = 600f;
 					UpdateSocialLog.LogAdd($"{playerName} summoned a companion!", "lightblue");
-
-				break;
+					break;
 			}
 		}
 
@@ -894,15 +809,15 @@ namespace ErenshorCoop
 		{
 			foreach (var healingData in healing)
 			{
-	
-				( bool isPlayer, var target ) = Extensions.GetCharacterFromID(healingData.targetIsNPC, healingData.targetID, healingData.targetIsSim);
+
+				(bool isPlayer, var target) = Extensions.GetCharacterFromID(healingData.targetIsNPC, healingData.targetID, healingData.targetIsSim);
 				if (target == null) continue;
 
 				if (!healingData.isMP)
 				{
 					//Note: even if each player sends their updated health, this might actually be faster
 					bool targetIsLocal = healingData.targetID == ClientConnectionManager.Instance.LocalPlayerID;
-					UpdateSocialLog.LogAdd($"{playerName}'s {( healingData.isCrit ? "CRITICAL " : "" )}healing spell restores {healingData.amount} of {( targetIsLocal ? "your" : target.name + "'s" )} life!", "green");
+					UpdateSocialLog.LogAdd($"{playerName}'s {(healingData.isCrit ? "CRITICAL " : "")}healing spell restores {healingData.amount} of {(targetIsLocal ? "your" : target.name + "'s")} life!", "green");
 
 					target.MyStats.HealMe(healingData.amount);
 				}
@@ -910,7 +825,7 @@ namespace ErenshorCoop
 				{
 					target.MyStats.CurrentMana += healingData.amount;
 					//having the bar extend for a frame kinda sucks so we handle it ourselves
-					if(target.MyStats.CurrentMana > target.MyStats.GetCurrentMaxMana())
+					if (target.MyStats.CurrentMana > target.MyStats.GetCurrentMaxMana())
 						target.MyStats.CurrentMana = target.MyStats.GetCurrentMaxMana();
 				}
 			}
@@ -945,8 +860,6 @@ namespace ErenshorCoop
 			mod.UpdateSlot(mod.BootsL, GameData.PlayerInv.Empty, 0, Item.SlotType.Foot);
 			mod.UpdateSlot(mod.BootsR, GameData.PlayerInv.Empty, 0, Item.SlotType.Foot);
 		}
-
-		
 
 	}
 }

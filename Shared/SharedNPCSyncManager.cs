@@ -19,7 +19,7 @@ namespace ErenshorCoop.Shared
 	public class SharedNPCSyncManager : MonoBehaviour
 	{
 		public Dictionary<short, NPCSync> mobs = new();
-		public Dictionary<short, NPCSync> sims = new();
+		public Dictionary<short, SimSync> sims = new();
 		public Dictionary<Animator, short> animatorToMobID = new();
 		public Dictionary<AnimatorOverrideController, short> overrideToMobID = new();
 
@@ -76,8 +76,11 @@ namespace ErenshorCoop.Shared
 				Logging.Log($"{curZone} != {scene.name}");
 				Cleanup();
 				CollectSpawnData();
-				if (ServerConnectionManager.Instance.IsRunning)
-					ServerRemoveSims();
+				//if (ServerConnectionManager.Instance.IsRunning)
+				//	ServerRemoveSims();
+				if(ClientConnectionManager.Instance.IsRunning)
+					StartCoroutine(DelayedCheckSim());
+
 			}
 			curZone = scene.name;
 
@@ -86,9 +89,9 @@ namespace ErenshorCoop.Shared
 				//OnClientChangeZone(ClientConnectionManager.Instance.LocalPlayerID, scene.name);
 			//	ServerRemoveSims();
 				//We assume our sims got destroyed..
-				sims.Clear();
+				//sims.Clear();
 				//We delay this just in case the sims aren't spawned in yet
-				StartCoroutine(DelayedCheckSim());
+				//StartCoroutine(DelayedCheckSim());
 			}
 		}
 
@@ -236,6 +239,10 @@ namespace ErenshorCoop.Shared
 				}
 			}
 
+			foreach (var s in sims)
+				Destroy(s.Value);
+
+			sims.Clear();
 			mobs.Clear();
 			animatorToMobID.Clear();
 			overrideToMobID.Clear();
@@ -245,11 +252,19 @@ namespace ErenshorCoop.Shared
 			Logging.Log($"SharedNPCSyncManager Cleaned up.");
 		}
 
-		
+		public void CollectSims()
+		{
+			var _sims = GameData.SimMngr.ActiveSimInstances;
+			foreach(var sim  in _sims)
+			{
+				var s = sim.gameObject.GetOrAddComponent<SimSync>();
+				s.type = EntityType.SIM;
+			}
+		}
 
 		public void CollectSpawnData()
 		{
-			//Logging.Log("collecting");
+			Logging.Log("collecting");
 
 			var spawns = FindObjectsOfType<SpawnPoint>(true);
 
@@ -307,11 +322,8 @@ namespace ErenshorCoop.Shared
 
 		public IEnumerator DelayedCheckSim(short playerID=-1)
 		{
-			yield return new WaitForSeconds(1f);
-			if(playerID > -1)
-				ServerCheckSims(playerID);
-			else
-				ServerCheckSims();
+			yield return new WaitForSeconds(2f);
+			CollectSims();
 		}
 
 		public IEnumerator DelayedSendMobData(short playerID = -1)
@@ -344,7 +356,7 @@ namespace ErenshorCoop.Shared
 						{
 							if (GameData.GroupMember1 != null)
 							{
-								spawnData.Add(ServerSpawnSim(GameData.GroupMember1.MyAvatar.gameObject, GameData.GroupMember1.simIndex));
+								//spawnData.Add(ServerSpawnSim(GameData.GroupMember1.MyAvatar.gameObject, GameData.GroupMember1.simIndex));
 								//GameData.GroupMember1.MyAvatar.GetComponent<NPCSync>().OnClientConnect(-1,"",""); //Force pet spawn
 							}
 						}
@@ -354,7 +366,7 @@ namespace ErenshorCoop.Shared
 						{
 							if (GameData.GroupMember2 != null)
 							{ 
-								spawnData.Add(ServerSpawnSim(GameData.GroupMember2.MyAvatar.gameObject, GameData.GroupMember2.simIndex)); 
+								//spawnData.Add(ServerSpawnSim(GameData.GroupMember2.MyAvatar.gameObject, GameData.GroupMember2.simIndex)); 
 								//GameData.GroupMember2.MyAvatar.GetComponent<NPCSync>().OnClientConnect(-1, "", "");
 							}
 						}
@@ -364,7 +376,7 @@ namespace ErenshorCoop.Shared
 						{
 							if (GameData.GroupMember3 != null)
 							{
-								spawnData.Add(ServerSpawnSim(GameData.GroupMember3.MyAvatar.gameObject, GameData.GroupMember3.simIndex));
+								//spawnData.Add(ServerSpawnSim(GameData.GroupMember3.MyAvatar.gameObject, GameData.GroupMember3.simIndex));
 								//GameData.GroupMember3.MyAvatar.GetComponent<NPCSync>().OnClientConnect(-1, "", "");
 							}
 						}
@@ -417,10 +429,15 @@ namespace ErenshorCoop.Shared
 
 		public Entity GetEntityFromID(short entityID, bool isSim)
 		{
-			if(isSim)
+			if (isSim)
+			{
 				if (sims.TryGetValue(entityID, out var sim))
 					return sim;
-			return mobs.TryGetValue(entityID, out var mob) ? mob : null;
+			}
+			else
+				return mobs.TryGetValue(entityID, out var mob) ? mob : null;
+
+			return null;
 		}
 
 		public void OnMobDestroyed(short id, EntityType type)
@@ -429,7 +446,8 @@ namespace ErenshorCoop.Shared
 
 			if (type == EntityType.SIM)
 			{
-				sims.Remove(id);
+				SendEntityDestroyPacket(id, type);
+				//sims.Remove(id);
 				return;
 			}
 
@@ -448,7 +466,7 @@ namespace ErenshorCoop.Shared
 
 		public short GetFreeId()
 		{
-			serverLastId = -1;
+			//serverLastId = -1;
 			foreach(var f in mobs)
 				if(f.Key >  serverLastId)
 					serverLastId = f.Key;
@@ -477,6 +495,7 @@ namespace ErenshorCoop.Shared
 		/// </summary>
 		public void SendMobData(short playerID, bool sendToAll = false)
 		{
+			Logging.LogError($"Trying to send mob data.....");
 			if (!CanRun || !ClientZoneOwnership.isZoneOwner) return;
 
 			Logging.LogError($"Trying to send mob data. {Variables.spawnData.Count}");
@@ -650,7 +669,7 @@ namespace ErenshorCoop.Shared
 		/// <summary>
 		/// Creates SpawnData for Sim
 		/// </summary>
-		public EntitySpawnData ServerSpawnSim(GameObject sim, int simIndex)
+		/*public EntitySpawnData ServerSpawnSim(GameObject sim, int simIndex)
 		{
 			if (!CanRun) return new();
 
@@ -671,7 +690,7 @@ namespace ErenshorCoop.Shared
 				sim.transform.rotation,
 				EntityType.SIM
 			);
-		}
+		}*/
 
 
 		/// <summary>
@@ -698,7 +717,7 @@ namespace ErenshorCoop.Shared
 
 			pack.SetData("targetPlayerIDs", playerIDs);
 			if (playerID != -1)
-				pack.SetTarget(ClientConnectionManager.Instance.GetPlayerFromID(playerID).peer);
+				pack.SetTarget(ClientConnectionManager.Instance.GetPlayerFromID(playerID));
 			pack.zone = SceneManager.GetActiveScene().name;
 			pack.entityType = type;
 
@@ -707,8 +726,8 @@ namespace ErenshorCoop.Shared
 				NPCSync ent = null;
 				if(mobs.ContainsKey(p.entityID))
 					ent = mobs[p.entityID];
-				if (ent == null && sims.ContainsKey(p.entityID))
-					ent = sims[p.entityID];
+				//if (ent == null && sims.ContainsKey(p.entityID))
+				//	ent = sims[p.entityID];
 				if(ent == null) continue;
 
 				//Force pet spawn
@@ -735,7 +754,7 @@ namespace ErenshorCoop.Shared
 			pack.dataTypes.Add(EntityDataType.ENTITY_REMOVE);
 			pack.SetData("targetPlayerIDs", playerIDs);
 			if (playerID != -1)
-				pack.SetTarget(ClientConnectionManager.Instance.GetPlayerFromID(playerID).peer);
+				pack.SetTarget(ClientConnectionManager.Instance.GetPlayerFromID(playerID));
 			pack.zone = SceneManager.GetActiveScene().name;
 			pack.entityType = type;
 

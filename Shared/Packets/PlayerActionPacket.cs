@@ -21,6 +21,7 @@ namespace ErenshorCoop.Shared.Packets
 		public bool targetIsNPC;
 		public bool targetIsSim;
 
+
 		public StatusEffectData effectData;
 
 		public bool RemoveAllStatus = false;
@@ -36,6 +37,7 @@ namespace ErenshorCoop.Shared.Packets
 			writer.Put((byte)PacketType.PLAYER_ACTION);
 			writer.Put(entityID);
 
+			writer.Put(isSim);
 
 			ushort flag = Extensions.GetSubTypeFlag(dataTypes);
 			writer.Put(flag);
@@ -100,9 +102,10 @@ namespace ErenshorCoop.Shared.Packets
 			}
 		}
 
-		public override void Read(NetPacketReader reader)
+		public override void Read(NetDataReader reader)
 		{
 			entityID = reader.GetShort();
+			isSim = reader.GetBool();
 			dataTypes = Extensions.ReadSubTypeFlag<ActionType>(reader.GetUShort());
 
 			if (dataTypes.Contains(ActionType.ATTACK))
@@ -135,7 +138,7 @@ namespace ErenshorCoop.Shared.Packets
 			}
 			if (dataTypes.Contains(ActionType.SPELL_EFFECT))
 			{
-				spellID = reader.GetString();
+				spellID = reader.GetString().Sanitize();
 				targetID = reader.GetShort();
 				targetIsNPC = reader.GetBool();
 				targetIsSim = reader.GetBool();

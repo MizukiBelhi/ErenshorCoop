@@ -56,7 +56,7 @@ namespace ErenshorCoop.Shared.Packets
 			}
 		}
 
-		public override void Read(NetPacketReader reader)
+		public override void Read(NetDataReader reader)
 		{
 			dataTypes = Extensions.ReadSubTypeFlag<ServerInfoType>(reader.GetUShort());
 
@@ -90,7 +90,7 @@ namespace ErenshorCoop.Shared.Packets
 			if (dataTypes.Contains(ServerInfoType.ZONE_OWNERSHIP))
 			{
 				zoneOwner = reader.GetShort();
-				zone = reader.GetString();
+				zone = reader.GetString().Sanitize();
 				playerList = new();
 				int count = reader.GetInt();
 				for(var i=0;i<count;i++)

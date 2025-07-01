@@ -96,7 +96,7 @@ namespace ErenshorCoop.Shared.Packets
 
 		}
 
-		public override void Read(NetPacketReader reader)
+		public override void Read(NetDataReader reader)
 		{
 			int c = reader.GetInt();
 			targetPlayerIDs = new();
@@ -107,7 +107,7 @@ namespace ErenshorCoop.Shared.Packets
 
 			entityID = reader.GetShort();
 			entityType = (EntityType)reader.GetByte();
-			zone = reader.GetString();
+			zone = reader.GetString().Sanitize();
 
 			dataTypes = Extensions.ReadSubTypeFlag<ActionType>(reader.GetUShort());
 
@@ -129,7 +129,7 @@ namespace ErenshorCoop.Shared.Packets
 			}
 			if (dataTypes.Contains(ActionType.SPELL_EFFECT))
 			{
-				spellID = reader.GetString();
+				spellID = reader.GetString().Sanitize();
 				targetID = reader.GetShort();
 				targetIsNPC = reader.GetBool();
 				targetIsSim = reader.GetBool();

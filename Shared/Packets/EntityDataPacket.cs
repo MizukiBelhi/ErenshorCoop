@@ -56,7 +56,7 @@ namespace ErenshorCoop.Shared.Packets
 			}
 		}
 
-		public override void Read(NetPacketReader reader)
+		public override void Read(NetDataReader reader)
 		{
 			int c = reader.GetInt();
 			targetPlayerIDs = new();
@@ -67,7 +67,7 @@ namespace ErenshorCoop.Shared.Packets
 
 			entityID = reader.GetShort();
 			entityType = (EntityType)reader.GetByte();
-			zone = reader.GetString();
+			zone = reader.GetString().Sanitize();
 
 			dataTypes = Extensions.ReadSubTypeFlag<EntityDataType>(reader.GetUShort());
 			

@@ -3,6 +3,9 @@ using System;
 using ErenshorCoop.Client;
 using ErenshorCoop.Shared;
 using ErenshorCoop.Shared.Packets;
+using System.Collections.Generic;
+using System.Linq;
+using Steamworks;
 
 namespace ErenshorCoop.Server
 {
@@ -12,6 +15,11 @@ namespace ErenshorCoop.Server
 		public static ConfigEntry<bool> IsEntitySyncDistance;
 		public static ConfigEntry<bool> IsPVPEnabled;
 		public static ConfigEntry<bool> EnableZoneTransfership;
+		public static ConfigEntry<bool> EnableModWhitelist;
+		public static ConfigEntry<string> ModeratorListRaw;
+		public static List<ulong> ModeratorList = new();
+		public static ConfigEntry<string> BanListRaw;
+		public static List<ulong> BanList = new();
 
 		public static bool clientIsPvpEnabled = false;
 
@@ -42,6 +50,39 @@ namespace ErenshorCoop.Server
 				"Enables PVP"
 			);
 			IsPVPEnabled.SettingChanged += OnPVPSettingChanged;
+
+			EnableModWhitelist = config.Bind(
+				"Host Settings",
+				"!!!!!Enable Mod Whitelist",
+				false,
+				"When this is enabled, only players with the same mods can join you."
+			);
+
+			ModeratorListRaw = config.Bind(
+				"Host Settings",
+				"!!!!!!Moderator SteamIDs",
+				"",
+				"Comma separated list of moderator SteamIDs."
+			);
+			ModeratorListRaw.SettingChanged += OnModListChanged;
+
+			ModeratorList = ModeratorListRaw.Value.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+							.Select(s => { return ulong.TryParse(s.Trim(), out var id) ? id : 0UL; })
+							.Where(id => id != 0UL)
+							.ToList();
+
+			BanListRaw = config.Bind(
+				"Host Settings",
+				"!!!!!!SteamID Ban List",
+				"",
+				"Comma separated list of banned SteamIDs."
+			);
+			BanListRaw.SettingChanged += OnBanListChanged;
+
+			BanList = BanListRaw.Value.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+							.Select(s => { return ulong.TryParse(s.Trim(), out var id) ? id : 0UL; })
+							.Where(id => id != 0UL)
+							.ToList();
 		}
 
 		private static void OnPVPSettingChanged(object sender, EventArgs e)
@@ -55,6 +96,22 @@ namespace ErenshorCoop.Server
 			}
 
 			PacketManager.GetOrCreatePacket<ServerInfoPacket>(0, PacketType.SERVER_INFO).AddPacketData(ServerInfoType.PVP_MODE, "pvpMode", IsPVPEnabled.Value);
+		}
+
+		private static void OnModListChanged(object sender, EventArgs e)
+		{
+			ModeratorList = ModeratorListRaw.Value.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+							.Select(s => { return ulong.TryParse(s.Trim(), out var id) ? id : 0UL; })
+							.Where(id => id != 0UL)
+							.ToList();
+		}
+
+		private static void OnBanListChanged(object sender, EventArgs e)
+		{
+			BanList = BanListRaw.Value.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+							.Select(s => { return ulong.TryParse(s.Trim(), out var id) ? id : 0UL; })
+							.Where(id => id != 0UL)
+							.ToList();
 		}
 	}
 }

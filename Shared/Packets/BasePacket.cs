@@ -1,5 +1,7 @@
-﻿using LiteNetLib;
+﻿using ErenshorCoop.Steam;
+using LiteNetLib;
 using LiteNetLib.Utils;
+using Steamworks;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
@@ -20,10 +22,13 @@ namespace ErenshorCoop.Shared.Packets
 		public bool hasSend = false;
 		public DeliveryMethod deliveryMethod;
 		public NetPeer peer;
+		public CSteamID steamPeer;
 		public bool singleTarget = false;
 		public List<NetPeer> exclusions = new();
+		public List<CSteamID> steamExclusions = new();
 		public short entityID;
 		public List<short> targetPlayerIDs;
+		public bool isSim = false;
 
 		public BasePacket(DeliveryMethod deliveryMethod) { this.deliveryMethod = deliveryMethod; }
 
@@ -32,7 +37,7 @@ namespace ErenshorCoop.Shared.Packets
 			writer.Put(entityID);
 		}
 
-		public virtual void Read(NetPacketReader reader)
+		public virtual void Read(NetDataReader reader)
 		{
 			entityID = reader.GetShort();
 		}
@@ -42,7 +47,23 @@ namespace ErenshorCoop.Shared.Packets
 			canSend = true;
 		}
 
-		public BasePacket SetTarget(NetPeer peer)
+		public BasePacket SetTarget(Entity peer)
+		{
+			if (Lobby.isInLobby)
+				this.steamPeer = peer.steamID;
+			else
+				this.peer = peer.peer;
+			singleTarget = true;
+			return this;
+		}
+
+		public BasePacket SetSteamTarget(CSteamID peer)
+		{
+			this.steamPeer = peer;
+			singleTarget = true;
+			return this;
+		}
+		public BasePacket SetPeerTarget(NetPeer peer)
 		{
 			this.peer = peer;
 			singleTarget = true;

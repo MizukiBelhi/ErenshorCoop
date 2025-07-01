@@ -8,6 +8,7 @@ using ErenshorCoop.Client;
 using ErenshorCoop.Server;
 using LiteNetLib;
 using LiteNetLib.Utils;
+using Steamworks;
 
 namespace ErenshorCoop.Shared
 {
@@ -50,6 +51,18 @@ namespace ErenshorCoop.Shared
 				((BasePacket)pack).hasSend = dontSend;
 				return pack;
 			}
+		}
+
+		public static T CreatePacket<T>(short entityID, PacketType type, bool dontSend = false) where T : BasePacket, new()
+		{
+			if (entityID == -1) return new T { entityID = entityID };
+			var entData = new Dictionary<PacketType, IPacket>();
+			var pack = new T { entityID = entityID };
+			entData[type] = pack;
+			packets.Add(entityID, entData);
+			((BasePacket)pack).hasSend = dontSend;
+			return pack;
+			
 		}
 
 		public static void ServerAddPacket(PacketType type, BasePacket packet)
@@ -175,40 +188,56 @@ namespace ErenshorCoop.Shared
 
 			if (isClientPacket)
 			{
-				//Logging.Log($"writing {packetType}");
+				//Logging.Log($"writing {packetType} {basePacket.entityID}");
 				if (ServerConnectionManager.Instance.IsRunning)
 				{
 					if (basePacket.singleTarget)
 					{
-						basePacket.peer.Send(writer, channel, basePacket.deliveryMethod);
-					}else
-						ServerBroadcast(writer, channel, basePacket.deliveryMethod, basePacket.exclusions);
+						if (!Steam.Lobby.isLobbyHost)
+							basePacket.peer.Send(writer, channel, basePacket.deliveryMethod);
+						else
+							Steam.Networking.SendPacket(basePacket.steamPeer, writer.CopyData(), channel, Steam.Networking.ConvertDeliveryMethod(basePacket.deliveryMethod));
+					}
+					else
+						ServerBroadcast(writer, channel, basePacket.deliveryMethod, basePacket.exclusions, basePacket.steamExclusions);
 				}
 				else
-					ClientConnectionManager.Instance.Server.Send(writer, channel, basePacket.deliveryMethod);
+				{
+					if (!Steam.Lobby.isInLobby)
+						ClientConnectionManager.Instance.Server.Send(writer, channel, basePacket.deliveryMethod);
+					else
+						Steam.Networking.SendPacket(Steam.Lobby.hostSteamID, writer.CopyData(), channel, Steam.Networking.ConvertDeliveryMethod(basePacket.deliveryMethod));
+				}
 			}
 			else
 			{
+				//Logging.Log($"writing {packetType} {basePacket.entityID}");
 				if (basePacket.singleTarget)
 				{
 					//Logging.Log($"writing {packetType}");
-					basePacket.peer.Send(writer, channel, basePacket.deliveryMethod);
+					if (!Steam.Lobby.isInLobby)
+						basePacket.peer.Send(writer, channel, basePacket.deliveryMethod);
+					else
+						Steam.Networking.SendPacket(basePacket.steamPeer, writer.CopyData(), channel, Steam.Networking.ConvertDeliveryMethod(basePacket.deliveryMethod));
 				}
 				else
 				{
-					ServerBroadcast(writer, channel, basePacket.deliveryMethod, basePacket.exclusions);
+					ServerBroadcast(writer, channel, basePacket.deliveryMethod, basePacket.exclusions, basePacket.steamExclusions);
 				}
 			}
 		}
 
-		private static void ServerBroadcast(NetDataWriter writer, byte channel, DeliveryMethod deliveryMethod, List<NetPeer> exclusions)
+		private static void ServerBroadcast(NetDataWriter writer, byte channel, DeliveryMethod deliveryMethod, List<NetPeer> exclusions, List<CSteamID> steamExclusions)
 		{
 			foreach (var client in ClientConnectionManager.Instance.Players)
 			{
 				if (client.Key == ClientConnectionManager.Instance.LocalPlayerID) continue;
-				if (exclusions.Contains(client.Value.peer)) continue;
+				if (exclusions.Contains(client.Value.peer) || steamExclusions.Contains(client.Value.steamID)) continue;
 
-				client.Value.peer.Send(writer, channel, deliveryMethod);
+				if(!Steam.Lobby.isInLobby)
+					client.Value.peer.Send(writer, channel, deliveryMethod);
+				else
+					Steam.Networking.SendPacket(client.Value.steamID, writer.CopyData(), channel, Steam.Networking.ConvertDeliveryMethod(deliveryMethod));
 			}
 		}
 	}

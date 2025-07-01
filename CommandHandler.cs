@@ -1,5 +1,7 @@
 ﻿using ErenshorCoop.Client;
 using ErenshorCoop.Server;
+using ErenshorCoop.Shared;
+using ErenshorCoop.Shared.Packets;
 using HarmonyLib;
 using System.Net;
 
@@ -73,6 +75,32 @@ namespace ErenshorCoop
 					case "disconnect":
 						ClientConnectionManager.Instance?.Disconnect();
 						ServerConnectionManager.Instance?.Disconnect();
+						return false;
+					case "kick":
+					case "ban":
+						if (!ClientConnectionManager.Instance.IsRunning)
+						{
+							return true;//Not connected
+						}
+						var pln = spl[1].ToLower();
+						if (pln == ClientConnectionManager.Instance.LocalPlayer.name.ToLower())
+						{
+							//cant kick/ban self...
+							Logging.WriteInfoMessage("Cannot kick/ban self!");
+							return false;
+						}
+						if(ServerConnectionManager.Instance.IsRunning)
+						{
+							ClientConnectionManager.Instance.HandleModCommand((byte)(command == "kick" ? 0 : 1), pln);
+						}
+						else
+						{
+							//Send packet
+							var pa = PacketManager.GetOrCreatePacket<PlayerRequestPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_REQUEST);
+							pa.dataTypes.Add(Request.MOD_COMMAND);
+							pa.playerName = pln;
+							pa.commandType = (byte)(command == "kick" ? 0 : 1);
+						}
 						return false;
 				}
 			}

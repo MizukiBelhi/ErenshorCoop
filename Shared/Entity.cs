@@ -4,6 +4,7 @@ using ErenshorCoop.Shared.Packets;
 using LiteNetLib;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Steamworks;
 
 namespace ErenshorCoop.Shared
 {
@@ -11,9 +12,9 @@ namespace ErenshorCoop.Shared
 	{
 		public string entityName = "";
 		public NetPeer peer;
+		public CSteamID steamID;
 		public short entityID = -1;
 		public Character character;
-		public string currentScene = "";
 		public EntityType type = EntityType.ENEMY;
 		public string zone = "";
 		protected Entity aggroTarget;
@@ -34,8 +35,9 @@ namespace ErenshorCoop.Shared
 			if (type == EntityType.PET && entityID == -1 && (GetType() == typeof(NPCSync)))
 			{
 				RequestID();
-
 			}
+			if (type == EntityType.SIM && entityID == -1 && (GetType() == typeof(SimSync)))
+				RequestID();
 		}
 
 		public void RequestID()
@@ -64,13 +66,18 @@ namespace ErenshorCoop.Shared
 					if(isGuardian)
 						SharedNPCSyncManager.Instance.ServerSpawnMob(gameObject, (int)CustomSpawnID.TREASURE_GUARD, $"{treasureChestID},{guardianId}", false, transform.position, transform.rotation);
 				}
+				if (type == EntityType.SIM)
+				{
+					SharedNPCSyncManager.Instance.sims.Add(entityID, ((SimSync)this));
+					((SimSync)this).SendConnectData();
+				}
 			}
 		}
 
 		public void ReceiveRequestID(short id)
 		{
-			Logging.Log($"received entityID request {id}");
-			if (GetType() != typeof(NPCSync))
+			Logging.Log($"received entityID request {id} for {name}");
+			if (GetType() != typeof(NPCSync) && GetType() != typeof(SimSync))
 				return;
 			if (id == -1) return;
 
@@ -82,6 +89,11 @@ namespace ErenshorCoop.Shared
 			{
 				if(isGuardian)
 					SharedNPCSyncManager.Instance.ServerSpawnMob(gameObject, (int)CustomSpawnID.TREASURE_GUARD, $"{treasureChestID},{guardianId}", false, transform.position, transform.rotation);
+			}
+			if(type == EntityType.SIM)
+			{
+				SharedNPCSyncManager.Instance.sims.Add(entityID, ((SimSync)this));
+				((SimSync)this).SendConnectData();
 			}
 		}
 
@@ -140,9 +152,14 @@ namespace ErenshorCoop.Shared
 				if (targetType == EntityType.ENEMY)
 					return;
 			}
-			
-			character.MyNPC.CurrentAggroTarget = target.character;
-			aggroTarget = target;
+
+			try
+			{
+
+				character.MyNPC.CurrentAggroTarget = target.character;
+				aggroTarget = target;
+			}
+			catch{}
 		}
 
 		public void SendAttack(int damage, short attackerID, bool attackerNPC, GameData.DamageType dmgType, bool animEffect, float resistMod)

@@ -29,7 +29,7 @@ namespace ErenshorCoop.Shared.Packets
 			writer.Put(weatherData.lightning);
 		}
 
-		public override void Read(NetPacketReader reader)
+		public override void Read(NetDataReader reader)
 		{
 
 			int c = reader.GetInt();
