@@ -11,12 +11,10 @@ using System.Reflection;
 using ErenshorCoop.Shared;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using Steamworks;
-using System.Collections;
 
 namespace ErenshorCoop
 {
-	[BepInPlugin("mizuki.coop", "Erenshor Coop", "1.6.0")]
+	[BepInPlugin("mizuki.coop", "Erenshor Coop", "1.5.1")]
 	public class ErenshorCoopMod : BaseUnityPlugin
 	{
 		public static ConfigEntry<int> someConfig;
@@ -37,7 +35,7 @@ namespace ErenshorCoop
 
 		public static List<PluginData> loadedPlugins = new();
 
-		public static System.Version version;
+		public static Version version;
 
 		private GameObject mainGO;
 		private GameObject ui;
@@ -71,9 +69,6 @@ namespace ErenshorCoop
 			GetLoadedPlugins();
 
 
-
-			StartCoroutine(DelayedSteamworksInit());
-
 			//For ScriptEngine
 			var scene = SceneManager.GetActiveScene();
 			//if (scene.name != "LoadScene" && scene.name != "Menu")
@@ -100,23 +95,8 @@ namespace ErenshorCoop
 
 		}
 
-		public IEnumerator DelayedSteamworksInit()
-		{
-			yield return new WaitForSeconds(2);
-			Steamworks.SteamAPI.Init();
-			Steam.Lobby.Init();
-		}
-
-		public void OnApplicationQuit()
-		{
-
-		}
-
 		private void OnDestroy()
 		{
-			Steam.Lobby.Cleanup();
-			Steam.Networking.Cleanup();
-
 			OnGameMapLoad -= OnGameLoad;
 			OnGameMenuLoad -= OnMenuLoad;
 
@@ -138,9 +118,6 @@ namespace ErenshorCoop
 			//Make absolutely sure there's no more syncs
 			var s = FindObjectsOfType<NPCSync>();
 			foreach (var n in s)
-				Destroy(n);
-			var sn = FindObjectsOfType<SimSync>();
-			foreach (var n in sn)
 				Destroy(n);
 		}
 
@@ -169,7 +146,6 @@ namespace ErenshorCoop
 
 			Destroy(ClientConnectionManager.Instance.LocalPlayer);
 			ClientConnectionManager.Instance.LocalPlayer = null;
-			Steam.Networking.Cleanup();
 		}
 
 		private void OnGameLoad(Scene scene)
@@ -190,7 +166,6 @@ namespace ErenshorCoop
 		public void Update()
 		{
 			PacketManager.ExtremePoolNoodleAction();
-			Steam.Networking.Update();
 		}
 
 		public void EnableHooks()
@@ -301,9 +276,9 @@ namespace ErenshorCoop
 		public struct PluginData
 		{
 			public string name;
-			public System.Version version;
+			public Version version;
 			public int diff;
-			public System.Version other;
+			public Version other;
 		}
 	}
 }

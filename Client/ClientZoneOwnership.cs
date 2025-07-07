@@ -40,8 +40,8 @@ namespace ErenshorCoop.Client
 		private static void OnGameMapLoad(Scene scene)
 		{
 			_zonePlayers.Clear();
-			//if (ServerConnectionManager.Instance.IsRunning)
-			//SharedNPCSyncManager.Instance.StartCoroutine(SharedNPCSyncManager.Instance.DelayedCheckSim());
+			if (ServerConnectionManager.Instance.IsRunning)
+				SharedNPCSyncManager.Instance.StartCoroutine(SharedNPCSyncManager.Instance.DelayedCheckSim());
 		}
 
 		public static void OnClientChangeZone(short playerID, string newZone, string prevZone)
@@ -57,8 +57,8 @@ namespace ErenshorCoop.Client
 				{
 					SharedNPCSyncManager.Instance.StartCoroutine(SharedNPCSyncManager.Instance.DelayedSendMobData(playerID));
 				}
-				//if(ServerConnectionManager.Instance.IsRunning)
-				SharedNPCSyncManager.Instance.StartCoroutine(SharedNPCSyncManager.Instance.DelayedCheckSim());
+				if(ServerConnectionManager.Instance.IsRunning)
+					SharedNPCSyncManager.Instance.StartCoroutine(SharedNPCSyncManager.Instance.DelayedCheckSim());
 			}
 			else
 			{

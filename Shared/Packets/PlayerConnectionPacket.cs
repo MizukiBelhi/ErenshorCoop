@@ -21,13 +21,13 @@ namespace ErenshorCoop.Shared.Packets
 		public string name;
 		public LookData lookData;
 		public List<GearData> gearData;
+
 		public PlayerConnectionPacket() : base(DeliveryMethod.ReliableOrdered) { }
 
 		public override void Write(NetDataWriter writer)
 		{
 			writer.Put((byte)PacketType.PLAYER_CONNECT);
 			writer.Put(entityID);
-			writer.Put(isSim);
 			writer.Put(position);
 			writer.Put(rotation);
 			writer.Put(health);
@@ -52,18 +52,17 @@ namespace ErenshorCoop.Shared.Packets
 			
 		}
 
-		public override void Read(NetDataReader reader)
+		public override void Read(NetPacketReader reader)
 		{
 			entityID = reader.GetShort();
-			isSim = reader.GetBool();
 			position = reader.GetVector3();
 			rotation = reader.GetRotation();
 			health = reader.GetInt();
 			mp = reader.GetInt();
 			_class = ErenshorCoopMod.ClassID2Class(reader.GetByte());
 			level = reader.GetByte();
-			name = reader.GetString().Sanitize();
-			scene = reader.GetString().Sanitize();
+			name = reader.GetString();
+			scene = reader.GetString();
 			
 			lookData = new()
 			{

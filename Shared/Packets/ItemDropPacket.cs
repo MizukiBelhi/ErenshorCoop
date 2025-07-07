@@ -45,24 +45,24 @@ namespace ErenshorCoop.Shared.Packets
 			}
 		}
 
-		public override void Read(NetDataReader reader)
+		public override void Read(NetPacketReader reader)
 		{
 			senderID = reader.GetShort();
 			dataTypes = Extensions.ReadSubTypeFlag<ItemDropType>(reader.GetUShort());
 			if (dataTypes.Contains(ItemDropType.DROP))
 			{
-				itemID = reader.GetString().Sanitize();
+				itemID = reader.GetString();
 				quality = reader.GetByte();
 				location = reader.GetVector3();
-				zone = reader.GetString().Sanitize();
-				id = reader.GetString().Sanitize();
+				zone = reader.GetString();
+				id = reader.GetString();
 			}
 
 			if (dataTypes.Contains(ItemDropType.DESTROY))
-				id = reader.GetString().Sanitize();
+				id = reader.GetString();
 			if (dataTypes.Contains(ItemDropType.NEW_QUANTITY))
 			{
-				id = reader.GetString().Sanitize();
+				id = reader.GetString();
 				quality = reader.GetByte();
 			}
 		}

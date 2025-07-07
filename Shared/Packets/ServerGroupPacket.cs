@@ -42,7 +42,7 @@ namespace ErenshorCoop.Shared.Packets
 				{
 					writer.Put(member.entityID);
 					writer.Put(member.isSim);
-					//writer.Put(member.simIndex);
+					writer.Put(member.simIndex);
 				}
 			}
 
@@ -53,7 +53,7 @@ namespace ErenshorCoop.Shared.Packets
 			}
 		}
 
-		public override void Read(NetDataReader reader)
+		public override void Read(NetPacketReader reader)
 		{
 			entityID = reader.GetShort();
 
@@ -75,7 +75,7 @@ namespace ErenshorCoop.Shared.Packets
 					{
 						entityID = reader.GetShort(),
 						isSim = reader.GetBool(),
-						//simIndex = reader.GetShort(),
+						simIndex = reader.GetShort(),
 					};
 					groupList.Add(m);
 				}

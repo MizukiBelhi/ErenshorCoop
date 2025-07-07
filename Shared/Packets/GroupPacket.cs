@@ -38,15 +38,11 @@ namespace ErenshorCoop.Shared.Packets
 				writer.Put(inviteID);
 			}
 			if (dataTypes.Contains(GroupDataType.INVITE))
-			{
 				writer.Put(playerID);
-				writer.Put(isSim);
-			}
 			if (dataTypes.Contains(GroupDataType.REMOVE))
 			{
 				writer.Put((byte)reason);
 				writer.Put(playerID);
-				writer.Put(isSim);
 			}
 			if (dataTypes.Contains(GroupDataType.EXPERIENCE))
 			{
@@ -57,7 +53,7 @@ namespace ErenshorCoop.Shared.Packets
 
 		}
 
-		public override void Read(NetDataReader reader)
+		public override void Read(NetPacketReader reader)
 		{
 			entityID = reader.GetShort();
 
@@ -69,17 +65,13 @@ namespace ErenshorCoop.Shared.Packets
 				inviteID = reader.GetShort();
 			}
 			if (dataTypes.Contains(GroupDataType.INVITE))
-			{
 				playerID = reader.GetShort();
-				isSim = reader.GetBool();
-			}
 			if (dataTypes.Contains(GroupDataType.INVITE_RESPONSE))
 				groupID = reader.GetShort();
 			if (dataTypes.Contains(GroupDataType.REMOVE))
 			{
 				reason = (GroupLeaveReason)reader.GetByte();
 				playerID = reader.GetShort();
-				isSim = reader.GetBool();
 			}
 			if (dataTypes.Contains(GroupDataType.EXPERIENCE))
 			{

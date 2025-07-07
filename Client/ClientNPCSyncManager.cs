@@ -10,7 +10,7 @@ namespace ErenshorCoop.Client
 	public class ClientNPCSyncManager : MonoBehaviour
 	{
 		public Dictionary<short, NetworkedNPC> NetworkedMobs = new();
-		public Dictionary<short, NetworkedSim> NetworkedSims = new();
+		public Dictionary<short, NetworkedNPC> NetworkedSims = new();
 
 		private readonly Queue<(int spawnID, string spawnMobID, bool isRare, short mobID, Vector3 pos, Quaternion rot, EntitySpawnData data)> spawnQueue = new();
 		private Coroutine spawnRoutine;
@@ -67,8 +67,8 @@ namespace ErenshorCoop.Client
 			{
 				if(s.Value == null) continue;
 
-				//s.Value.sim.enabled = true;
-				Destroy(s.Value.gameObject);
+				s.Value.sim.enabled = true;
+				Destroy(s.Value);
 			}
 
 			NetworkedSims.Clear();
@@ -171,7 +171,7 @@ namespace ErenshorCoop.Client
 			{
 				//if (NetworkedSims.ContainsKey(data.entityID)) return;
 				//Logging.Log($"====> Spawning sim");
-				//SpawnSim(data.npcID, data.entityID, data.position, data.rotation);
+				SpawnSim(data.npcID, data.entityID, data.position, data.rotation);
 				return;
 			}
 
@@ -441,7 +441,7 @@ namespace ErenshorCoop.Client
 		}
 
 
-		/*private bool SpawnSim(string npcID, short entityID, Vector3 pos, Quaternion rot)
+		private bool SpawnSim(string npcID, short entityID, Vector3 pos, Quaternion rot)
 		{
 			if (!CanRun) return true;
 			//if (NetworkedSims.ContainsKey(entityID)) return true;
@@ -506,7 +506,7 @@ namespace ErenshorCoop.Client
 			NetworkedSims[entityID] = network;
 			//DontDestroyOnLoad(component.gameObject);
 			return true;
-		}*/
+		}
 
 		public void OnEntityDataReceive<T>(T packet) where T : BasePacket
 		{
@@ -584,7 +584,7 @@ namespace ErenshorCoop.Client
 						NetworkedMobs[entityData.entityID].HandleTargetChange(entityData.targetID, entityData.targetType);
 					}
 				}
-				/*else if(NetworkedSims.ContainsKey(entityData.entityID) && entityData.entityType == EntityType.SIM)
+				else if(NetworkedSims.ContainsKey(entityData.entityID) && entityData.entityType == EntityType.SIM)
 				{
 					if (entityData.dataTypes.Contains(EntityDataType.ANIM))
 					{
@@ -603,7 +603,7 @@ namespace ErenshorCoop.Client
 					{
 						NetworkedSims[entityData.entityID].HandleTargetChange(entityData.targetID, entityData.targetType);
 					}
-				}*/
+				}
 			}
 
 			if (packet is EntityActionPacket entityAction)
@@ -628,7 +628,7 @@ namespace ErenshorCoop.Client
 					if(entityAction.dataTypes.Contains(ActionType.STATUS_EFFECT_REMOVE))
 						NetworkedMobs[entityAction.entityID].HandleStatusRemoval(entityAction.RemoveAllStatus, entityAction.RemoveBreakable, entityAction.statusID);
 				}
-				/*else if(NetworkedSims.ContainsKey(entityAction.entityID) && entityAction.entityType == EntityType.SIM)
+				else if(NetworkedSims.ContainsKey(entityAction.entityID) && entityAction.entityType == EntityType.SIM)
 				{
 					if (entityAction.dataTypes.Contains(ActionType.ATTACK))
 						NetworkedSims[entityAction.entityID].HandleAttack(entityAction.attackData);
@@ -644,7 +644,7 @@ namespace ErenshorCoop.Client
 						NetworkedSims[entityAction.entityID].HandleStatusEffectApply(entityAction.effectData);
 					if (entityAction.dataTypes.Contains(ActionType.STATUS_EFFECT_REMOVE))
 						NetworkedSims[entityAction.entityID].HandleStatusRemoval(entityAction.RemoveAllStatus, entityAction.RemoveBreakable, entityAction.statusID);
-				}*/
+				}
 			}
 		}
 

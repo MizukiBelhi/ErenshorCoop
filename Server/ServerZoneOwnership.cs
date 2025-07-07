@@ -5,7 +5,6 @@ using ErenshorCoop.Shared;
 using ErenshorCoop.Shared.Packets;
 using LiteNetLib;
 using UnityEngine;
-using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 
 namespace ErenshorCoop.Server
@@ -14,7 +13,7 @@ namespace ErenshorCoop.Server
 	{
 		private static readonly Dictionary<string, List<short>> _zoneMembers = new();
 		private static readonly Dictionary<string, short> _zoneOwners = new();
-		private static Queue<(short peerPlayer, short newOwnerID, string zone, Entity ent)> packetQueue = new();
+		private static Queue<(short peerPlayer, short newOwnerID, string zone, NetPeer peer)> packetQueue = new();
 
 		private static bool isInUse = false;
 
@@ -99,8 +98,8 @@ namespace ErenshorCoop.Server
 
 
 			//Send our sims to this player
-			//if (newZone == SceneManager.GetActiveScene().name)
-			//	SharedNPCSyncManager.Instance.StartCoroutine(SharedNPCSyncManager.Instance.DelayedCheckSim(playerID));
+			if (newZone == SceneManager.GetActiveScene().name)
+				SharedNPCSyncManager.Instance.StartCoroutine(SharedNPCSyncManager.Instance.DelayedCheckSim(playerID));
 
 			if (!string.IsNullOrEmpty(previousZone) && _zoneMembers.TryGetValue(previousZone, out var pList))
 			{
@@ -113,7 +112,7 @@ namespace ErenshorCoop.Server
 				{
 					_zoneOwners[previousZone] = pList[0];
 					Logging.Log($" {previousZone}.O = {pList[0]}");
-					SendZoneOwnershipPacket(pList[0],pList[0], previousZone, ClientConnectionManager.Instance.GetPlayerFromID(pList[0]));
+					SendZoneOwnershipPacket(pList[0],pList[0], previousZone, ClientConnectionManager.Instance.GetPlayerFromID(pList[0]).peer);
 				}
 			}
 			
@@ -133,7 +132,7 @@ namespace ErenshorCoop.Server
 			if (playerID == ClientConnectionManager.Instance.LocalPlayerID && _zoneOwners[newZone] != ClientConnectionManager.Instance.LocalPlayerID)
 			{
 				//Send previous owner that we're the new owner
-				SendZoneOwnershipPacket(_zoneOwners[newZone], ClientConnectionManager.Instance.LocalPlayerID, newZone, ClientConnectionManager.Instance.GetPlayerFromID(_zoneOwners[newZone]));
+				SendZoneOwnershipPacket(_zoneOwners[newZone], ClientConnectionManager.Instance.LocalPlayerID, newZone, ClientConnectionManager.Instance.GetPlayerFromID(_zoneOwners[newZone]).peer);
 
 				_zoneOwners[newZone] = ClientConnectionManager.Instance.LocalPlayerID;
 				Logging.Log($" {newZone}.O = 0.2");
@@ -141,7 +140,7 @@ namespace ErenshorCoop.Server
 			}
 
 
-			SendZoneOwnershipPacket(playerID, _zoneOwners[newZone], newZone, ClientConnectionManager.Instance.GetPlayerFromID(playerID));
+			SendZoneOwnershipPacket(playerID, _zoneOwners[newZone], newZone, ClientConnectionManager.Instance.GetPlayerFromID(playerID).peer);
 		}
 
 
@@ -166,7 +165,7 @@ namespace ErenshorCoop.Server
 			if (_zoneOwners[zone] == playerID && _zoneMembers[zone].Count >= 1)
 			{
 				_zoneOwners[zone] = _zoneMembers[zone][0];
-				SendZoneOwnershipPacket(_zoneOwners[zone], _zoneOwners[zone], zone, ClientConnectionManager.Instance.Players[_zoneOwners[zone]]);
+				SendZoneOwnershipPacket(_zoneOwners[zone], _zoneOwners[zone], zone, ClientConnectionManager.Instance.Players[_zoneOwners[zone]].peer);
 			}
 
 			if (_zoneOwners[zone] == playerID)
@@ -177,14 +176,9 @@ namespace ErenshorCoop.Server
 		}
 
 
-		private static void SendZoneOwnershipPacket(short peerPlayer, short newOwnerID, string zone, Entity ent)
+		private static void SendZoneOwnershipPacket(short peerPlayer, short newOwnerID, string zone, NetPeer peer = null)
 		{
-			if(ent != null && ent == ClientConnectionManager.Instance.LocalPlayer)
-			{
-				ClientZoneOwnership.OnZoneOwnerChange(newOwnerID, zone, _zoneMembers[zone]);
-				return;
-			}
-			packetQueue.Enqueue((peerPlayer, newOwnerID, zone, ent));
+			packetQueue.Enqueue((peerPlayer, newOwnerID, zone, peer));
 		}
 
 
@@ -194,23 +188,16 @@ namespace ErenshorCoop.Server
 			{
 				while (packetQueue.Count <= 0) yield return new WaitForSeconds(0.5f);
 
-				( short peerPlayer, short newOwnerID, string zone, Entity ent ) = packetQueue.Dequeue();
+				( short peerPlayer, short newOwnerID, string zone, NetPeer peer ) = packetQueue.Dequeue();
 
 				Logging.Log($"assigning {newOwnerID} as owner of {zone}");
-
-				
 				var packet = PacketManager.GetOrCreatePacket<ServerInfoPacket>(peerPlayer, PacketType.SERVER_INFO);
 				packet.dataTypes.Add(ServerInfoType.ZONE_OWNERSHIP);
 				packet.SetData("zone",      zone);
 				packet.SetData("zoneOwner", newOwnerID);
 				packet.playerList = _zoneMembers[zone];
-				if (ent != null)
-				{
-					if (!Steam.Lobby.isInLobby)
-						packet.SetPeerTarget(ent.peer);
-					else
-						packet.SetSteamTarget(ent.steamID);
-				}
+				if (peer != null)
+					packet.SetTarget(peer);
 
 				yield return new WaitForSeconds(2f);
 			}

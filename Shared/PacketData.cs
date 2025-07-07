@@ -12,7 +12,7 @@ namespace ErenshorCoop.Shared
 	public interface IPacket
 	{
 		void Write(NetDataWriter writer);
-		void Read(NetDataReader reader);
+		void Read(NetPacketReader reader);
 	}
 
 
@@ -100,7 +100,6 @@ namespace ErenshorCoop.Shared
 		CLASS,
 		MP,
 		CURTARGET,
-		DESTR_SIM
 	}
 
 	public enum EntityDataType : byte
@@ -158,6 +157,5 @@ namespace ErenshorCoop.Shared
 	public enum Request : byte
 	{
 		ENTITY_ID,
-		MOD_COMMAND,
 	}
 }

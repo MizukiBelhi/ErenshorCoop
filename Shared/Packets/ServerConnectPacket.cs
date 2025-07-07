@@ -13,7 +13,7 @@ namespace ErenshorCoop.Shared.Packets
 			writer.Put(entityID);
 		}
 
-		public override void Read(NetDataReader reader)
+		public override void Read(NetPacketReader reader)
 		{
 			entityID = reader.GetShort();
 		}

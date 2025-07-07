@@ -8,7 +8,6 @@ using System.Threading.Tasks;
 using ErenshorCoop.Client;
 using ErenshorCoop.Server;
 using UnityEngine;
-using System.Text.RegularExpressions;
 
 namespace ErenshorCoop.Shared
 {
@@ -37,15 +36,15 @@ namespace ErenshorCoop.Shared
 				writer.Put(col.a);
 		}
 
-		public static Vector3 GetVector3(this NetDataReader reader)
+		public static Vector3 GetVector3(this NetPacketReader reader)
 		{
 			return new Vector3(reader.GetFloat(), reader.GetFloat(), reader.GetFloat());
 		}
-		public static Quaternion GetRotation(this NetDataReader reader)
+		public static Quaternion GetRotation(this NetPacketReader reader)
 		{
 			return new Quaternion(reader.GetFloat(), reader.GetFloat(), reader.GetFloat(), reader.GetFloat());
 		}
-		public static Color GetColor(this NetDataReader reader, bool useAlpha = false)
+		public static Color GetColor(this NetPacketReader reader, bool useAlpha = false)
 		{
 			var col = new Color(reader.GetFloat(), reader.GetFloat(), reader.GetFloat(), 255);
 			if(useAlpha)
@@ -255,21 +254,6 @@ namespace ErenshorCoop.Shared
 				hash = hash * 23 + nameHash;
 				return hash & 0x7FFFFFFF;
 			}
-		}
-
-		private static Regex richText = new(@"<.*?>", RegexOptions.Compiled);
-
-		public static string Sanitize(this string input, int maxLength = 256)
-		{
-			if (string.IsNullOrEmpty(input))
-				return string.Empty;
-
-
-			string clean = input.Replace("<", "&lt;").Replace(">", "&gt;");
-			//Hardcore removal of tags
-			//string clean = richText.Replace(input, "");
-			clean = clean.Where(c => !char.IsControl(c)).Aggregate("", (s, c) => s + c);
-			return clean.Length > maxLength ? clean.Substring(0, maxLength) : clean;
 		}
 	}
 }

@@ -8,7 +8,6 @@ using ErenshorCoop.Client;
 using ErenshorCoop.Shared.Packets;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using Steamworks;
 
 namespace ErenshorCoop.Server
 {
@@ -30,7 +29,7 @@ namespace ErenshorCoop.Server
 
 		public static ServerConnectionManager Instance;
 
-		public bool IsRunning => netManager.IsRunning || (Steam.Lobby.isLobbyHost && Steam.Networking.isHosting);
+		public bool IsRunning => netManager.IsRunning;
 
 		public NetStatistics GetStatistics() => netManager.Statistics;
 
@@ -97,7 +96,7 @@ namespace ErenshorCoop.Server
 			netManager.Stop();
 			//Entities.Clear();
 			OnCloseServer?.Invoke();
-			PlayerIDNum = 0;
+			PlayerIDNum = -1;
 		}
 
 		private string GetLocalIpAddress()
@@ -132,7 +131,7 @@ namespace ErenshorCoop.Server
 
 			var p = PacketManager.GetOrCreatePacket<ServerInfoPacket>(0, PacketType.SERVER_INFO);
 			p.AddPacketData(ServerInfoType.PVP_MODE, "pvpMode", ServerConfig.IsPVPEnabled.Value);
-			p.SetPeerTarget(peer);
+			p.SetTarget(peer);
 			p.dataTypes.Add(ServerInfoType.SERVER_SETTINGS);
 			p.serverSettings = new()
 			{
@@ -143,31 +142,7 @@ namespace ErenshorCoop.Server
 			};
 			p.dataTypes.Add(ServerInfoType.HOST_MODS);
 			p.plugins = ErenshorCoopMod.loadedPlugins;
-			PacketManager.GetOrCreatePacket<ServerConnectPacket>(PlayerIDNum, PacketType.SERVER_CONNECT).SetPeerTarget(peer);
-		}
-
-		public void OnPeerConnected(CSteamID steamID)
-		{
-			++PlayerIDNum;
-			while (ClientConnectionManager.Instance.Players.ContainsKey(PlayerIDNum) && PlayerIDNum != 0)
-			{
-				++PlayerIDNum;
-			}
-
-			var p = PacketManager.GetOrCreatePacket<ServerInfoPacket>(0, PacketType.SERVER_INFO);
-			p.AddPacketData(ServerInfoType.PVP_MODE, "pvpMode", ServerConfig.IsPVPEnabled.Value);
-			p.SetSteamTarget(steamID);
-			p.dataTypes.Add(ServerInfoType.SERVER_SETTINGS);
-			p.serverSettings = new()
-			{
-				xpMod = GameData.ServerXPMod,
-				dmgMod = GameData.ServerDMGMod,
-				hpMod = GameData.ServerHPMod,
-				lootMod = GameData.ServerLootRate
-			};
-			p.dataTypes.Add(ServerInfoType.HOST_MODS);
-			p.plugins = ErenshorCoopMod.loadedPlugins;
-			PacketManager.GetOrCreatePacket<ServerConnectPacket>(PlayerIDNum, PacketType.SERVER_CONNECT).SetSteamTarget(steamID);
+			PacketManager.GetOrCreatePacket<ServerConnectPacket>(PlayerIDNum, PacketType.SERVER_CONNECT).SetTarget(peer);
 		}
 
 		public void OnPeerDisconnected(NetPeer peer, DisconnectInfo disconnectInfo)
@@ -185,24 +160,6 @@ namespace ErenshorCoop.Server
 			//Also remove player on host, because we're not receiving the packet
 			ClientConnectionManager.Instance.PlayerDisconnect(playerID);
 			
-			PacketManager.GetOrCreatePacket<ServerDisonnectPacket>(playerID, PacketType.DISCONNECT);
-		}
-
-		public void OnPeerDisconnected(CSteamID peer, string disconnectInfo)
-		{
-			Logging.Log($"Client Disconnected: {peer.m_SteamID} Reason: {disconnectInfo}");
-			short playerID = -1;
-
-			foreach (var p in ClientConnectionManager.Instance.Players)
-				if (Equals(p.Value.steamID, peer))
-					playerID = p.Value.playerID;
-
-			if (playerID == -1) return;
-
-
-			//Also remove player on host, because we're not receiving the packet
-			ClientConnectionManager.Instance.PlayerDisconnect(playerID);
-
 			PacketManager.GetOrCreatePacket<ServerDisonnectPacket>(playerID, PacketType.DISCONNECT);
 		}
 

@@ -7,7 +7,6 @@ using System.Linq;
 using ErenshorCoop.Client;
 using ErenshorCoop.Shared;
 using ErenshorCoop.Shared.Packets;
-using ErenshorCoop.Server;
 
 namespace ErenshorCoop
 {
@@ -20,12 +19,16 @@ namespace ErenshorCoop
 		public int previousLevel = 0;
 		public int previousMP = 0;
 		public Entity previousTarget = null;
-		public short playerID = 0;
+		public short playerID = -1;
 
 		public Animator animator;
 		public Inventory inventory;
 		public Stats stats;
 		public AnimatorOverrideController AnimOverride;
+
+		//interp
+		private float lastInterpTime = 0f;
+		private readonly float interpCall = 1f / 60f;
 
 		public bool hasSentConnect = false;
 
@@ -52,11 +55,9 @@ namespace ErenshorCoop
 
 			previousLevel = GameData.PlayerStats.Level;
 			entityName = GameData.CurrentCharacterSlot.CharName;
-			zone = SceneManager.GetActiveScene().name;
+			currentScene = SceneManager.GetActiveScene().name;
 
 			type = EntityType.PLAYER;
-
-			
 		}
 
 		
@@ -83,7 +84,7 @@ namespace ErenshorCoop
 					Extensions.BuildPlayerClipLookup(pc, com);
 					previousLevel = GameData.PlayerStats.Level;
 					entityName = GameData.CurrentCharacterSlot.CharName;
-					zone = SceneManager.GetActiveScene().name;
+					currentScene = SceneManager.GetActiveScene().name;
 				}
 
 				var packet = PacketManager.GetOrCreatePacket<PlayerConnectionPacket>(playerID, PacketType.PLAYER_CONNECT, true)
@@ -133,17 +134,17 @@ namespace ErenshorCoop
 
 		private void OnGameMapLoad(Scene scene)
 		{
-			zone = scene.name;
+			currentScene = scene.name;
 
 			if (!ClientConnectionManager.Instance.IsRunning) return;
 			if (!hasSentConnect) return;
 
-			PacketManager.GetOrCreatePacket<PlayerDataPacket>(playerID, PacketType.PLAYER_DATA).AddPacketData(PlayerDataType.SCENE, "scene", zone);
+			PacketManager.GetOrCreatePacket<PlayerDataPacket>(playerID, PacketType.PLAYER_DATA).AddPacketData(PlayerDataType.SCENE, "scene", currentScene);
 
 			//Check if other players are in same scene, this is kinda hacky but it absolutely makes sure they are visible or not
 			foreach (var p in ClientConnectionManager.Instance.Players)
 			{
-				if (p.Value.zone == zone || p.Value.zone == zone)
+				if (p.Value.currentScene == currentScene || p.Value.zone == currentScene)
 				{
 					p.Value.gameObject.SetActive(true);
 					if(p.Value.MySummon != null && p.Value.MySummon.gameObject != null)
@@ -163,11 +164,11 @@ namespace ErenshorCoop
 				CreateSummon(GameData.SpellDatabase.GetSpellByID(MySummon.spellID), MySummon.gameObject);
 			}
 
-			if (Variables.droppedItems.TryGetValue(zone, out var items))
+			if (Variables.droppedItems.TryGetValue(currentScene, out var items))
 			{
 				foreach (var itm in items)
 				{
-					ClientConnectionManager.Instance.SpawnItem(itm.item, itm.quantity, itm.pos, zone, itm.id,true);
+					ClientConnectionManager.Instance.SpawnItem(itm.item, itm.quantity, itm.pos, currentScene, itm.id,true);
 				}
 			}
 		}
@@ -222,11 +223,10 @@ namespace ErenshorCoop
 		}
 		public void Update()
 		{
-			if (ServerConnectionManager.Instance != null && ServerConnectionManager.Instance.IsRunning)
-				hasSentConnect = true;
-
 			if (!ClientConnectionManager.Instance.IsRunning) return;
 			if (!hasSentConnect) return;
+
+			lastInterpTime += Time.deltaTime;
 
 			//if (Vector3.Distance(transform.position,previousPosition) > 0.1f && lastInterpTime >= interpCall)
 			if(transform.position != previousPosition)

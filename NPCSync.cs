@@ -121,36 +121,33 @@ namespace ErenshorCoop
 			if (type == EntityType.PET) return;
 
 			var curTar = npc?.GetCurrentTarget();
-			if (curTar != null)
+			var curTarEnt = curTar?.GetComponent<Entity>();
+			if (curTarEnt != null)
 			{
-				var curTarEnt = curTar?.GetComponent<Entity>();
-				if (curTarEnt != null)
+				if (previousTarget != curTarEnt)
 				{
-					if (previousTarget != curTarEnt)
-					{
-						var p = PacketManager.GetOrCreatePacket<EntityDataPacket>(entityID, PacketType.ENTITY_DATA);
-						p.AddPacketData(EntityDataType.CURTARGET, "targetID", curTarEnt.entityID);
-						p.targetType = curTarEnt.type;
-						if (curTarEnt is PlayerSync || curTarEnt is NetworkedPlayer)
-							p.targetType = EntityType.PLAYER;
-						p.SetData("targetPlayerIDs", SharedNPCSyncManager.Instance.GetPlayerSendList());
-						p.entityType = type;
-						p.zone = SceneManager.GetActiveScene().name;
-						previousTarget = curTarEnt;
-					}
+					var p = PacketManager.GetOrCreatePacket<EntityDataPacket>(entityID, PacketType.ENTITY_DATA);
+					p.AddPacketData(EntityDataType.CURTARGET, "targetID", curTarEnt.entityID);
+					p.targetType = curTarEnt.type;
+					if (curTarEnt is PlayerSync || curTarEnt is NetworkedPlayer)
+						p.targetType = EntityType.PLAYER;
+					p.SetData("targetPlayerIDs", SharedNPCSyncManager.Instance.GetPlayerSendList());
+					p.entityType = type;
+					p.zone = SceneManager.GetActiveScene().name;
+					previousTarget = curTarEnt;
 				}
-				else
+			}
+			else
+			{
+				if (previousTarget != null)
 				{
-					if (previousTarget != null)
-					{
-						var p = PacketManager.GetOrCreatePacket<EntityDataPacket>(entityID, PacketType.ENTITY_DATA);
-						p.AddPacketData(EntityDataType.CURTARGET, "targetID", (short)-1);
-						p.targetType = EntityType.LOCAL_PLAYER;
-						p.SetData("targetPlayerIDs", SharedNPCSyncManager.Instance.GetPlayerSendList());
-						p.targetType = EntityType.LOCAL_PLAYER;
-						p.zone = SceneManager.GetActiveScene().name;
-						previousTarget = null;
-					}
+					var p = PacketManager.GetOrCreatePacket<EntityDataPacket>(entityID, PacketType.ENTITY_DATA);
+					p.AddPacketData(EntityDataType.CURTARGET, "targetID", (short)-1);
+					p.targetType = EntityType.LOCAL_PLAYER;
+					p.SetData("targetPlayerIDs", SharedNPCSyncManager.Instance.GetPlayerSendList());
+					p.targetType = EntityType.LOCAL_PLAYER;
+					p.zone = SceneManager.GetActiveScene().name;
+					previousTarget = null;
 				}
 			}
 
@@ -165,26 +162,23 @@ namespace ErenshorCoop
 			if (type == EntityType.PET) return;
 
 			var curTar = npc?.GetCurrentTarget();
-			if (curTar != null)
+			var curTarEnt = curTar?.GetComponent<Entity>();
+			if (character != null && npc.CurrentAggroTarget != null && character.Alive && curTarEnt != null)
 			{
-				var curTarEnt = curTar?.GetComponent<Entity>();
-				if (character != null && npc.CurrentAggroTarget != null && character.Alive && curTarEnt != null)
+				//GameData.GroupMatesInCombat.Add(npc);
+				//Logging.Log($" {curTarEnt.ToString()} {character.ToString()} {GameData.SimPlayerGrouping.GroupTargets.Contains(character)} ");
+				if (npc.CurrentAggroTarget != null && npc.CurrentAggroTarget.MyNPC != null && npc.CurrentAggroTarget.MyNPC.ThisSim != null && !GameData.AttackingPlayer.Contains(npc) && curTarEnt != null && npc.CurrentAggroTarget.MyNPC.ThisSim.InGroup)
 				{
-					//GameData.GroupMatesInCombat.Add(npc);
-					//Logging.Log($" {curTarEnt.ToString()} {character.ToString()} {GameData.SimPlayerGrouping.GroupTargets.Contains(character)} ");
-					if (npc.CurrentAggroTarget != null && npc.CurrentAggroTarget.MyNPC != null && npc.CurrentAggroTarget.MyNPC.ThisSim != null && !GameData.AttackingPlayer.Contains(npc) && curTarEnt != null && npc.CurrentAggroTarget.MyNPC.ThisSim.InGroup)
-					{
 
-						GameData.AttackingPlayer.Add(npc);
-						if (!GameData.SimPlayerGrouping.GroupTargets.Contains(character))
-							GameData.SimPlayerGrouping.GroupTargets.Add(character);
+					GameData.AttackingPlayer.Add(npc);
+					if (!GameData.SimPlayerGrouping.GroupTargets.Contains(character))
+						GameData.SimPlayerGrouping.GroupTargets.Add(character);
 
 
-						//Logging.Log($"Add {character.name} grouptarget");
-						if (!GameData.GroupMatesInCombat.Contains(npc.CurrentAggroTarget.MyNPC))
-							GameData.GroupMatesInCombat.Add(npc.CurrentAggroTarget.MyNPC);
-						//GameData.SimPlayerGrouping.GroupTargets.Add(character);
-					}
+					//Logging.Log($"Add {character.name} grouptarget");
+					if(!GameData.GroupMatesInCombat.Contains(npc.CurrentAggroTarget.MyNPC))
+						GameData.GroupMatesInCombat.Add(npc.CurrentAggroTarget.MyNPC);
+					//GameData.SimPlayerGrouping.GroupTargets.Add(character);
 				}
 			}
 		}

@@ -1,11 +1,9 @@
 ﻿using System;
 using ErenshorCoop.Client;
 using ErenshorCoop.Server;
-using Steamworks;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
-using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 namespace ErenshorCoop.UI
@@ -19,20 +17,17 @@ namespace ErenshorCoop.UI
 		private long lastBSent = 0;
 		public static GameObject statsPanel;
 
-		private  const float StatsUpdateTime = 1f;
+		private  const float StatsUpdateTime = 1f; // Update every 1 second
 		private float statsTimer = 0f;
 
-		private static GameObject mainMenuButton;
+
 		private static TextMeshProUGUI promptText;
 		private static GameObject promptPanel;
 		private static Action acceptCB;
 		private static Action cancelCB;
 
 		public static GameObject connectUI;
-
 		public static bool isGameMenuOpen = false;
-
-		public static CSteamID selectedLobby;
 
 		public void UpdateStatistics()
 		{
@@ -40,46 +35,36 @@ namespace ErenshorCoop.UI
 
 			if (!( statsTimer >= StatsUpdateTime )) return;
 
-			statsTimer = 0f;
+			statsTimer = 0f; // Reset the timer
 
 			if (statsPanel == null) return;
 			if (!statsPanel.activeSelf) return;
 			if (!ClientConnectionManager.Instance.IsRunning) return;
 
-			if (!Steam.Lobby.isInLobby)
+
+			var statistics = ClientConnectionManager.Instance.GetStatistics();
+			int ping = ClientConnectionManager.Instance.Server.Ping;
+
+			if (ServerConnectionManager.Instance.IsRunning)
 			{
-				var statistics = ClientConnectionManager.Instance.GetStatistics();
-				int ping = ClientConnectionManager.Instance.Server.Ping;
-
-				if (ServerConnectionManager.Instance.IsRunning)
-				{
-					statistics = ServerConnectionManager.Instance.GetStatistics();
-					ping = 0;
-				}
-
-				long bReceived = statistics.BytesReceived;
-				long bSent = statistics.BytesSent;
-
-
-
-				float rec = (bReceived - lastBReceived) / 1024f;
-				float sen = (bSent - lastBSent) / 1024f;
-
-				lastBReceived = bReceived;
-				lastBSent = bSent;
-
-				var inout = $"In/Out: {rec:F2}|{sen:F2} KB/s  Packet Loss: {statistics.PacketLossPercent}%";
-
-				statisticsText.text = $"Ping: {ping}ms {inout}";
+				statistics = ServerConnectionManager.Instance.GetStatistics();
+				ping = 0;
 			}
-			else
-			{
-				var stats = Steam.Networking.GetConnectionInfo();
 
-				var inout = $"In/Out: {stats.RecvKBps:F2}|{stats.SentKBps:F2} KB/s  Packet Loss: {stats.DroppedPacketPercent}%";
+			long bReceived = statistics.BytesReceived;
+			long bSent = statistics.BytesSent;
+			
 
-				statisticsText.text = $"Ping: {stats.PingMs}ms {inout}";
-			}
+			float rec = (bReceived - lastBReceived) / 1024f;
+			float sen = (bSent - lastBSent) / 1024f;
+
+			lastBReceived = bReceived;
+			lastBSent = bSent;
+
+			var inout = $"In/Out: {rec:F2}|{sen:F2} KB/s  Packet Loss: {statistics.PacketLossPercent}%";
+			//var inout = $" {statistics.PacketLoss}  {statistics.PacketLossPercent}";
+
+			statisticsText.text = $"Ping: {ping}ms {inout}";
 
 		}
 
@@ -91,61 +76,18 @@ namespace ErenshorCoop.UI
 			if (GameData.GM != null && GameData.GM.EscapeMenu != null && GameData.GM.EscapeMenu.activeSelf != isGameMenuOpen)
 			{
 				isGameMenuOpen = GameData.GM.EscapeMenu.activeSelf;
-			}
-
-			if(connectUI != null && Connect.tabManager != null)
-			{
-				Connect.Update();
-				Connect.tabManager.tabButtonsContainer.SetActive(connectUI.activeSelf);
-				selectedLobby = Connect.selectedLobby;
-				if(Connect.spinnyIcon != null)
-				{
-					Connect.spinnyIcon.transform.localRotation = Quaternion.Euler(0, 0, Connect.spinnyIcon.transform.rotation.eulerAngles.z - 1f);
-				}
+				if (connectUI != null)
+					connectUI.SetActive(isGameMenuOpen);
 			}
 			
 		}
 
 		public void OnDestroy()
 		{
-			Connect.Cleanup();
-			if (connectUI != null)
-			{
-				GameData.Misc.UIWindows.Remove(connectUI);
-			}
-
 			ClientConnectionManager.Instance.OnConnect -= OnConnect;
 			ClientConnectionManager.Instance.OnDisconnect -= OnDisconnect;
-			ErenshorCoopMod.OnGameMapLoad -= OnMapLoad;
-
-			if (mainMenuButton != null)
-				Destroy(mainMenuButton);
 
 			Logging.Log($"UI Destroyed");
-		}
-
-
-		private void OnCoopMenuOpen()
-		{
-			
-			if (connectUI != null)
-			{
-				connectUI.SetActive(!connectUI.activeSelf);
-				if(Connect.tabManager != null)
-				{
-					if (Connect.tabManager.currentActiveTab == 0)
-						Connect.OnLobbieRefresh();
-				}
-			}
-		}
-
-		public void OnMapLoad(Scene scene)
-		{
-			if (scene.name == "Menu" || scene.name == "LoadScene") return;
-
-			LoadMenus();
-
-			
 		}
 
 		public void Awake()
@@ -157,17 +99,12 @@ namespace ErenshorCoop.UI
 
 			ClientConnectionManager.Instance.OnConnect += OnConnect;
 			ClientConnectionManager.Instance.OnDisconnect += OnDisconnect;
-			ErenshorCoopMod.OnGameMapLoad += OnMapLoad;
 
-			OnMapLoad(SceneManager.GetActiveScene());
-		}
-
-		public void LoadMenus()
-		{
 			Base.LoadSpritesAndMaterials();
 
+			// Create Canvas
 			var canvasObject = this.gameObject;
-
+			
 			var canvas = canvasObject.AddComponent<Canvas>();
 			canvas.renderMode = RenderMode.ScreenSpaceOverlay;
 			canvasObject.AddComponent<GraphicRaycaster>();
@@ -183,12 +120,7 @@ namespace ErenshorCoop.UI
 			group.blocksRaycasts = true;
 			group.interactable = true;
 
-			var scaler = canvasObject.AddComponent<CanvasScaler>();
-			scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-			scaler.referenceResolution = new Vector2(1920, 1200);
-			scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-			scaler.matchWidthOrHeight = 0.5f;
-
+			// Create a panel to hold the Main elements
 			statsPanel = new GameObject("Panel");
 			statsPanel.transform.SetParent(canvas.transform);
 			var panelRect = statsPanel.AddComponent<RectTransform>();
@@ -220,25 +152,17 @@ namespace ErenshorCoop.UI
 
 			statsPanel.SetActive(false);
 
-			(promptPanel, promptText) = CreatePrompt(canvasObject);
+			( promptPanel, promptText ) = CreatePrompt(canvasObject);
 			promptPanel.SetActive(false);
 
-			if (connectUI == null)
+			if(connectUI == null)
 				connectUI = Connect.CreateConnectUi(canvas);
 
 
-			if (GameData.GM != null && GameData.GM.EscapeMenu != null)
+			if(GameData.GM != null && GameData.GM.EscapeMenu != null)
 				isGameMenuOpen = GameData.GM.EscapeMenu.activeSelf;
 
-			GameData.Misc.UIWindows.Add(connectUI);
-			//Add a button to the main menu
-			var escMenu = GameData.GM.EscapeMenu.transform;
-
-			if (mainMenuButton == null)
-				mainMenuButton = Base.AddButton(escMenu, new Vector2(0f, -254.0358f), new Vector2(175, 35), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Base.sprites["dd_form 1"], "CO-OP", () => { OnCoopMenuOpen(); }).gameObject;
-
-
-			connectUI.SetActive(false);
+			connectUI.SetActive(isGameMenuOpen);
 		}
 
 		public static void EnablePrompt(string text, Action cbAccept, Action cbDecline)

@@ -10,7 +10,6 @@ using ErenshorCoop.Shared.Packets;
 using TMPro;
 using UnityEngine.SceneManagement;
 using System.Linq;
-using Steamworks;
 
 namespace ErenshorCoop
 {
@@ -44,26 +43,21 @@ namespace ErenshorCoop
 		SimInvSlot MH = new(Item.SlotType.Primary) { Quant = 1 };
 		SimInvSlot OH = new(Item.SlotType.Secondary) { Quant = 1 };
 
+
+		//Interpolation
+		private bool firstInterpUpdate;
+		private const float interpDuration = 0.1f;
+		private Coroutine interpRoutine;
+
 		private GameObject spellEffect;
 		
 
 		public void Init(Vector3 position, Quaternion rotation, string pName, string scene, short playerID, NetPeer peer)
 		{
 			this.peer = peer;
-			_Init(position, rotation, pName, scene, playerID);
-		}
-
-		public void Init(Vector3 position, Quaternion rotation, string pName, string scene, short playerID, CSteamID steamID)
-		{
-			this.steamID = steamID;
-			_Init(position, rotation, pName, scene, playerID);
-		}
-
-		private void _Init(Vector3 position, Quaternion rotation, string pName, string scene, short playerID)
-		{
 			rot = rotation;
 			playerName = pName;
-			zone = scene;
+			currentScene = scene;
 			sceneChanged = true;
 			this.playerID = playerID;
 
@@ -99,8 +93,8 @@ namespace ErenshorCoop
 			sim.MyStats.OverrideHPforNPC = false;
 			DontDestroyOnLoad(gameObject);
 
-			if (ServerConnectionManager.Instance.IsRunning)
-				character.MyFaction = ServerConfig.IsPVPEnabled.Value ? Character.Faction.PC : Character.Faction.Player;
+			if(ServerConnectionManager.Instance.IsRunning)
+				character.MyFaction = ServerConfig.IsPVPEnabled.Value?Character.Faction.PC:Character.Faction.Player;
 			else
 				character.MyFaction = ServerConfig.clientIsPvpEnabled ? Character.Faction.PC : Character.Faction.Player;
 			character.isNPC = false;
@@ -425,6 +419,7 @@ namespace ErenshorCoop
 			sim.MyStats.Level = packet.level;
 			sim.MyStats.CharacterClass = packet._class;
 			zone = packet.scene;
+			currentScene = packet.scene;
 			UpdateLooks(packet.lookData, packet.gearData);
 
 			sim.MyStats.CurrentHP = packet.health;
@@ -473,14 +468,15 @@ namespace ErenshorCoop
 				}
 				if (playerDataPacket.dataTypes.Contains(PlayerDataType.SCENE))
 				{
-					if (zone != playerDataPacket.scene)
+					if (currentScene != playerDataPacket.scene)
 					{
 						sceneChanged = true;
 						if(ServerConnectionManager.Instance.IsRunning)
 							ServerConnectionManager.Instance.OnClientSwapZone?.Invoke(playerID, peer);
 					}
-
-					zone = playerDataPacket.scene;
+				
+					currentScene =	playerDataPacket.scene;
+					zone = currentScene;
 				}
 				if (playerDataPacket.dataTypes.Contains(PlayerDataType.ANIM))
 				{
@@ -811,7 +807,7 @@ namespace ErenshorCoop
 
 		public void HandleSpellCharge(int SpellChargeFXIndex)
 		{
-			if (zone != SceneManager.GetActiveScene().name) return;
+			if (currentScene != SceneManager.GetActiveScene().name) return;
 
 			if(spellEffect != null)
 				DestroyImmediate(spellEffect);

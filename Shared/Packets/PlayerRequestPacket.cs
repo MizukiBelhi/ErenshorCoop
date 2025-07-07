@@ -15,9 +15,6 @@ namespace ErenshorCoop.Shared.Packets
 
 		public PlayerRequestPacket() :base(DeliveryMethod.ReliableOrdered) { }
 
-		public byte commandType;
-		public string playerName;
-
 		public override void Write(NetDataWriter writer)
 		{
 			writer.Put((byte)PacketType.PLAYER_REQUEST);
@@ -31,15 +28,10 @@ namespace ErenshorCoop.Shared.Packets
 				foreach (var entityType in requestEntityType)
 					writer.Put((byte)entityType);
 			}
-			if (dataTypes.Contains(Request.MOD_COMMAND))
-			{
-				writer.Put(commandType);
-				writer.Put(playerName);
-			}
 
 		}
 
-		public override void Read(NetDataReader reader)
+		public override void Read(NetPacketReader reader)
 		{
 			entityID = reader.GetShort();
 			dataTypes = Extensions.ReadSubTypeFlag<Request>(reader.GetUShort());
@@ -50,11 +42,6 @@ namespace ErenshorCoop.Shared.Packets
 				var c = reader.GetInt();
 				for(int i = 0; i < c; i++)
 					requestEntityType.Add((EntityType)reader.GetByte());
-			}
-			if (dataTypes.Contains(Request.MOD_COMMAND))
-			{
-				commandType = reader.GetByte();
-				playerName = reader.GetString().Sanitize();
 			}
 
 		}

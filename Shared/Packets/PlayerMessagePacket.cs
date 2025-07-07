@@ -21,13 +21,13 @@ namespace ErenshorCoop.Shared.Packets
 				writer.Put(target);
 		}
 
-		public override void Read(NetDataReader reader)
+		public override void Read(NetPacketReader reader)
 		{
 			entityID = reader.GetShort();
 			messageType = (MessageType)reader.GetByte();
-			message = reader.GetString().Sanitize();
+			message = reader.GetString();
 			if(messageType == MessageType.WHISPER)
-				target = reader.GetString().Sanitize();
+				target = reader.GetString();
 		}
 	}
 }
