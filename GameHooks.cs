@@ -692,11 +692,37 @@ namespace ErenshorCoop
 
 			var codes = new List<CodeInstruction>(instructions);
 
+			Label? targetLabel = null;
+
+			for (int i = 0; i < codes.Count - 2; i++)
+			{
+				if (i + 3 < codes.Count && codes[i].opcode == OpCodes.Ldarg_0 &&
+					codes[i + 1].opcode == OpCodes.Ldfld &&
+					codes[i + 2].opcode == OpCodes.Ldfld &&
+					codes[i + 3].opcode == OpCodes.Callvirt)
+				{
+					if (codes[i].labels.Count > 0)
+					{
+						targetLabel = codes[i].labels[0];
+						break;
+					}
+				}
+			}
 
 			for (int i = 0; i < codes.Count; i++)
 			{
 				var IsField = codes[i].operand is FieldInfo;
 				var field = codes[i].operand as FieldInfo;
+
+				if (i + 3 < codes.Count && codes[i].opcode == OpCodes.Leave &&
+					codes[i + 1].opcode == OpCodes.Ldloca_S &&
+					codes[i + 2].opcode == OpCodes.Constrained &&
+					codes[i + 3].opcode == OpCodes.Callvirt)
+				{
+					codes[i].operand = targetLabel;
+
+					codes.Insert(i + 1, new CodeInstruction(OpCodes.Nop));
+				}
 
 				if (i-7 >= 0 && codes[i].opcode == OpCodes.Stfld && IsField &&
 					field.Name == "CurrentHP" && field.DeclaringType == typeof(Stats) && codes[i - 7].opcode == OpCodes.Stloc_S && ((LocalBuilder)codes[i - 7].operand).LocalIndex == 18)
