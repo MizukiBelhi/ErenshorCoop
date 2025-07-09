@@ -7,7 +7,7 @@ namespace ErenshorCoop.Shared.Packets
 {
 	public class WeatherPacket : BasePacket
 	{
-		public WeatherPacket() : base(DeliveryMethod.ReliableOrdered) { }
+		public WeatherPacket() : base(DeliveryMethod.Unreliable) { }
 		public WeatherHandler.WeatherData weatherData;
 
 		public override void Write(NetDataWriter writer)
@@ -27,9 +27,11 @@ namespace ErenshorCoop.Shared.Packets
 			writer.Put(weatherData.weightGoal);
 			writer.Put(weatherData.raining);
 			writer.Put(weatherData.lightning);
+			writer.Put(weatherData.sunParentRotation);
+			writer.Put(weatherData.rotationZAmount);
 		}
 
-		public override void Read(NetPacketReader reader)
+		public override void Read(NetDataReader reader)
 		{
 
 			int c = reader.GetInt();
@@ -50,7 +52,9 @@ namespace ErenshorCoop.Shared.Packets
 				colorWeight = reader.GetFloat(),
 				weightGoal = reader.GetFloat(),
 				raining = reader.GetBool(),
-				lightning = reader.GetBool()
+				lightning = reader.GetBool(),
+				sunParentRotation = reader.GetRotation(),
+				rotationZAmount = reader.GetFloat()
 			};
 		}
 	}

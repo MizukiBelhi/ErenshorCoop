@@ -16,7 +16,7 @@ namespace ErenshorCoop.Shared.Packets
 		public Vector3 position;
 		public Quaternion rotation;
 
-		public EntityTransformPacket() : base(DeliveryMethod.Sequenced) { }
+		public EntityTransformPacket() : base(DeliveryMethod.Unreliable) { }
 
 		public override void Write(NetDataWriter writer)
 		{
@@ -37,7 +37,7 @@ namespace ErenshorCoop.Shared.Packets
 				writer.Put(rotation);
 		}
 
-		public override void Read(NetPacketReader reader)
+		public override void Read(NetDataReader reader)
 		{
 			int c = reader.GetInt();
 			targetPlayerIDs = new();
@@ -47,7 +47,7 @@ namespace ErenshorCoop.Shared.Packets
 			}
 
 			entityID = reader.GetShort();
-			zone = reader.GetString();
+			zone = reader.GetString().Sanitize();
 
 			dataTypes = Extensions.ReadSubTypeFlag<EntityDataType>(reader.GetUShort());
 			entityType = (EntityType)reader.GetByte();

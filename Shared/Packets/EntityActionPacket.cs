@@ -24,7 +24,7 @@ namespace ErenshorCoop.Shared.Packets
 		public bool RemoveAllStatus = false;
 		public bool RemoveBreakable = false;
 		public int statusID;
-
+		public List<WandAttackData> wandData;
 		public EntityActionPacket() : base(DeliveryMethod.ReliableOrdered) { }
 
 		public override void Write(NetDataWriter writer)
@@ -52,6 +52,7 @@ namespace ErenshorCoop.Shared.Packets
 				writer.Put((byte)attackData.damageType);
 				writer.Put(attackData.effect);
 				writer.Put(attackData.resistMod);
+				writer.Put(attackData.isCrit);
 			}
 			if (dataTypes.Contains(ActionType.SPELL_CHARGE))
 			{
@@ -93,10 +94,18 @@ namespace ErenshorCoop.Shared.Packets
 				writer.Put(RemoveAllStatus);
 				writer.Put(RemoveBreakable);
 			}
-
+			if (dataTypes.Contains(ActionType.WAND_ATTACK))
+			{
+				writer.Put(wandData.Count);
+				foreach (var w in wandData)
+				{
+					writer.Put(w.targetID);
+					writer.Put(w.itemID);
+				}
+			}
 		}
 
-		public override void Read(NetPacketReader reader)
+		public override void Read(NetDataReader reader)
 		{
 			int c = reader.GetInt();
 			targetPlayerIDs = new();
@@ -107,7 +116,7 @@ namespace ErenshorCoop.Shared.Packets
 
 			entityID = reader.GetShort();
 			entityType = (EntityType)reader.GetByte();
-			zone = reader.GetString();
+			zone = reader.GetString().Sanitize();
 
 			dataTypes = Extensions.ReadSubTypeFlag<ActionType>(reader.GetUShort());
 
@@ -120,7 +129,8 @@ namespace ErenshorCoop.Shared.Packets
 					damage = reader.GetInt(),
 					damageType = (GameData.DamageType)reader.GetByte(),
 					effect = reader.GetBool(),
-					resistMod = reader.GetFloat()
+					resistMod = reader.GetFloat(),
+					isCrit = reader.GetBool()
 				};
 			}
 			if (dataTypes.Contains(ActionType.SPELL_CHARGE))
@@ -129,7 +139,7 @@ namespace ErenshorCoop.Shared.Packets
 			}
 			if (dataTypes.Contains(ActionType.SPELL_EFFECT))
 			{
-				spellID = reader.GetString();
+				spellID = reader.GetString().Sanitize();
 				targetID = reader.GetShort();
 				targetIsNPC = reader.GetBool();
 				targetIsSim = reader.GetBool();
@@ -156,7 +166,7 @@ namespace ErenshorCoop.Shared.Packets
 			{
 				effectData = new()
 				{
-					spellID = reader.GetString(),
+					spellID = reader.GetString().Sanitize(),
 					damageBonus = reader.GetInt(),
 					casterID = reader.GetShort(),
 					casterType = (EntityType)reader.GetByte(),
@@ -171,7 +181,20 @@ namespace ErenshorCoop.Shared.Packets
 				RemoveAllStatus = reader.GetBool();
 				RemoveBreakable = reader.GetBool();
 			}
-
+			if (dataTypes.Contains(ActionType.WAND_ATTACK))
+			{
+				var cnt = reader.GetInt();
+				wandData = new();
+				for (int i = 0; i < cnt; i++)
+				{
+					WandAttackData w = new()
+					{
+						targetID = reader.GetShort(),
+						itemID = reader.GetString().Sanitize(),
+					};
+					wandData.Add(w);
+				}
+			}
 		}
 
 	}
@@ -184,5 +207,6 @@ namespace ErenshorCoop.Shared.Packets
 		public GameData.DamageType damageType;
 		public bool effect;
 		public float resistMod;
+		public bool isCrit;
 	}
 }

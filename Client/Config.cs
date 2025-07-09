@@ -13,6 +13,7 @@ namespace ErenshorCoop.Client
 		public static ConfigEntry<bool> WeatherSync;
 		public static ConfigEntry<bool> ItemDropConfirm;
 		public static ConfigEntry<bool> DisplayMetrics;
+		public static ConfigEntry<bool> CloseMenu;
 
 		private static ConfigFile config;
 		public static void Load(ConfigFile configFile)
@@ -35,6 +36,12 @@ namespace ErenshorCoop.Client
 			DisplayMetrics = config.Bind(
 				"Client Settings",
 				"!!!Show Metrics (ping, etc)",
+				false,
+				""
+			);
+			CloseMenu = config.Bind(
+				"Client Settings",
+				"!!!!Close Menu On Connect",
 				false,
 				""
 			);

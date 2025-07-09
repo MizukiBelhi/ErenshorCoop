@@ -56,7 +56,7 @@ namespace ErenshorCoop.Shared.Packets
 			}
 		}
 
-		public override void Read(NetPacketReader reader)
+		public override void Read(NetDataReader reader)
 		{
 			int c = reader.GetInt();
 			targetPlayerIDs = new();
@@ -67,7 +67,7 @@ namespace ErenshorCoop.Shared.Packets
 
 			entityID = reader.GetShort();
 			entityType = (EntityType)reader.GetByte();
-			zone = reader.GetString();
+			zone = reader.GetString().Sanitize();
 
 			dataTypes = Extensions.ReadSubTypeFlag<EntityDataType>(reader.GetUShort());
 			
@@ -92,7 +92,7 @@ namespace ErenshorCoop.Shared.Packets
 						AnimatorSyncType.BOOL or AnimatorSyncType.TRIG or AnimatorSyncType.RSTTRIG => reader.GetBool(),
 						AnimatorSyncType.FLOAT                                                     => reader.GetFloat(),
 						AnimatorSyncType.INT                                                       => reader.GetInt(),
-						AnimatorSyncType.OVERRIDE                                                  => reader.GetString(),
+						AnimatorSyncType.OVERRIDE                                                  => reader.GetString().Sanitize(),
 						_                                                                          => _anim.value
 					};
 					animData.Add(_anim);

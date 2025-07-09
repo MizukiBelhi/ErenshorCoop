@@ -22,6 +22,9 @@ namespace ErenshorCoop.Shared.Packets
 		public int earnedXP;
 		public float xpBonus;
 
+		public short followTargetID;
+		public short simID;
+
 		public override void Write(NetDataWriter writer)
 		{
 			writer.Put((byte)PacketType.SERVER_GROUP);
@@ -42,10 +45,14 @@ namespace ErenshorCoop.Shared.Packets
 				{
 					writer.Put(member.entityID);
 					writer.Put(member.isSim);
-					writer.Put(member.simIndex);
+					//writer.Put(member.simIndex);
 				}
 			}
-
+			if(dataTypes.Contains(GroupDataType.SIM_FOLLOW))
+			{
+				writer.Put(followTargetID);
+				writer.Put(simID);
+			}
 			if (dataTypes.Contains(GroupDataType.EXPERIENCE))
 			{
 				writer.Put(earnedXP);
@@ -53,7 +60,7 @@ namespace ErenshorCoop.Shared.Packets
 			}
 		}
 
-		public override void Read(NetPacketReader reader)
+		public override void Read(NetDataReader reader)
 		{
 			entityID = reader.GetShort();
 
@@ -75,10 +82,15 @@ namespace ErenshorCoop.Shared.Packets
 					{
 						entityID = reader.GetShort(),
 						isSim = reader.GetBool(),
-						simIndex = reader.GetShort(),
+						//simIndex = reader.GetShort(),
 					};
 					groupList.Add(m);
 				}
+			}
+			if(dataTypes.Contains(GroupDataType.SIM_FOLLOW))
+			{
+				followTargetID = reader.GetShort();
+				simID = reader.GetShort();
 			}
 			if (dataTypes.Contains(GroupDataType.EXPERIENCE))
 			{

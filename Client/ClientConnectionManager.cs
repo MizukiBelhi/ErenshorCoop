@@ -11,6 +11,10 @@ using ErenshorCoop.Server;
 using ErenshorCoop.Shared.Packets;
 using Random = UnityEngine.Random;
 using System.Linq;
+using System.Runtime.Remoting.Messaging;
+using Steamworks;
+using LiteNetLib.Utils;
+using HarmonyLib;
 
 namespace ErenshorCoop.Client
 {
@@ -22,8 +26,10 @@ namespace ErenshorCoop.Client
 
 
 		public PlayerSync LocalPlayer;
-		public short LocalPlayerID = -1;
+		public short LocalPlayerID = 0;
 		public Dictionary<short, NetworkedPlayer> Players = new();
+
+		private Queue<(short, PlayerConnectionPacket)> simSpawnQueue = new();
 
 
 		public Action<short, string, string> OnClientConnect;
@@ -35,14 +41,16 @@ namespace ErenshorCoop.Client
 
 		public static ClientConnectionManager Instance;
 
-		public bool IsRunning => netManager.IsRunning && Server is {ConnectionState: ConnectionState.Connected };
-		private bool IsConnected => netManager.IsRunning && peer is {ConnectionState: ConnectionState.Connected };
+		public bool IsRunning => (netManager.IsRunning && Server is {ConnectionState: ConnectionState.Connected }) || Steam.Lobby.isInLobby;
+		private bool IsConnected => (netManager.IsRunning && peer is {ConnectionState: ConnectionState.Connected }) || Steam.Lobby.isInLobby;
 
 		public NetStatistics GetStatistics() => Server.Statistics;
 
 		public List<Entity> requestReceivers = new();
 
 		private ServerSettings savedSettings;
+
+		private Coroutine spawnRoutine;
 
 		public void Awake()
 		{
@@ -57,11 +65,14 @@ namespace ErenshorCoop.Client
 				EnableStatistics = true,
 				ChannelsCount = Variables.MaxChannelCount
 			};
+
+			spawnRoutine = StartCoroutine(ActualSpawnSim());
 		}
 
 		public void OnGameMenuLoad(Scene _)
 		{
 			Disconnect();
+			Steam.Networking.Cleanup();
 		}
 
 		public void Connect(string ip, int port)
@@ -129,19 +140,26 @@ namespace ErenshorCoop.Client
 
 		public void Update()
 		{
-			netManager.PollEvents();
-			if (!IsConnected) return;
-
 			foreach (var player in Players)
 			{
 				if (player.Value.sceneChanged)
 				{
-					player.Value.gameObject.SetActive(player.Value.currentScene == SceneManager.GetActiveScene().name);
+					player.Value.gameObject.SetActive(player.Value.zone == SceneManager.GetActiveScene().name);
 					player.Value.sceneChanged = false;
 
 					Logging.LogError($"[Client] Player changed scene");
 				}
 			}
+
+			if (Steam.Lobby.isInLobby)
+			{
+				//Steam.Networking.Update();
+				return;
+			}
+			netManager.PollEvents();
+			if (!IsConnected) return;
+
+			
 		}
 
 
@@ -149,6 +167,7 @@ namespace ErenshorCoop.Client
 		{
 			Disconnect();
 			ErenshorCoopMod.OnGameMenuLoad -= OnGameMenuLoad;
+			StopAllCoroutines();
 		}
 
 
@@ -156,6 +175,9 @@ namespace ErenshorCoop.Client
 		//We're delaying this because it takes a second to start the connection
 		public void OnConnectDelayed(float delayInSeconds, short playerID, string scene)
 		{
+			//For some reason it's not invoking anymore..
+			ClientZoneOwnership.OnClientChangeZone(playerID, scene, null);
+
 			Timer timer = new(delayInSeconds * 1000);
 			timer.Elapsed += (_, _) =>
 			{
@@ -199,6 +221,107 @@ namespace ErenshorCoop.Client
 			}
 		}
 
+		private void OnPlayerConnect(short playerID, PlayerConnectionPacket packet, CSteamID peer)
+		{
+			if (Players.ContainsKey(playerID))
+			{
+				//Logging.Log($"Already in list?");
+				return;
+			}
+
+			string scene = packet.scene;
+			string charName = packet.name;
+			var pos = packet.position;
+			var rot = packet.rotation;
+
+			var pl = GameHooks.CreatePlayer(playerID, pos, rot);
+			if (pl != null)
+			{
+				Players.Add(playerID, pl);
+				pl.Init(pos, rot, charName, scene, playerID, peer);
+				pl.HandleConnectPacket(packet);
+
+
+
+				Logging.Log($"Player {charName} connected @{scene} id:{playerID} steam:{peer}");
+
+				OnConnectDelayed(0.25f, playerID, scene);
+			}
+			else
+			{
+				Logging.LogError($"Unknown Error: Failed to Create Player.");
+			}
+		}
+
+		private void OnSimSpawn(short playerID, PlayerConnectionPacket packet)
+		{
+			
+			if (ClientNPCSyncManager.Instance.NetworkedSims.ContainsKey(playerID))
+			{
+				//Logging.Log($"Already in list? {packet.name}");
+				//If the sim is already in the list.. update the zone
+				ClientNPCSyncManager.Instance.NetworkedSims[playerID].zone = SceneManager.GetActiveScene().name;
+				return;
+			}
+
+			simSpawnQueue.Enqueue((playerID, packet));
+		}
+
+		private System.Collections.IEnumerator ActualSpawnSim()
+		{
+			while (true)
+			{
+				if (simSpawnQueue.Count > 0)
+				{
+					var (playerID, packet) = simSpawnQueue.Dequeue();
+					string scene = packet.scene;
+					string charName = packet.name;
+					var pos = packet.position;
+					var rot = packet.rotation;
+
+					var pl = GameHooks.CreateSim(playerID, pos, rot);
+					if (pl != null)
+					{
+						ClientNPCSyncManager.Instance.NetworkedSims.Add(playerID, pl);
+						pl.Init(pos, rot, charName, scene, playerID);
+						pl.HandleConnectPacket(packet);
+						pl.ownerID = packet.ownerID;
+						pl.gameObject.SetActive(false);
+
+						//Logging.Log($"SIM {charName} #{pl.ownerID} connected @{scene}");
+					}
+					else
+					{
+						Logging.LogError($"Unknown Error: Failed to Create Sim");
+					}
+				}
+				if (ClientNPCSyncManager.Instance != null && ClientNPCSyncManager.Instance.NetworkedSims != null)
+				{
+					//Also check on all sims while we're at it
+					var zone = SceneManager.GetActiveScene().name;
+					foreach (var sim in ClientNPCSyncManager.Instance.NetworkedSims)
+					{
+						if (sim.Value != null && sim.Value.gameObject != null)
+						{
+							if (sim.Value.zone == zone || sim.Value.zone == zone)
+							{
+								sim.Value.gameObject.SetActive(true);
+								if (sim.Value.MySummon != null && sim.Value.MySummon.gameObject != null)
+									sim.Value.MySummon.gameObject.SetActive(true);
+							}
+							else
+							{
+								sim.Value.gameObject.SetActive(false);
+								if (sim.Value.MySummon != null && sim.Value.MySummon.gameObject != null)
+									sim.Value.MySummon.gameObject.SetActive(false);
+							}
+						}
+					}
+				}
+				yield return new WaitForSeconds(0.1f);
+			}
+		}
+
 		public void PlayerDisconnect(short playerID)
 		{
 			
@@ -208,6 +331,22 @@ namespace ErenshorCoop.Client
 				Destroy(p.gameObject);
 				Players.Remove(playerID);
 				OnPlayerDisconnect?.Invoke(playerID);
+
+				//Find all their sims
+				List<short> simsToRemove = new();
+				foreach(var s in ClientNPCSyncManager.Instance.NetworkedSims)
+				{
+					if(s.Value.ownerID == playerID)
+					{
+						simsToRemove.Add(s.Key);
+						//This handles it on host only, who sends it to clients
+						Grouping.ForceRemoveFromGroup(s.Key, true);
+						Destroy(s.Value.gameObject);
+					}
+				}
+
+				foreach (var s in simsToRemove)
+					ClientNPCSyncManager.Instance.NetworkedSims.Remove(s);
 			}
 		}
 
@@ -226,27 +365,56 @@ namespace ErenshorCoop.Client
 				Logging.LogGameMessage($"Disconnected: {disconnectInfo.Reason}");
 			Disconnect();
 
-			UI.Connect._feedbackText.text = $"{disconnectInfo.Reason}";
-			UI.Connect.EnableButtons();
+			UI.ConnectPanel._feedbackText.text = $"{disconnectInfo.Reason}";
+			UI.ConnectPanel.EnableButtons();
 		}
 
 		public void OnNetworkError(IPEndPoint endPoint, SocketError socketError)
 		{
 			if (socketError == SocketError.Success)
 			{
-				UI.Connect._feedbackText.text = $"Connected!";
+				UI.ConnectPanel._feedbackText.text = $"Connected!";
 				return;
 			}
 
 			Logging.LogGameMessage($"Error: {socketError}");
 
 			Disconnect();
-			UI.Connect._feedbackText.text = $"{socketError}";
-			UI.Connect.EnableButtons();
+			UI.ConnectPanel._feedbackText.text = $"{socketError}";
+			UI.ConnectPanel.EnableButtons();
 		}
+
+
+		private NetPeer _lastPeer = null;
+		public CSteamID _lastSteamID;
 
 		public void OnNetworkReceive(NetPeer peer, NetPacketReader reader, byte channelNumber, DeliveryMethod deliveryMethod)
 		{
+			_lastPeer = peer;
+			(var packet, var packetType) = OnNetworkHandle(reader, channelNumber, deliveryMethod);
+			reader.Recycle();
+			if (packet == null) return;
+
+			if (ServerConnectionManager.Instance.IsRunning)
+			{
+				packet.exclusions.Add(peer);
+				//Make sure we only send the packet to whoever should actually receive it
+				if (packet.targetPlayerIDs != null && packet.targetPlayerIDs.Count > 0)
+				{
+					foreach (var p in Players)
+					{
+						if (!packet.targetPlayerIDs.Contains(p.Key))
+							packet.exclusions.Add(p.Value.peer);
+					}
+				}
+				PacketManager.ServerAddPacket(packetType, packet);
+			}
+		}
+
+
+		public (BasePacket, PacketType) OnNetworkHandle(NetDataReader reader, byte channelNumber, DeliveryMethod deliveryMethod, bool useSteam=false)
+		{
+			var psize = reader.RawDataSize;
 			var packetType = (PacketType)reader.GetByte();
 
 			var isPlayerPacket = true;
@@ -321,19 +489,13 @@ namespace ErenshorCoop.Client
 				default: packet = new BasePacket(DeliveryMethod.Unreliable); Logging.LogError($"Unhandled PacketType: {packetType}."); isPlayerPacket = false; break;
 			}
 
-			
-
-
 			packet.Read(reader);
-			reader.Recycle();
+			//Logging.Log($"Received {packetType} of size {psize}");
 
 			if (packet.GetType() == typeof(BasePacket))
 			{
-				return; //Unknown packet
+				return (null, 0); //Unknown packet
 			}
-
-
-			
 
 			if (isPlayerPacket)
 			{
@@ -369,48 +531,61 @@ namespace ErenshorCoop.Client
 				if (packetType == PacketType.SERVER_GROUP)
 				{
 					Grouping.HandleServerPacket((ServerGroupPacket)packet);
-					return;
+					return (null, 0);
 				}
 				if (packet is PlayerMessagePacket messagePacket)
 				{
-					Logging.HandleMessage(GetPlayerFromID(packet.entityID),messagePacket);
+					Logging.HandleMessage(GetPlayerFromID(packet.entityID), messagePacket);
 					if (messagePacket.messageType == MessageType.INFO)
-						return; //don't resend
+						return (null, 0); //don't resend
 				}
 				//Logging.Log($"{packet.GetType()}");
 				short playerID = packet.entityID;
 				//if (playerID == LocalPlayerID) return;
 
-				if (playerID != LocalPlayerID)
+				if (playerID != LocalPlayerID || packet.isSim)
 				{
 					if (packet is PlayerConnectionPacket)
 					{
-						OnPlayerConnect(playerID, (PlayerConnectionPacket)packet, peer);
+						if (!packet.isSim)
+						{
+							if(!useSteam)
+								OnPlayerConnect(playerID, (PlayerConnectionPacket)packet, _lastPeer);
+							else
+								OnPlayerConnect(playerID, (PlayerConnectionPacket)packet, _lastSteamID);
+						}
+						else
+						{
+							OnSimSpawn(playerID, (PlayerConnectionPacket)packet);
+						}
 					}
 					else
 					{
+
 						if (packet is PlayerDataPacket)
 						{
-							if (((PlayerDataPacket)packet).dataTypes.Contains(PlayerDataType.SCENE))
+							if (((PlayerDataPacket)packet).dataTypes.Contains(PlayerDataType.SCENE) && !packet.isSim)
 							{
 								if (Players.TryGetValue(playerID, out var pl))
 								{
-									if (pl.currentScene != ((PlayerDataPacket)packet).scene)
+									if (pl.zone != ((PlayerDataPacket)packet).scene)
 									{
-										OnClientSwapZone?.Invoke(playerID, ((PlayerDataPacket)packet).scene, pl.currentScene);
+										OnClientSwapZone?.Invoke(playerID, ((PlayerDataPacket)packet).scene, pl.zone);
 									}
 								}
 							}
 						}
-						if (Players.ContainsKey(playerID))
+						if (Players.ContainsKey(playerID) && !packet.isSim)
 							Players[playerID].OnPlayerDataReceive(packet);
+						else if (packet.isSim && ClientNPCSyncManager.Instance.NetworkedSims.ContainsKey(playerID))
+							ClientNPCSyncManager.Instance.NetworkedSims[playerID].OnSimDataReceive(packet);
 					}
 				}
 			}
 			else if (packetType == PacketType.GROUP)
 			{
 				Grouping.HandleClientPacket((GroupPacket)packet);
-				return;
+				return (null, 0);
 			}
 			else if (packetType == PacketType.SERVER_INFO)
 			{
@@ -428,7 +603,7 @@ namespace ErenshorCoop.Client
 				if (((ServerInfoPacket)packet).dataTypes.Contains(ServerInfoType.SERVER_SETTINGS))
 				{
 					var p = (ServerInfoPacket)packet;
-					if(savedSettings == null) //we dont have saved settings, we can apply
+					if (savedSettings == null) //we dont have saved settings, we can apply
 					{
 						savedSettings = new()
 						{
@@ -444,24 +619,49 @@ namespace ErenshorCoop.Client
 						GameData.ServerLootRate = p.serverSettings.lootMod;
 					}
 				}
+				if (((ServerInfoPacket)packet).dataTypes.Contains(ServerInfoType.PLAYER_LIST))
+				{
+					var p = (ServerInfoPacket)packet;
+					for(int i=0;i<p.playerInfoList.Count;i++)
+					{
+						var pl = p.playerInfoList[i];
+						var ent = GetPlayerFromID(pl.playerID);
+						if (ent == null) continue;
+
+						pl.zone = ent.zone;
+						pl.name = ent.name;
+						if (pl.playerID == LocalPlayerID)
+						{
+							pl.name = GameData.CurrentCharacterSlot.CharName;
+							pl.zone = SceneManager.GetActiveScene().name;
+						}
+
+						p.playerInfoList[i] = pl;
+					}
+
+					Steam.Networking.lastPlayerData = p.playerInfoList;
+
+					ErenshorCoopMod.ModMain.HandleOnConnect();
+				}
 				if (((ServerInfoPacket)packet).dataTypes.Contains(ServerInfoType.HOST_MODS))
 				{
+					Logging.Log($"Received {packetType} of size {psize}");
 					//We just put it here
 					Logging.LogGameMessage($"Connected!");
 
 					var p = (ServerInfoPacket)packet;
 					List<ErenshorCoopMod.PluginData> differentPlugins = new();
 
-					ErenshorCoopMod.PluginData coopMod = new();
+					//ErenshorCoopMod.PluginData coopMod = new();
 
 					bool isMissingPlugin = false;
 					bool coopDiff = false;
-					foreach(var plugin in p.plugins)
+					foreach (var plugin in p.plugins)
 					{
 						var found = false;
-						foreach(var ownPlugin in ErenshorCoopMod.loadedPlugins)
+						foreach (var ownPlugin in ErenshorCoopMod.loadedPlugins)
 						{
-							if(plugin.name == ownPlugin.name)
+							if (plugin.name == ownPlugin.name)
 							{
 								found = true;
 								var cmp = plugin.version.CompareTo(ownPlugin.version);
@@ -475,7 +675,7 @@ namespace ErenshorCoop.Client
 										diff = cmp
 									});
 
-									if(plugin.name == "Erenshor Coop")
+									if (plugin.name == "Erenshor Coop")
 									{
 										coopDiff = true;
 									}
@@ -486,7 +686,7 @@ namespace ErenshorCoop.Client
 							isMissingPlugin = true;
 					}
 
-					
+
 
 					if (p.plugins.Count != ErenshorCoopMod.loadedPlugins.Count)
 					{
@@ -519,20 +719,21 @@ namespace ErenshorCoop.Client
 						}
 					}
 
-					if(coopDiff)
+					if (coopDiff)
 					{
 						Logging.LogGameMessage($"Your COOP version differs from the hosts, this will cause major issues!", true);
-					}else if (isMissingPlugin)
+					}
+					else if (isMissingPlugin)
 					{
 						Logging.LogGameMessage($"Your mods differ from the hosts, this could cause issues.", true);
 					}
-					if(differentPlugins.Count > 0)
+					if (differentPlugins.Count > 0)
 					{
-						foreach(var plugin in differentPlugins)
+						foreach (var plugin in differentPlugins)
 						{
-							if(plugin.other != null && plugin.version != null)
+							if (plugin.other != null && plugin.version != null)
 								Logging.LogGameMessage($"\"{plugin.name}\" You: v{plugin.version.ToString()} - Host: v{plugin.other.ToString()}", true);
-							if(plugin.other == null && plugin.version != null)
+							if (plugin.other == null && plugin.version != null)
 								Logging.LogGameMessage($"\"{plugin.name}\" You: v{plugin.version.ToString()} - Host: None", true);
 							if (plugin.other != null && plugin.version == null)
 								Logging.LogGameMessage($"\"{plugin.name}\" You: None - Host: v{plugin.other.ToString()}", true);
@@ -542,42 +743,170 @@ namespace ErenshorCoop.Client
 				if (((ServerInfoPacket)packet).dataTypes.Contains(ServerInfoType.ZONE_OWNERSHIP))
 				{
 					OnZoneOwnerChange?.Invoke(((ServerInfoPacket)packet).zoneOwner, ((ServerInfoPacket)packet).zone, ((ServerInfoPacket)packet).playerList);
-					return;
+					return (null, 0);
 				}
 			}
 			else if (packetType == PacketType.SERVER_CONNECT)
 			{
 				LocalPlayerID = ((ServerConnectPacket)packet).entityID;
-				LocalPlayer.playerID = LocalPlayerID;
 				LocalPlayer.entityID = LocalPlayerID;
+				LocalPlayer.steamID = Steam.Lobby.playerSteamID;
 				OnConnect?.Invoke();
 				WeatherHandler.Init();
 
-				UI.Connect._feedbackText.text = "Connected!";
+				UI.ConnectPanel._feedbackText.text = "Connected!";
 
 				Grouping.ForceClearGroup();
 			}
 			else if (packetType == PacketType.PLAYER_REQUEST)
 			{
+				
 				var p = (PlayerRequestPacket)packet;
 
 				if (p.dataTypes.Contains(Request.ENTITY_ID))
 				{
 					var idL = new List<short>();
-					for(int i = 0;i< p.requestEntityType.Count;i++)
+					for (int i = 0; i < p.requestEntityType.Count; i++)
 					{
 						var fid = SharedNPCSyncManager.Instance.GetFreeId();
 						idL.Add(fid);
 					}
 					var pa = PacketManager.GetOrCreatePacket<ServerRequestPacket>(p.entityID, PacketType.SERVER_REQUEST);
 					pa.AddPacketData(Request.ENTITY_ID, "reqID", idL);
-					pa.SetTarget(peer);
+					pa.SetTarget((!useSteam)?GetPlayerFromPeer(_lastPeer):GetPlayerFromSteam(_lastSteamID));
 					pa.exclusions.Add(LocalPlayer.peer);
 				}
-				return;
+				if (p.dataTypes.Contains(Request.MOD_COMMAND))
+				{
+					if (!ServerConnectionManager.Instance.IsRunning) return (null, 0);
+
+					string retMes = "";
+					if (!Steam.Lobby.isInLobby)
+					{
+						//Only supported on steam
+						retMes = "[Host] Commands are only supported using steam lobbies.";
+						PacketManager.GetOrCreatePacket<PlayerMessagePacket>(p.entityID, PacketType.PLAYER_MESSAGE)
+						.SetTarget((!useSteam) ? GetPlayerFromPeer(_lastPeer) : GetPlayerFromSteam(_lastSteamID))
+						.SetData("message", retMes)
+						.SetData("messageType", MessageType.INFO);
+						return (null, 0);
+					}
+
+					//Make sure sender is a mod
+					if (_lastSteamID == null || !ServerConfig.ModeratorList.Contains(_lastSteamID.m_SteamID))
+					{
+						PacketManager.GetOrCreatePacket<PlayerMessagePacket>(p.entityID, PacketType.PLAYER_MESSAGE)
+									.SetTarget((!useSteam) ? GetPlayerFromPeer(_lastPeer) : GetPlayerFromSteam(_lastSteamID))
+									.SetData("message", "[Host] Insufficent Permission.")
+									.SetData("messageType", MessageType.INFO);
+						return (null, 0);
+					}
+
+					bool sendtoall = false;
+					if (p.commandType > 1 || p.commandType < 0)
+					{
+						retMes = "[Host] Unknown command.";
+					}
+					else if (p.commandType == 0) // kick
+					{
+						Entity selected = null;
+						foreach (var pl in Players)
+						{
+							if (pl.Value.playerName.ToLower() == p.playerName && pl.Value != LocalPlayer) //dont remember if localplayer is in the list but just incase...
+							{
+								selected = pl.Value;
+								break;
+							}
+						}
+
+
+						if (selected != null)
+						{
+							//Make sure it's not a mod
+							if (ServerConfig.ModeratorList.Contains(selected.steamID.m_SteamID))
+							{
+								PacketManager.GetOrCreatePacket<PlayerMessagePacket>(p.entityID, PacketType.PLAYER_MESSAGE)
+									.SetTarget((!useSteam) ? GetPlayerFromPeer(_lastPeer) : GetPlayerFromSteam(_lastSteamID))
+									.SetData("message", "[Host] Insufficent Permission.")
+									.SetData("messageType", MessageType.INFO);
+								return (null, 0);
+							}
+
+							var res = Steam.Networking.KickPlayer(selected.steamID);
+							if (res)
+								retMes = $"[Host] Player {selected.entityName} has been kicked.";
+							else
+								retMes = $"[Host] Could not kick {selected.entityName}.";
+
+							sendtoall = res;
+						}
+						else
+						{
+							retMes = $"[Host] Player not found.";
+						}
+					}
+					else if (p.commandType == 1) // ban
+					{
+						Entity selected = null;
+						foreach (var pl in Players)
+						{
+							if (pl.Value.playerName.ToLower() == p.playerName && pl.Value != LocalPlayer) //dont remember if localplayer is in the list but just incase...
+							{
+								selected = pl.Value;
+								break;
+							}
+						}
+
+
+						if (selected != null)
+						{
+							//Make sure it's not a mod
+							if (ServerConfig.ModeratorList.Contains(selected.steamID.m_SteamID))
+							{
+								PacketManager.GetOrCreatePacket<PlayerMessagePacket>(p.entityID, PacketType.PLAYER_MESSAGE)
+									.SetTarget((!useSteam) ? GetPlayerFromPeer(_lastPeer) : GetPlayerFromSteam(_lastSteamID))
+									.SetData("message", "[Host] Insufficent Permission.")
+									.SetData("messageType", MessageType.INFO);
+								return (null, 0);
+							}
+
+							var res = Steam.Networking.BanPlayer(selected.steamID);
+							if (res)
+								retMes = $"[Host] Player {selected.entityName} has been banned.";
+							else
+								retMes = $"[Host] Could not ban {selected.entityName}.";
+
+							sendtoall = res;
+						}
+						else
+						{
+							retMes = $"[Host] Player not found.";
+						}
+					}
+
+					if (!sendtoall)
+					{
+						PacketManager.GetOrCreatePacket<PlayerMessagePacket>(p.entityID, PacketType.PLAYER_MESSAGE)
+							.SetTarget((!useSteam) ? GetPlayerFromPeer(_lastPeer) : GetPlayerFromSteam(_lastSteamID))
+							.SetData("message", retMes)
+							.SetData("messageType", MessageType.INFO);
+					}
+					else
+					{
+
+						var pa = PacketManager.GetOrCreatePacket<PlayerMessagePacket>(0, PacketType.PLAYER_MESSAGE)
+							.SetData("message", retMes)
+							.SetData("messageType", MessageType.INFO);
+
+						//Host message
+						Logging.HandleMessage(GetPlayerFromID(packet.entityID), (PlayerMessagePacket)pa);
+					}
+				}
+				return (null, 0);
 			}
 			else if (packetType == PacketType.SERVER_REQUEST)
 			{
+				//Logging.Log($"Received {packetType} of size {psize}");
 				if (packet.entityID == LocalPlayerID)
 				{
 					var p = (ServerRequestPacket)packet;
@@ -587,9 +916,9 @@ namespace ErenshorCoop.Client
 						var recvs = new List<Entity>(requestReceivers);
 						requestReceivers.Clear();
 						var idx = 0;
-						foreach(var r in recvs)
+						foreach (var r in recvs)
 						{
-							if(r != null)
+							if (r != null)
 							{
 								if (idx >= p.reqID.Count)
 								{
@@ -604,46 +933,30 @@ namespace ErenshorCoop.Client
 								}
 							}
 						}
-						
+
 						//requestReceiver?.ReceiveRequestID(p.reqID);
 					}
+					
 				}
 
-				return;
+				return (null, 0);
 			}
-			else if ( packetType == PacketType.DISCONNECT)
+			else if (packetType == PacketType.DISCONNECT)
 			{
 				PlayerDisconnect(packet.entityID);
 			}
 			else
 			{
-				
+
 				var bp = (EntityBasePacket)packet;
 				if (!ClientZoneOwnership.isZoneOwner || bp.entityType == EntityType.PET)
-				{
 					ClientNPCSyncManager.Instance.OnEntityDataReceive(packet);
-				}
 
 				if (ServerConnectionManager.Instance.IsRunning)
-				{
 					ServerZoneOwnership.HandleEntityPacket(bp);
-				}
 			}
 
-			if (ServerConnectionManager.Instance.IsRunning)
-			{
-				packet.exclusions.Add(peer);
-				//Make sure we only send the packet to whoever should actually receive it
-				if(packet.targetPlayerIDs != null && packet.targetPlayerIDs.Count > 0)
-				{
-					foreach(var p in Players)
-					{
-						if (!packet.targetPlayerIDs.Contains(p.Key))
-							packet.exclusions.Add(p.Value.peer);
-					}
-				}
-				PacketManager.ServerAddPacket(packetType, packet);
-			}
+			return (packet, packetType);
 		}
 
 
@@ -805,6 +1118,126 @@ namespace ErenshorCoop.Client
 		{
 			if (playerID == LocalPlayerID) return LocalPlayer;
 			return Players.TryGetValue(playerID, out var play) ? play : null;
+		}
+
+		public Entity GetPlayerFromPeer(NetPeer peer)
+		{
+			if(LocalPlayer.peer == peer) return LocalPlayer;
+			foreach (var p in Players)
+				if (p.Value.peer == peer)
+					return p.Value;
+
+			return null;
+		}
+
+		public Entity GetPlayerFromSteam(CSteamID peer)
+		{
+			if (LocalPlayer.steamID == peer) return LocalPlayer;
+			foreach (var p in Players)
+				if (p.Value.steamID == peer)
+					return p.Value;
+
+			return null;
+		}
+
+
+		//FIXME: Make better
+		public void HandleModCommand(byte cmdType, string plName)
+		{
+			if (!ServerConnectionManager.Instance.IsRunning) return;
+
+			string retMes = "";
+			if (!Steam.Lobby.isInLobby)
+			{
+				//Only supported on steam
+				PlayerMessagePacket pa = new();
+				pa.message = "[Host] Commands are only supported using steam lobbies.";
+				pa.messageType = MessageType.INFO;
+
+				Logging.HandleMessage(LocalPlayer, pa);
+				return;
+			}
+
+			bool sendtoall = false;
+			if (cmdType > 1 || cmdType < 0)
+			{
+				retMes = "[Host] Unknown command.";
+			}
+			else if (cmdType == 0) // kick
+			{
+				Entity selected = null;
+				foreach (var pl in Players)
+				{
+					if (pl.Value.playerName.ToLower() == plName && pl.Value != LocalPlayer) //dont remember if localplayer is in the list but just incase...
+					{
+						selected = pl.Value;
+						break;
+					}
+				}
+
+
+				if (selected != null)
+				{
+					var res = Steam.Networking.KickPlayer(selected.steamID);
+					if (res)
+						retMes = $"[Host] Player {selected.entityName} has been kicked.";
+					else
+						retMes = $"[Host] Could not kick {selected.entityName}.";
+
+					sendtoall = res;
+				}
+				else
+				{
+					retMes = $"[Host] Player not found.";
+				}
+			}
+			else if (cmdType == 1) // ban
+			{
+				Entity selected = null;
+				foreach (var pl in Players)
+				{
+					if (pl.Value.playerName.ToLower() == plName && pl.Value != LocalPlayer) //dont remember if localplayer is in the list but just incase...
+					{
+						selected = pl.Value;
+						break;
+					}
+				}
+
+
+				if (selected != null)
+				{
+					var res = Steam.Networking.BanPlayer(selected.steamID);
+					if (res)
+						retMes = $"[Host] Player {selected.entityName} has been banned.";
+					else
+						retMes = $"[Host] Could not ban {selected.entityName}.";
+
+					sendtoall = res;
+				}
+				else
+				{
+					retMes = $"[Host] Player not found.";
+				}
+			}
+
+			if (!sendtoall)
+			{
+				PlayerMessagePacket pa = new();
+				pa.message = retMes;
+				pa.messageType = MessageType.INFO;
+
+				Logging.HandleMessage(LocalPlayer, pa);
+			}
+			else
+			{
+
+				var pa = PacketManager.GetOrCreatePacket<PlayerMessagePacket>(0, PacketType.PLAYER_MESSAGE)
+					.SetData("message", retMes)
+					.SetData("messageType", MessageType.INFO);
+
+				//Host message
+				Logging.HandleMessage(LocalPlayer, (PlayerMessagePacket)pa);
+			}
 		}
 
 		public void OnConnectionRequest(ConnectionRequest request) { request.Accept(); }

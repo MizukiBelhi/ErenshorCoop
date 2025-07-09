@@ -11,17 +11,14 @@ using System.Reflection;
 using ErenshorCoop.Shared;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Steamworks;
+using System.Collections;
 
 namespace ErenshorCoop
 {
-	[BepInPlugin("mizuki.coop", "Erenshor Coop", "1.5.1")]
+	[BepInPlugin("mizuki.coop", "Erenshor Coop", "2.0.0")]
 	public class ErenshorCoopMod : BaseUnityPlugin
 	{
-		public static ConfigEntry<int> someConfig;
-
-		//distance of mob to each player to send animation sync updates
-		public static float mobSyncDistance = 40f;
-
 		public static Action<Scene> OnGameMapLoad;
 		public static Action<Scene> OnGameMenuLoad;
 
@@ -35,15 +32,24 @@ namespace ErenshorCoop
 
 		public static List<PluginData> loadedPlugins = new();
 
-		public static Version version;
+		public static System.Version version;
 
 		private GameObject mainGO;
 		private GameObject ui;
+
+		public static ConfigFile config;
 
 		public void Awake()
 		{
 			version = Info.Metadata.Version;
 			logger = Logger;
+			config = Config;
+
+
+			if (!SteamAPI.Init())
+			{
+				Logging.LogError("SteamAPI Init failed.");
+			}
 
 			SceneManager.sceneLoaded += OnSceneLoaded;
 			OnGameMapLoad += OnGameLoad;
@@ -68,6 +74,8 @@ namespace ErenshorCoop
 
 			GetLoadedPlugins();
 
+			
+			StartCoroutine(DelayedSteamworksInit());
 
 			//For ScriptEngine
 			var scene = SceneManager.GetActiveScene();
@@ -95,8 +103,23 @@ namespace ErenshorCoop
 
 		}
 
+		public IEnumerator DelayedSteamworksInit()
+		{
+			yield return new WaitForSeconds(2);
+			Steamworks.SteamAPI.Init();
+			Steam.Lobby.Init();
+		}
+
+		public void OnApplicationQuit()
+		{
+
+		}
+
 		private void OnDestroy()
 		{
+			Steam.Lobby.Cleanup();
+			Steam.Networking.Cleanup();
+
 			OnGameMapLoad -= OnGameLoad;
 			OnGameMenuLoad -= OnMenuLoad;
 
@@ -113,11 +136,15 @@ namespace ErenshorCoop
 			Destroy(ui);
 			Destroy(mainGO);
 
+
 			harm.UnpatchSelf();
 
 			//Make absolutely sure there's no more syncs
 			var s = FindObjectsOfType<NPCSync>();
 			foreach (var n in s)
+				Destroy(n);
+			var sn = FindObjectsOfType<SimSync>();
+			foreach (var n in sn)
 				Destroy(n);
 		}
 
@@ -133,8 +160,6 @@ namespace ErenshorCoop
 					version = plugin.Metadata.Version
 				};
 				loadedPlugins.Add(pluginData);
-
-			//	Logger.LogInfo($"Loaded Mods: {pluginData.name} v{pluginData.version}");
 			}
 		}
 
@@ -146,6 +171,7 @@ namespace ErenshorCoop
 
 			Destroy(ClientConnectionManager.Instance.LocalPlayer);
 			ClientConnectionManager.Instance.LocalPlayer = null;
+			Steam.Networking.Cleanup();
 		}
 
 		private void OnGameLoad(Scene scene)
@@ -161,11 +187,20 @@ namespace ErenshorCoop
 			}else if(ClientConnectionManager.Instance.LocalPlayer == null){
 				Logging.LogError("Could not find Player object. Try changing scenes?");
 			}
+
+			StartCoroutine(SteamCheckStart());
+		}
+
+		public IEnumerator SteamCheckStart()
+		{
+			yield return new WaitForSeconds(3);
+			Steam.Lobby.CheckForGameStart();
 		}
 
 		public void Update()
 		{
 			PacketManager.ExtremePoolNoodleAction();
+			Steam.Networking.Update();
 		}
 
 		public void EnableHooks()
@@ -217,7 +252,16 @@ namespace ErenshorCoop
 			} catch {}
 		}
 
-
+		public static void CreatePostHook(Type origType, string origName, Type newType, string newName, Type[] paramTypes)
+		{
+			try
+			{
+				var patch = new HarmonyMethod(AccessTools.Method(newType, newName));
+				var orig = AccessTools.Method(origType, origName, paramTypes);
+				harm.Patch(orig, null, patch);
+			}
+			catch { }
+		}
 		public static void UnPatchTranspiler(Type origType, string origName, Type newType, string newName)
 		{
 			try
@@ -276,9 +320,9 @@ namespace ErenshorCoop
 		public struct PluginData
 		{
 			public string name;
-			public Version version;
+			public System.Version version;
 			public int diff;
-			public Version other;
+			public System.Version other;
 		}
 	}
 }

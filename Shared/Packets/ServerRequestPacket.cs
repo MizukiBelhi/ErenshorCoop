@@ -24,10 +24,9 @@ namespace ErenshorCoop.Shared.Packets
 				foreach(var r in reqID)
 					writer.Put(r);
 			}
-
 		}
 
-		public override void Read(NetPacketReader reader)
+		public override void Read(NetDataReader reader)
 		{
 			entityID = reader.GetShort();
 			dataTypes = Extensions.ReadSubTypeFlag<Request>(reader.GetUShort());

@@ -21,13 +21,14 @@ namespace ErenshorCoop.Shared.Packets
 		public string name;
 		public LookData lookData;
 		public List<GearData> gearData;
-
+		public short ownerID = -1;
 		public PlayerConnectionPacket() : base(DeliveryMethod.ReliableOrdered) { }
 
 		public override void Write(NetDataWriter writer)
 		{
 			writer.Put((byte)PacketType.PLAYER_CONNECT);
 			writer.Put(entityID);
+			writer.Put(isSim);
 			writer.Put(position);
 			writer.Put(rotation);
 			writer.Put(health);
@@ -36,7 +37,7 @@ namespace ErenshorCoop.Shared.Packets
 			writer.Put((byte)level);
 			writer.Put(name);
 			writer.Put(scene);
-
+			writer.Put(ownerID);
 
 			writer.Put(lookData.isMale);
 			writer.Put(lookData.hairName);
@@ -52,22 +53,24 @@ namespace ErenshorCoop.Shared.Packets
 			
 		}
 
-		public override void Read(NetPacketReader reader)
+		public override void Read(NetDataReader reader)
 		{
 			entityID = reader.GetShort();
+			isSim = reader.GetBool();
 			position = reader.GetVector3();
 			rotation = reader.GetRotation();
 			health = reader.GetInt();
 			mp = reader.GetInt();
 			_class = ErenshorCoopMod.ClassID2Class(reader.GetByte());
 			level = reader.GetByte();
-			name = reader.GetString();
-			scene = reader.GetString();
+			name = reader.GetString().Sanitize();
+			scene = reader.GetString().Sanitize();
+			ownerID = reader.GetShort();
 			
 			lookData = new()
 			{
 				isMale = reader.GetBool(),
-				hairName = reader.GetString(),
+				hairName = reader.GetString(), //Not sure if this can be safely sanitized
 				hairColor = reader.GetColor(),
 				skinColor = reader.GetColor(),
 			};
@@ -79,7 +82,7 @@ namespace ErenshorCoop.Shared.Packets
 				GearData gd = new()
 				{
 					slotType = (Item.SlotType)reader.GetByte(),
-					itemID = reader.GetString(),
+					itemID = reader.GetString().Sanitize(),
 					quality = reader.GetByte()
 				};
 				gearData.Add(gd);

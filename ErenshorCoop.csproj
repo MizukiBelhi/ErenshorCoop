@@ -41,17 +41,26 @@
     <Reference Include="0Harmony">
       <HintPath>Libraries\0Harmony.dll</HintPath>
     </Reference>
-    <Reference Include="Assembly-CSharp">
-      <HintPath>Libraries\Assembly-CSharp.dll</HintPath>
+    <Reference Include="Assembly-CSharp, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>F:\steam\steamapps\common\Erenshor\Erenshor_Data\Managed\Assembly-CSharp.dll</HintPath>
     </Reference>
     <Reference Include="BepInEx">
       <HintPath>Libraries\BepInEx.dll</HintPath>
+    </Reference>
+    <Reference Include="com.rlabrecque.steamworks.net, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>F:\steam\steamapps\common\Erenshor\Erenshor_Data\Managed\com.rlabrecque.steamworks.net.dll</HintPath>
     </Reference>
     <Reference Include="LiteNetLib">
       <HintPath>Libraries\LiteNetLib.dll</HintPath>
     </Reference>
     <Reference Include="Newtonsoft.Json">
       <HintPath>Libraries\Newtonsoft.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="OccaSoftware.SuperSimpleSkybox.Runtime, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>F:\steam\steamapps\common\Erenshor\Erenshor_Data\Managed\OccaSoftware.SuperSimpleSkybox.Runtime.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -79,8 +88,16 @@
     <Reference Include="UnityEngine.CoreModule">
       <HintPath>Libraries\UnityEngine.CoreModule.dll</HintPath>
     </Reference>
+    <Reference Include="UnityEngine.ImageConversionModule, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>F:\steam\steamapps\common\Erenshor\Erenshor_Data\Managed\UnityEngine.ImageConversionModule.dll</HintPath>
+    </Reference>
     <Reference Include="UnityEngine.InputLegacyModule">
       <HintPath>Libraries\UnityEngine.InputLegacyModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.ParticleSystemModule, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>F:\steam\steamapps\common\Erenshor\Erenshor_Data\Managed\UnityEngine.ParticleSystemModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.PhysicsModule">
       <HintPath>Libraries\UnityEngine.PhysicsModule.dll</HintPath>
@@ -107,6 +124,7 @@
     <Compile Include="GameHooks.cs" />
     <Compile Include="Grouping.cs" />
     <Compile Include="Logging.cs" />
+    <Compile Include="NetworkedSim.cs" />
     <Compile Include="NPCSync.cs" />
     <Compile Include="NetworkedNPC.cs" />
     <Compile Include="NetworkedPlayer.cs" />
@@ -140,11 +158,46 @@
     <Compile Include="Shared\Packets\ServerInfoPacket.cs" />
     <Compile Include="Shared\Packets\ServerRequestPacket.cs" />
     <Compile Include="Shared\Variables.cs" />
+    <Compile Include="SimSync.cs" />
+    <Compile Include="Steam\Lobby.cs" />
+    <Compile Include="Steam\Networking.cs" />
     <Compile Include="UI\Base.cs" />
     <Compile Include="UI\Connect.cs" />
+    <Compile Include="UI\ConnectPanel.cs" />
+    <Compile Include="UI\IPanel.cs" />
+    <Compile Include="UI\LobbyCreatePanel.cs" />
+    <Compile Include="UI\LobbyPanel.cs" />
     <Compile Include="UI\Main.cs" />
+    <Compile Include="UI\PlayerPanel.cs" />
+    <Compile Include="UI\SettingsPanel.cs" />
+    <Compile Include="UI\TabButton.cs" />
+    <Compile Include="UI\TabManager.cs" />
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <EmbeddedResource Include="UI\icons\circle-info-solid.png" />
+    <EmbeddedResource Include="UI\icons\lock-open-solid.png" />
+    <EmbeddedResource Include="UI\icons\lock-solid.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="UI\icons\rotate-solid.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="UI\icons\list-solid.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="UI\icons\check-solid.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="UI\icons\bg.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="UI\icons\signal-solid.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="UI\icons\bug-solid.png" />
+    <EmbeddedResource Include="UI\icons\crown-solid.png" />
+    <EmbeddedResource Include="UI\icons\star-solid.png" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <PostBuildEvent>

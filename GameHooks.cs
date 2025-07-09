@@ -30,6 +30,7 @@ namespace ErenshorCoop
 			ErenshorCoopMod.CreatePrefixHook(typeof(Zoneline),                   "OnTriggerEnter",          typeof(GameHooks), "ZoneLineOnTriggerEnter_Prefix");
 			ErenshorCoopMod.CreatePrefixHook(typeof(NPC),                        "Update",                  typeof(GameHooks), "NPCUpdate_Prefix");
 			ErenshorCoopMod.CreatePrefixHook(typeof(NPC),                        "Combat",                  typeof(GameHooks), "NPCCombat_Prefix");
+			ErenshorCoopMod.CreatePrefixHook(typeof(NPC),                        "ForceAggroOn",            typeof(GameHooks), "ForceAggroOn_Prefix");
 			ErenshorCoopMod.CreatePrefixHook(typeof(TypeText),                   "CheckInput",              typeof(GameHooks), "CheckInput_Prefix");
 			ErenshorCoopMod.CreatePrefixHook(typeof(Stats),                      "ReduceHP",                typeof(GameHooks), "StatsReduceHP_Prefix");
 			ErenshorCoopMod.CreatePrefixHook(typeof(Stats),                      "MitigatePhysical",        typeof(GameHooks), "StatsMitigatePhysical_Prefix");
@@ -65,14 +66,21 @@ namespace ErenshorCoop
 			ErenshorCoopMod.CreatePrefixHook(typeof(LootWindow),                 "CloseWindow",             typeof(GameHooks), "LootWindowClose_Prefix");
 			ErenshorCoopMod.CreatePrefixHook(typeof(PlayerControl),              "LeftClick",               typeof(GameHooks), "PlayerLeftClick_Prefix");
 			ErenshorCoopMod.CreatePrefixHook(typeof(ItemIcon),                   "InformGroupOfLoot",       typeof(GameHooks), "InformGroupOfLoot_Prefix");
-
+			ErenshorCoopMod.CreatePrefixHook(typeof(AtmosphereColors),           "Update",                  typeof(WeatherHandler), "AtmosphereUpdate_Prefix");
+			ErenshorCoopMod.CreatePrefixHook(typeof(DayNight),                   "FixedUpdate",             typeof(WeatherHandler), "DayNightFixedUpd_Prefix");
+			ErenshorCoopMod.CreatePrefixHook(typeof(SimPlayer),                  "FollowPlayer",            typeof(GameHooks), "FollowPlayer_Prefix");
+			ErenshorCoopMod.CreatePrefixHook(typeof(SimPlayer),                  "LoadSimData",             typeof(GameHooks), "LoadSimData_Prefix");
+			ErenshorCoopMod.CreatePrefixHook(typeof(PlayerCombat),               "DoWandAttack",            typeof(GameHooks), "PlayerDoWandAttack_Prefix");
+			ErenshorCoopMod.CreatePrefixHook(typeof(NPC),                        "DoWandAttack",            typeof(GameHooks), "NPCDoWandAttack_Prefix");
+			ErenshorCoopMod.CreatePrefixHook(typeof(SimPlayerMngr),              "BringPlayerGroupToZone",  typeof(GameHooks), "BringPlayerGroupToZone_pre");
+			ErenshorCoopMod.CreatePrefixHook(typeof(SimItemDisplay),             "OnPointerDown",           typeof(GameHooks), "SimItemOnPointerDown_Prefix");
 
 			ErenshorCoopMod.CreatePostHook(typeof(SpawnPoint),        "SpawnNPC",           typeof(GameHooks), "SpawnPointSpawnNPC_Post");
 			ErenshorCoopMod.CreatePostHook(typeof(Inventory),         "Update",             typeof(GameHooks), "InventoryUpdate_Postfix");
 			ErenshorCoopMod.CreatePostHook(typeof(Character),         "DamageMe",           typeof(GameHooks), "CharacterDamageMe_Postfix");
 			ErenshorCoopMod.CreatePostHook(typeof(Character),         "MagicDamageMe",      typeof(GameHooks), "MagicDamageMe_Postfix");
 			ErenshorCoopMod.CreatePostHook(typeof(Respawn),           "RespawnPlayer",      typeof(GameHooks), "RespawnPlayer_Postfix");
-			ErenshorCoopMod.CreatePostHook(typeof(SimPlayerGrouping), "InviteToGroup",      typeof(GameHooks), "InviteToGroup_Postfix");
+
 			ErenshorCoopMod.CreatePostHook(typeof(GameManager),       "OpenEscMenu",        typeof(GameHooks), "OpenEscMenu_Postfix");
 			ErenshorCoopMod.CreatePostHook(typeof(GameManager),       "CloseEscMenu",       typeof(GameHooks), "CloseEscMenu_Postfix");
 			ErenshorCoopMod.CreatePostHook(typeof(GameManager),       "ToggleEscapeMenu",   typeof(GameHooks), "ToggleEscMenu_Postfix");
@@ -80,21 +88,11 @@ namespace ErenshorCoop
 			ErenshorCoopMod.CreatePostHook(typeof(Chessboard),        "SpawnPiece",         typeof(GameHooks), "CSpawnPiece_Postfix");
 			ErenshorCoopMod.CreatePostHook(typeof(SiraetheEvent),     "Update",             typeof(GameHooks), "SUpdate_Postfix");
 			ErenshorCoopMod.CreatePostHook(typeof(TreasureChestEvent),"SpawnGuardiansCont", typeof(GameHooks), "TreSpawn_Postfix");
+			ErenshorCoopMod.CreatePostHook(typeof(SimPlayerTracking), "SpawnMeInGame",      typeof(GameHooks), "SimSpawn_Postfix");
+			ErenshorCoopMod.CreatePostHook(typeof(Stats),             "HealMe",             typeof(GameHooks), "StatsHealMe_Postfix", new[] { typeof(Spell), typeof(int), typeof(bool), typeof(bool), typeof(Character) });
 
-			try
-			{
-				ErenshorCoopMod.UnPatchTranspiler(typeof(SpellVessel), "ResolveSpell", typeof(GameHooks), "ResolveSpellTranspiler");
-			}catch{}
-			ErenshorCoopMod.CreateTranspilerHook(typeof(SpellVessel), "ResolveSpell", typeof(GameHooks), "ResolveSpellTranspiler");
 
-			if (insertions < 10)
-			{
-				Logging.LogError($"There was an issue resolving healing" +
-								$"\nPlease Update to the newest mod version or wait" +
-								$"\nuntil a new version has been released." +
-								$"\nHealing might not work, continue at your own risk.");
-			}
-
+			
 			//ErenshorCoopMod.CreatePrefixHook(typeof(Misc), "GenPopup", typeof(GameHooks), "MiscGenPopup_Prefix");
 
 
@@ -135,8 +133,67 @@ namespace ErenshorCoop
 
 			type = typeof(LootWindow);
 			downCD = type.GetField("downCD", BindingFlags.NonPublic | BindingFlags.Instance);
+
+			type = typeof(SimPlayer);
+			followPlayer = type.GetMethod("FollowPlayer", BindingFlags.NonPublic | BindingFlags.Instance);
 		}
 
+
+
+		public static bool SimItemOnPointerDown_Prefix(PointerEventData eventData)
+		{
+			if (!ClientConnectionManager.Instance.IsRunning) return true;
+
+			if (eventData.button == PointerEventData.InputButton.Left)
+			{
+				if (GameData.InspectSim.Who != null && GameData.InspectSim.Who.GetComponent<Entity>() != null)
+				{
+					var ent = GameData.InspectSim.Who.GetComponent<Entity>();
+					if (ent is NetworkedPlayer || ent is NetworkedSim) return false;
+				}
+			}
+			return true;
+		}
+
+		//Sadly we need to modify this to not try to spawn players, that'd be bad
+		public static bool BringPlayerGroupToZone_pre(SimPlayerMngr __instance)
+		{
+			if (!ClientConnectionManager.Instance.IsRunning) return true;
+
+			if (GameData.GroupMember1 != null && GameData.GroupMember1.simIndex >= 0)
+			{
+			//	Logging.Log($"spawn gp1 {GameData.GroupMember1.simIndex} {GameData.GroupMember1.SimName} ");
+				__instance.ActiveSimInstances.Add(GameData.GroupMember1.SpawnMeInGame(GameData.PlayerControl.transform.position + new Vector3(Random.Range(-1, 1), 0f, Random.Range(-1, 1))));
+				GameData.GroupMember1.MyAvatar.InGroup = true;
+				GameData.GroupMember1.isPuller = false;
+				GameData.GroupMember1.Caution = false;
+				GameData.GroupMember1.CurScene = SceneManager.GetActiveScene().name;
+				__instance.SimsInZones[GameData.GroupMember1.simIndex] = SceneManager.GetActiveScene().name;
+			}
+			if (GameData.GroupMember2 != null && GameData.GroupMember2.simIndex >= 0)
+			{
+			//	Logging.Log($"spawn gp2 {GameData.GroupMember2.simIndex} {GameData.GroupMember2.SimName} ");
+				__instance.ActiveSimInstances.Add(GameData.GroupMember2.SpawnMeInGame(GameData.PlayerControl.transform.position + new Vector3(Random.Range(-1, 1), 0f, Random.Range(-1, 1))));
+				GameData.GroupMember2.MyAvatar.InGroup = true;
+				GameData.GroupMember2.isPuller = false;
+				GameData.GroupMember2.Caution = false;
+				GameData.GroupMember2.CurScene = SceneManager.GetActiveScene().name;
+				__instance.SimsInZones[GameData.GroupMember2.simIndex] = SceneManager.GetActiveScene().name;
+			}
+			if (GameData.GroupMember3 != null && GameData.GroupMember1.simIndex >= 0)
+			{
+			//	Logging.Log($"spawn gp3 {GameData.GroupMember3.simIndex} {GameData.GroupMember3.SimName} ");
+				__instance.ActiveSimInstances.Add(GameData.GroupMember3.SpawnMeInGame(GameData.PlayerControl.transform.position + new Vector3(Random.Range(-1, 1), 0f, Random.Range(-1, 1))));
+				GameData.GroupMember3.MyAvatar.InGroup = true;
+				GameData.GroupMember3.isPuller = false;
+				GameData.GroupMember3.Caution = false;
+				GameData.GroupMember3.CurScene = SceneManager.GetActiveScene().name;
+				__instance.SimsInZones[GameData.GroupMember3.simIndex] = SceneManager.GetActiveScene().name;
+			}
+			return false;
+		}
+
+		public static MethodInfo followPlayer;
 		public static bool CollectActiveSimData_Prefix(SimPlayerMngr __instance)
 		{
 			return true;
@@ -146,7 +203,7 @@ namespace ErenshorCoop
 		{
 			if (!ClientConnectionManager.Instance.IsRunning) return true;
 
-			if (ClientConnectionManager.Instance.LocalPlayer.currentScene == _dest)
+			if (ClientConnectionManager.Instance.LocalPlayer.zone == _dest)
 			{
 				GameData.SimPlayerGrouping.GroupTargets.Clear();
 				GameData.SimPlayerGrouping.isPulling = false;
@@ -192,7 +249,12 @@ namespace ErenshorCoop
 			}
 
 			//Logging.Log($"Sim Name: {sim.name}");
-			GameObject _player = UnityEngine.Object.Instantiate(sim.gameObject, pos, rot);
+
+			var nMeshAgent = sim.gameObject.GetComponent<NavMeshAgent>();
+			if (nMeshAgent != null) nMeshAgent.enabled = false;
+
+
+			GameObject _player = UnityEngine.Object.Instantiate(sim.gameObject, new Vector3(999, 999, 999), rot);
 			_player.SetActive(false); //immediately hide this player, could be optimized by only creating the player if they're in the same zone.
 			var pCon = _player.GetComponent<SimPlayer>();
 			if(pCon == null)
@@ -201,17 +263,203 @@ namespace ErenshorCoop
 				return null;
 			}
 			pCon.enabled = false;
-			var nMeshAgent = _player.GetComponent<NavMeshAgent>();
-			if (nMeshAgent != null) nMeshAgent.enabled = false;
+			_player.transform.position = pos;
 
 			NetworkedPlayer player = _player.AddComponent<NetworkedPlayer>();
 			player.sim = pCon;
 			player.pos = pos;
 			player.rot = rot;
 
+			if (nMeshAgent != null) nMeshAgent.enabled = true;
+
 			return player;
 		}
 
+
+		public static NetworkedSim CreateSim(int playerID, Vector3 pos, Quaternion rot)
+		{
+			var sims = GameData.SimMngr.ActualSims;
+			if (sims.Count == 0)
+			{
+				Logging.LogError($"Could not create player for {playerID}. No Sim instances.");
+				return null;
+			}
+			var sim = sims[0];
+			if (sim == null)
+			{
+				Logging.LogError($"Could not create player for {playerID}. No Sim.");
+				return null;
+			}
+
+			//Logging.Log($"Sim Name: {sim.name}");
+			var nMeshAgent = sim.gameObject.GetComponent<NavMeshAgent>();
+			if (nMeshAgent != null) nMeshAgent.enabled = false;
+
+			GameObject _player = UnityEngine.Object.Instantiate(sim.gameObject, new Vector3(999, 999, 999), rot);
+			
+			var pCon = _player.GetComponent<SimPlayer>();
+			if (pCon == null)
+			{
+				Logging.LogError($"Could not create player for {playerID}.");
+				return null;
+			}
+			pCon.enabled = false;
+			
+			_player.transform.position = pos;
+
+			NetworkedSim player = _player.AddComponent<NetworkedSim>();
+			player.sim = pCon;
+			player.pos = pos;
+			player.rot = rot;
+
+			if (nMeshAgent != null) nMeshAgent.enabled = true;
+
+			return player;
+		}
+
+
+		public static void StatsHealMe_Postfix(Stats __instance, int __result, Spell _spell, int _amt, bool _isCrit, bool _isMana, Character _source)
+		{
+			SyncHealing(_spell, __instance, __result, _isCrit, _source, _isMana);
+		}
+
+		public static void PlayerDoWandAttack_Prefix(Character _target)
+		{
+			if (!ClientConnectionManager.Instance.IsRunning) return;
+
+			Inventory playerInv = GameData.PlayerInv;
+			Item item;
+			if (playerInv == null) return;
+
+			ItemIcon mh = playerInv.MH;
+			item = ((mh != null) ? mh.MyItem : null);
+
+			if (item == null) return;
+
+			var (_,_,targID) = GetEntityIDByCharacter(_target);
+			if (targID == -1) return;
+
+			WandAttackData wandAttackData = new()
+			{
+				targetID = targID,
+				itemID = item.Id
+			};
+
+			ClientConnectionManager.Instance.LocalPlayer.SendWand(wandAttackData);
+		}
+
+
+		public static void NPCDoWandAttack_Prefix(NPC __instance, Character _target)
+		{
+			if (!ClientConnectionManager.Instance.IsRunning) return;
+
+			Entity ent = GetEntityByCharacter(__instance.ThisSim.MyStats.Myself);
+			if (ent == null) return;
+			//make sure its a local sim
+			if (ent.entityID == -1) return;
+			if (!(ent is SimSync)) return;
+
+			Item item;
+
+			if (!__instance.SimPlayer) return; //Seems to only be a thing on sims
+
+			SimInvSlot simMH = __instance.ThisSim.MyStats.MyInv.SimMH;
+			item = ((simMH != null) ? simMH.MyItem : null);
+
+			if (item == null) return;
+
+			var (_, _, targID) = GetEntityIDByCharacter(_target);
+			if (targID == -1) return;
+
+			WandAttackData wandAttackData = new()
+			{
+				targetID = targID,
+				itemID = item.Id
+			};
+
+			((SimSync)ent).SendWand(wandAttackData);
+		}
+
+		public static bool LoadSimData_Prefix(SimPlayer __instance)
+		{
+			if (__instance.transform.position == new Vector3(999, 999, 999)) return false;
+			return true;
+		}
+
+
+		public static bool ForceAggroOn_Prefix(NPC __instance, Character tar)
+		{
+			__instance.CurrentAggroTarget = tar;
+
+			if (!GameData.SimPlayerGrouping.IsSimInPlayerGroup(__instance.ThisSim)) return false;
+			return true;
+		}
+
+		public static bool FollowPlayer_Prefix(SimPlayer __instance)
+		{
+			if (!ClientConnectionManager.Instance.IsRunning) return true;
+
+			if (!SharedNPCSyncManager.Instance.simToSync.TryGetValue(__instance, out var sync)) return false; //Prevent others
+
+			if (sync.npc.CurrentAggroTarget == null && !sync.character.MySpells.isCasting())
+			{
+				Transform follow = sync.target == null ? GameData.PlayerControl.transform : sync.target;
+
+				sync.sim.TimeOnTask -= 60f * Time.deltaTime;
+				if (Vector3.Distance(sync.transform.position, follow.position + sync.randomizeOffset) >= 7f)
+				{
+					sync.nav.speed = sync.stats.actualRunSpeed;
+					sync.nav.isStopped = false;
+					sync.animator.SetBool("Walking", true);
+					sync.animator.SetBool("Patrol", false);
+					if (sync.npc.NeedsNavUpdate(follow.position + sync.randomizeOffset))
+					{
+						sync.npc.HighPriorityNavUpdate(GameData.GetSafeNavMeshPoint(follow.position, 2f, 0.25f, 4f, 0.5f) + sync.randomizeOffset);
+					}
+				}
+				if (Vector3.Distance(sync.transform.position, sync.nav.destination) < 5f)
+				{
+					if (Vector3.Distance(sync.transform.position, sync.nav.destination) >= 1f)
+					{
+						sync.nav.speed = 3f;
+						sync.nav.isStopped = false;
+						sync.animator.SetBool("Walking", false);
+						sync.animator.SetBool("Patrol", true);
+					}
+					else
+					{
+						sync.nav.speed = 0f;
+						sync.nav.velocity = Vector3.zero;
+						sync.nav.isStopped = true;
+						sync.animator.SetBool("Walking", false);
+						sync.animator.SetBool("Patrol", false);
+					}
+					if (sync.npc.NeedsNavUpdate(follow.position + sync.randomizeOffset))
+					{
+						sync.npc.HighPriorityNavUpdate(GameData.GetSafeNavMeshPoint(follow.position, 2f, 0.25f, 4f, 0.5f) + sync.randomizeOffset);
+					}
+				}
+			}
+			return false;
+		}
+
+		public static void SimSpawn_Postfix(SimPlayerTracking __instance, ref SimPlayer __result, Vector3 pos)
+		{
+			if (!ClientConnectionManager.Instance.IsRunning) return;
+			if (__result == null) return;
+			var ent = __result.GetComponent<SimSync>();
+
+			//If it exists already that probably means this sim zoned
+			if(ent != null)
+			{
+				UnityEngine.Object.Destroy(ent);
+			}
+
+			ent = __result.gameObject.AddComponent<SimSync>();
+			ent.type = EntityType.SIM;
+			//ent.entityID = SharedNPCSyncManager.Instance.GetFreeId();
+			
+		}
 
 
 		private static List<GameObject> _prevTreGuards = new();
@@ -308,6 +556,8 @@ namespace ErenshorCoop
 			if (Physics.Raycast(ray, out var raycastHit))
 			{
 				if (raycastHit.transform.GetComponent<NetworkedPlayer>() != null)
+					return false;
+				if (raycastHit.transform.GetComponent<NetworkedSim>() != null)
 					return false;
 				if (raycastHit.transform.GetComponent<Character>() != null)
 					return true;
@@ -662,357 +912,14 @@ namespace ErenshorCoop
 #endregion
 
 
-
-
-#region TRANSPILERS
-
-		private static int insertions = 0;
-
-		public static IEnumerable<CodeInstruction> ResolveSpellTranspiler(IEnumerable<CodeInstruction> instructions)
-		{
-
-			void InsertSyncHealingCalls(List<CodeInstruction> codes, ref int i, int insertAt, string groupMemberName)
-			{
-				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldarg_0)); //this.
-				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldfld,    AccessTools.Field(typeof(SpellVessel),       "spell"))); //spell
-				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldsfld,   AccessTools.Field(typeof(GameData),          groupMemberName)));
-				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldfld,    AccessTools.Field(typeof(SimPlayerTracking), "MyStats")));
-				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldc_I4_0)); //0
-				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldloc_S,  17)); // text
-				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldarg_0)); // this
-				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(SpellVessel), "SpellSource")));
-				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldc_I4_1)); //true
-				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldc_I4_0)); //false
-
-				var syncMethod = AccessTools.Method(typeof(GameHooks), nameof(SyncHealing));
-				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Call, syncMethod));
-				i = insertAt - 1;
-				insertions++;
-			}
-
-			var codes = new List<CodeInstruction>(instructions);
-
-			Label? targetLabel = null;
-
-			for (int i = 0; i < codes.Count - 2; i++)
-			{
-				if (i + 3 < codes.Count && codes[i].opcode == OpCodes.Ldarg_0 &&
-					codes[i + 1].opcode == OpCodes.Ldfld &&
-					codes[i + 2].opcode == OpCodes.Ldfld &&
-					codes[i + 3].opcode == OpCodes.Callvirt)
-				{
-					if (codes[i].labels.Count > 0)
-					{
-						targetLabel = codes[i].labels[0];
-						break;
-					}
-				}
-			}
-
-			for (int i = 0; i < codes.Count; i++)
-			{
-				var IsField = codes[i].operand is FieldInfo;
-				var field = codes[i].operand as FieldInfo;
-
-				if (i + 3 < codes.Count && codes[i].opcode == OpCodes.Leave &&
-					codes[i + 1].opcode == OpCodes.Ldloca_S &&
-					codes[i + 2].opcode == OpCodes.Constrained &&
-					codes[i + 3].opcode == OpCodes.Callvirt)
-				{
-					codes[i].operand = targetLabel;
-
-					codes.Insert(i + 1, new CodeInstruction(OpCodes.Nop));
-				}
-
-				if (i-7 >= 0 && codes[i].opcode == OpCodes.Stfld && IsField &&
-					field.Name == "CurrentHP" && field.DeclaringType == typeof(Stats) && codes[i - 7].opcode == OpCodes.Stloc_S && ((LocalBuilder)codes[i - 7].operand).LocalIndex == 18)
-				{
-					var insertIndex = i + 1;
-
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldarg_0)); //this.
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(SpellVessel), "spell"))); //spell
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldarg_0)); //this.
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld,   AccessTools.Field(typeof(SpellVessel), "targ"))); //targ
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldloc_S, 16)); //num6
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldloc_S, 17)); //text
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldarg_0)); //this.
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(SpellVessel), "SpellSource"))); //SpellSource
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldc_I4_0)); //false
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldc_I4_0)); //false
-
-					var syncMethod = AccessTools.Method(typeof(GameHooks), nameof(SyncHealing));
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Call, syncMethod));
-
-					//Logging.Log($"inserted caster");
-					insertions++;
-					i = insertIndex - 1;
-
-				}
-
-				if (codes.Count >= i + 1 &&
-					codes[i].opcode == OpCodes.Stfld && IsField && field.Name == "CurrentHP" &&
-					field.DeclaringType == typeof(Stats) && codes[i + 1].opcode == OpCodes.Ldsfld)
-				{
-					var nextField = codes[i + 1].operand as FieldInfo;
-
-					if (nextField != null &&
-						nextField.Name == "GroupMember1" &&
-						nextField.DeclaringType == typeof(GameData))
-					{
-						InsertSyncHealingCalls(codes, ref i, i + 1, nextField.Name);
-						//Logging.Log($"inserted mem1");
-					}
-
-					if (nextField != null &&
-						nextField.Name == "GroupMember2" &&
-						nextField.DeclaringType == typeof(GameData))
-					{
-						InsertSyncHealingCalls(codes, ref i, i + 1, nextField.Name);
-						//Logging.Log($"inserted mem2");
-					}
-
-					if (nextField != null &&
-						nextField.Name == "GroupMember3" &&
-						nextField.DeclaringType == typeof(GameData))
-					{
-						InsertSyncHealingCalls(codes, ref i, i + 1, nextField.Name);
-						//Logging.Log($"inserted mem3");
-					}
-				}
-				if (codes.Count >= i + 4 &&
-					codes[i].opcode == OpCodes.Stfld && IsField && field.Name == "CurrentHP" &&
-					field.DeclaringType == typeof(Stats) && codes[i + 4].opcode == OpCodes.Ldfld)
-				{
-					var nextField = codes[i + 4].operand as FieldInfo;
-
-					if (nextField != null &&
-						nextField.Name == "MyCharmedNPC" &&
-						nextField.DeclaringType == typeof(Character))
-					{
-						/*var insertIndex = i + 1;
-						codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldarg_0)); //this.
-						codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(SpellVessel), "spell"))); //spell
-
-						codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldarg_0)); // this.
-						codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(SpellVessel), "targ"))); //targ.
-						codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(Stats),       "Myself"))); //Myself.
-						codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(Character),   "MyCharmedNPC")));//MyCharmedNPC.
-						var getComp = typeof(Component).GetMethod("GetComponent", Type.EmptyTypes)!.MakeGenericMethod(typeof(Stats));
-						codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Callvirt, getComp)); //GetComponent<Stats>()
-
-						codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldc_I4_0)); //0
-						codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldloc_S, 14)); //text
-						codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldarg_0)); //this.
-						codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(SpellVessel), "SpellSource"))); //SpellSource
-						codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldc_I4_1)); //true
-						codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldc_I4_0)); //false
-
-						var syncMethod = AccessTools.Method(typeof(GameHooks), nameof(SyncHealing));
-						codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Call, syncMethod));
-						i = insertIndex - 1;*/
-
-					}
-
-				}
-
-				if (codes.Count >= i + 1 && codes[i].opcode == OpCodes.Stfld &&
-					IsField && field.Name == "CurrentHP" && field.DeclaringType == typeof(Stats) && codes[i + 1].opcode == OpCodes.Ldloc_S)
-				{
-					var insertIndex = i + 1;
-
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldarg_0)); //this.
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld,    AccessTools.Field(typeof(SpellVessel), "spell"))); //spell
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldloc_S,  22)); //character4.
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld,    AccessTools.Field(typeof(Character), "MyStats"))); //MyStats
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldc_I4_0)); //num6
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldloc_S,  17)); //text
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldarg_0)); //this.
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(SpellVessel), "SpellSource"))); //SpellSource
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldc_I4_1)); //true
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldc_I4_0)); //false
-
-					var syncMethod = AccessTools.Method(typeof(GameHooks), nameof(SyncHealing));
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Call, syncMethod));
-
-					insertions++;
-					//Logging.Log($"inserted char4");
-					i = insertIndex - 1;
-				}
-
-				DoMPCalls(ref codes, ref i);
-
-			}
-
-			return codes.AsEnumerable();
-		}
-
-
-		private static void DoMPCalls(ref List<CodeInstruction> codes, ref int i)
-		{
-			void InsertSyncHealingCalls(List<CodeInstruction> codes, ref int i, int insertAt, string groupMemberName)
-			{
-				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldarg_0)); //this.
-				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldfld,  AccessTools.Field(typeof(SpellVessel),       "spell"))); //spell
-				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldsfld, AccessTools.Field(typeof(GameData),          groupMemberName)));
-				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldfld,  AccessTools.Field(typeof(SimPlayerTracking), "MyStats")));
-				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldarg_0)); //this.
-				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(SpellVessel), "spell"))); //spell.
-				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(Spell),       "Mana"))); //Mana
-				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldstr, "")); //text
-				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldarg_0)); //this.
-				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(SpellVessel), "SpellSource"))); //SpellSource
-				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldc_I4_0)); //false
-				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Ldc_I4_1)); //true
-
-				var syncMethod = AccessTools.Method(typeof(GameHooks), nameof(SyncHealing));
-				codes.Insert(insertAt++, new CodeInstruction(OpCodes.Call, syncMethod));
-				i = insertAt - 1;
-				insertions++;
-			}
-
-			var IsField = codes[i].operand is FieldInfo;
-			var field = codes[i].operand as FieldInfo;
-
-			if (codes.Count >= i + 3 &&
-				codes[i].opcode == OpCodes.Stfld && IsField &&
-				field.Name == "CurrentMana" && field.DeclaringType == typeof(Stats))
-			{
-				var nField = codes[i + 3].operand as FieldInfo;
-				if (nField != null &&
-					nField.DeclaringType == typeof(Spell) &&
-					nField.Name == "GroupEffect")
-				{
-					var insertIndex = i + 1;
-
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldarg_0)); //this.
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(SpellVessel), "spell"))); //spell
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldarg_0)); //this.
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld,   AccessTools.Field(typeof(SpellVessel), "targ"))); //targ
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldarg_0)); //this.
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld,   AccessTools.Field(typeof(SpellVessel), "spell"))); //spell.
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld,   AccessTools.Field(typeof(Spell), "Mana"))); //Mana
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldstr, "")); //text
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldarg_0)); //this.
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(SpellVessel), "SpellSource"))); //SpellSource
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldc_I4_0)); //false
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldc_I4_1)); //true
-
-					var syncMethod = AccessTools.Method(typeof(GameHooks), nameof(SyncHealing));
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Call, syncMethod));
-
-					//Logging.Log($"inserted caster mp");
-					insertions++;
-					i = insertIndex - 1;
-				}
-			}
-
-			if (codes.Count >= i + 1 &&
-				codes[i].opcode == OpCodes.Stfld && IsField && field.Name == "CurrentMana" &&
-				field.DeclaringType == typeof(Stats) && codes[i + 1].opcode == OpCodes.Ldsfld)
-			{
-				var nextField = codes[i + 1].operand as FieldInfo;
-
-				if (nextField != null &&
-					nextField.Name == "GroupMember1" &&
-					nextField.DeclaringType == typeof(GameData))
-				{
-					InsertSyncHealingCalls(codes, ref i, i + 1, nextField.Name);
-					//Logging.Log($"inserted mp mem1");
-				}
-
-				if (nextField != null &&
-					nextField.Name == "GroupMember2" &&
-					nextField.DeclaringType == typeof(GameData))
-				{
-					InsertSyncHealingCalls(codes, ref i, i + 1, nextField.Name);
-					//Logging.Log($"inserted mp mem2");
-				}
-
-				if (nextField != null &&
-					nextField.Name == "GroupMember3" &&
-					nextField.DeclaringType == typeof(GameData))
-				{
-					InsertSyncHealingCalls(codes, ref i, i + 1, nextField.Name);
-					//Logging.Log($"inserted mp mem3");
-				}
-			}
-			if (codes.Count >= i + 4 &&
-				codes[i].opcode == OpCodes.Stfld && IsField && field.Name == "CurrentMana" &&
-				field.DeclaringType == typeof(Stats) && codes[i + 4].opcode == OpCodes.Ldfld)
-			{
-				var nextField = codes[i + 4].operand as FieldInfo;
-
-				if (nextField != null &&
-					nextField.Name == "MyCharmedNPC" &&
-					nextField.DeclaringType == typeof(Character))
-				{
-					/*var insertIndex = i + 1;
-
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldarg_0)); //this.
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(SpellVessel), "spell"))); //spell
-
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldarg_0)); // this.
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(SpellVessel), "targ"))); //targ.
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(Stats),       "Myself"))); //Myself.
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(Character),   "MyCharmedNPC")));//MyCharmedNPC.
-					var getComp = typeof(Component).GetMethod("GetComponent", Type.EmptyTypes)!.MakeGenericMethod(typeof(Stats));
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Callvirt, getComp)); //GetComponent<Stats>()
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld,    AccessTools.Field(typeof(SpellVessel), "spell"))); //spell.
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld,    AccessTools.Field(typeof(Spell),       "Mana"))); //Mana
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldstr,    "")); //text
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldarg_0)); //this.
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(SpellVessel), "SpellSource"))); //SpellSource
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldc_I4_0)); //false
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldc_I4_1)); //true
-
-					var syncMethod = AccessTools.Method(typeof(GameHooks), nameof(SyncHealing));
-					codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Call, syncMethod));
-					i = insertIndex - 1;*/
-				}
-
-			}
-
-			if (codes.Count >= i + 1 && codes[i].opcode == OpCodes.Stfld &&
-				IsField && field.Name == "CurrentMana" && field.DeclaringType == typeof(Stats) && codes[i + 1].opcode == OpCodes.Ldloc_S)
-			{
-				var insertIndex = i + 1;
-
-
-				codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldarg_0)); //this.
-				codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld,   AccessTools.Field(typeof(SpellVessel), "spell"))); //spell
-				codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldloc_S, 23)); //character5.
-				codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld,   AccessTools.Field(typeof(Character),   "MyStats"))); //MyStats
-				codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldarg_0)); //this.
-				codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(SpellVessel), "spell"))); //spell.
-				codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(Spell),       "Mana"))); //Mana
-				codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldstr, "")); //text
-				codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldarg_0)); //this.
-				codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld, AccessTools.Field(typeof(SpellVessel), "SpellSource"))); //SpellSource
-				codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldc_I4_0)); //false
-				codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldc_I4_1)); //true
-
-				var syncMethod = AccessTools.Method(typeof(GameHooks), nameof(SyncHealing));
-				codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Call, syncMethod));
-
-				//Logging.Log($"inserted mp char5");
-				insertions++;
-				i = insertIndex - 1;
-			}
-		}
-
-		public static void SyncHealing(Spell spell, Stats target, int amount, string text, CastSpell caster, bool calc, bool isMP)
+		public static void SyncHealing(Spell spell, Stats target, int amount, bool isCrit, Character caster, bool isMP)
 		{
 			if (!ClientConnectionManager.Instance.IsRunning) return;
-			//Logging.Log($"aaaaaaaaaaaaaaa");
 
-			(bool IsPlayer, bool IsSim, short entityID) = GetEntityIDByCharacter(caster.MyChar);
-			if (entityID == -1)
-			{
-				//Logging.Log($"no caster? {caster.name}");
-				return;
-			}
+			(bool IsPlayer, bool IsSim, short entityID) = GetEntityIDByCharacter(caster);
+			if (entityID == -1)	return;
 
-			if (!IsPlayer && ( ( IsSim && !ServerConnectionManager.Instance.IsRunning ) || ( !IsSim && !ClientZoneOwnership.isZoneOwner ) ))
+			if ( ( !IsSim && !ClientZoneOwnership.isZoneOwner ) )
 			{
 				Logging.Log($"er {IsPlayer} {IsSim} {entityID}");
 				return;
@@ -1024,19 +931,12 @@ namespace ErenshorCoop
 				return;
 			}
 
-			if (amount == 0 && !isMP)
-			{
-				amount = spell.HP + caster.MyChar.MyStats.CharacterClass.WisBenefit / 100 * caster.MyChar.MyStats.GetCurrentWis();
-			}
-
 			(bool targetIsPlayer, bool targetIsSim, short targetEntityID) = GetEntityIDByCharacter(target.Myself);
 			if (targetEntityID == -1)
 			{
 				Logging.Log($"no target {targetIsPlayer} {targetIsSim} {targetEntityID} {target.name}");
 				return;
 			}
-
-			bool isCrit = !isMP && text.Contains("CRITICAL");
 
 			var hd = new HealingData
 			{
@@ -1048,21 +948,23 @@ namespace ErenshorCoop
 				targetIsSim = targetIsSim,
 			};
 
-
 			//Logging.Log($"[{caster.name}] healed [{target.name}] for {amount} {(isMP?"MP":"HP")}. Text = {text}");
-
 			if (!IsPlayer)
 			{
-				((NPCSync)SharedNPCSyncManager.Instance.GetEntityFromID(entityID, IsSim)).SendHeal(hd);
+				if (IsSim)
+				{
+					var ent = SharedNPCSyncManager.Instance.GetEntityFromID(entityID, true);
+					if(ent != null) //make sure its local
+						((SimSync)ent).SendHeal(hd);
+				}
+				else
+					((NPCSync)SharedNPCSyncManager.Instance.GetEntityFromID(entityID, false))?.SendHeal(hd);
 			}
 			else
 			{
 				ClientConnectionManager.Instance.LocalPlayer.SendHeal(hd);
 			}
 		}
-
-#endregion
-
 
 
 
@@ -1190,261 +1092,79 @@ namespace ErenshorCoop
 		public static FieldInfo targ;
 		public static FieldInfo SpellSource;
 
-		public static void ResolveSpell_Prefix(SpellVessel __instance)
+		public static bool ResolveSpell_Prefix(SpellVessel __instance)
 		{
-			if (!ClientConnectionManager.Instance.IsRunning) return;
-
-			var isUserPlayer = true;
-			short entityID = -1;
+			if (!ClientConnectionManager.Instance.IsRunning) return true;
 
 			var chara = ((CastSpell)SpellSource.GetValue(__instance)).MyChar;
-			EntityType sourceType = EntityType.ENEMY;
+			var ent = GetEntityByCharacter(chara);
+			if (ent == null) return true;
 
-			if (chara != ClientConnectionManager.Instance.LocalPlayer.character)
-			{
-				if (ServerConnectionManager.Instance.IsRunning)
-				{
-					foreach (var m in SharedNPCSyncManager.Instance.mobs)
-					{
-						if (m.Value.character == chara)
-						{
-							isUserPlayer = false;
-							entityID = m.Key;
-							sourceType = m.Value.type;
-							break;
-						}
-					}
-					foreach (var m in SharedNPCSyncManager.Instance.sims)
-					{
-						if (m.Value.character == chara)
-						{
-							isUserPlayer = false;
-							entityID = m.Key;
-							sourceType = m.Value.type;
-							break;
-						}
-					}
-
-					if (isUserPlayer) return;
-				}
-				else
-				{
-					//are we a pet?
-					var n = chara.GetComponent<NPCSync>();
-					if (n != null && n.type == EntityType.PET)
-					{
-						isUserPlayer = false;
-						entityID = n.entityID;
-						sourceType = n.type;
-					}
-					else
-						return;
-				}
-			}
-
-			
 
 			var target = (Stats)targ.GetValue(__instance);
-			var isNPC = false;
-			short targetID = -1;
-			bool targetIsSim = false;
+			if (target == null) return true;
+			var targEnt = GetEntityByStats(target);
+			if (targEnt == null) return true;
 
-
-			foreach (var m in ClientNPCSyncManager.Instance.NetworkedMobs)
+			if (ent is PlayerSync || ent is SimSync)
 			{
-				if (m.Value.character.MyStats == target)
-				{
-					isNPC = true;
-					targetID = m.Key;
-					break;
-				}
-			}
-			if (targetID == -1)
-			{
-				foreach (var m in ClientNPCSyncManager.Instance.NetworkedSims)
-				{
-					if (m.Value.character.MyStats == target)
-					{
-						isNPC = true;
-						targetID = m.Key;
-						targetIsSim = true;
-						break;
-					}
-				}
-			}
-			if (targetID == -1)
-			{
-				foreach (var m in SharedNPCSyncManager.Instance.mobs)
-				{
-					if (m.Value.character.MyStats == target)
-					{
-						isNPC = true;
-						targetID = m.Key;
-						break;
-					}
-				}
-			}
-			if (targetID == -1)
-			{
-				foreach (var m in SharedNPCSyncManager.Instance.sims)
-				{
-					if (m.Value.character.MyStats == target)
-					{
-						isNPC = true;
-						targetID = m.Key;
-						targetIsSim = true;
-						break;
-					}
-				}
-			}
-			
+				var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(ent.entityID, PacketType.PLAYER_ACTION);
 
-			if (targetID == -1)
-			{
-				foreach (var p in ClientConnectionManager.Instance.Players)
-				{
-					if (p.Value.sim.MyStats == target)
-					{
-						targetID = p.Key;
-						break;
-					}
-				}
-
-				if (targetID == -1 && target == ClientConnectionManager.Instance.LocalPlayer.stats)
-					targetID = ClientConnectionManager.Instance.LocalPlayerID;
-
-				if(targetID == -1)
-				{
-					//are we our pet?
-					var n = target.GetComponent<NPCSync>();
-					if (n != null && n.type == EntityType.PET)
-					{
-						targetID = n.entityID;
-						isNPC = true;
-					}
-				}
-				if (targetID == -1)
-				{
-					//are we a pet?
-					var n = target.GetComponent<NetworkedNPC>();
-					if (n != null && n.type == EntityType.PET)
-					{
-						targetID = n.entityID;
-						isNPC = true;
-					}
-				}
-			}
-
-			if (targetID == -1)
-			{
-				//Logging.Log($"no valid target? {target.name}");
-				return;
-			}
-
-
-			if (!isUserPlayer)
-			{
-				var pack = PacketManager.GetOrCreatePacket<EntityActionPacket>(entityID, PacketType.ENTITY_ACTION);
 				pack.dataTypes.Add(ActionType.SPELL_EFFECT);
 				pack.spellID = __instance.spell.Id;
-				pack.targetID = targetID;
-				pack.targetIsNPC = isNPC;
-				pack.targetIsSim = targetIsSim;
+				pack.targetID = targEnt.entityID;
+				pack.targetIsNPC = targEnt.type == EntityType.ENEMY;
+				pack.targetIsSim = targEnt.type == EntityType.SIM;
+				pack.isSim = ent is SimSync;
+			}
+			else if(ent is NPCSync)
+			{
+				var pack = PacketManager.GetOrCreatePacket<EntityActionPacket>(ent.entityID, PacketType.ENTITY_ACTION);
+				pack.dataTypes.Add(ActionType.SPELL_EFFECT);
+				pack.spellID = __instance.spell.Id;
+				pack.targetID = targEnt.entityID;
+				pack.targetIsNPC = targEnt.type == EntityType.ENEMY;
+				pack.targetIsSim = targEnt.type == EntityType.SIM;
 				pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
-				if (ServerConnectionManager.Instance.IsRunning)
-				{
-					if (SharedNPCSyncManager.Instance.sims.ContainsKey(entityID))
-						sourceType = EntityType.SIM;
-				}
-				pack.entityType = sourceType;
+				pack.entityType = ent.type;
 			}
-			else
-			{
-				var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_ACTION);
-				pack.dataTypes.Add(ActionType.SPELL_EFFECT);
-				pack.spellID = __instance.spell.Id;
-				pack.targetID = targetID;
-				pack.targetIsNPC = isNPC;
-				pack.targetIsSim = targetIsSim;
-			}
-
+			return true;
 		}
 
 		public static void EndSpell_Prefix(SpellVessel __instance)
 		{
 			if (!ClientConnectionManager.Instance.IsRunning) return;
 
-			var isUserPlayer = true;
-			short entityID = -1;
-
 			var chara = ((CastSpell)SpellSource.GetValue(__instance)).MyChar;
-			EntityType sourceType = EntityType.ENEMY;
+			var ent = GetEntityByCharacter(chara);
+			if (ent == null) return;
 
-			if (chara != ClientConnectionManager.Instance.LocalPlayer.character)
+			if (ent is PlayerSync || ent is SimSync)
 			{
-				if (ClientZoneOwnership.isZoneOwner)
-				{
-					foreach (var m in SharedNPCSyncManager.Instance.mobs)
-					{
-						if (m.Value.character == chara)
-						{
-							isUserPlayer = false;
-							entityID = m.Key;
-							sourceType = m.Value.type;
-							break;
-						}
-					}
-					foreach (var m in SharedNPCSyncManager.Instance.sims)
-					{
-						if (m.Value.character == chara)
-						{
-							isUserPlayer = false;
-							entityID = m.Key;
-							sourceType = m.Value.type;
-							break;
-						}
-					}
+				PlayerActionPacket pack;
 
-					if (isUserPlayer) return;
-				}
-				else
-				{
-					//are we a pet?
-					var n = chara.GetComponent<NPCSync>();
-					if (n != null && n.type == EntityType.PET)
-					{
-						isUserPlayer = false;
-						entityID = n.entityID;
-						sourceType = n.type;
-					}
-					else
-						return;
-				}
-			}
-
-			if (isUserPlayer)
-			{
-				var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_ACTION);
+				pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(ent.entityID, PacketType.PLAYER_ACTION);
 				pack.dataTypes.Add(ActionType.SPELL_END);
 
 				if (__instance.spell.Type == Spell.SpellType.Pet)
 				{
 					if (chara.MyCharmedNPC != null)
 					{
-						ClientConnectionManager.Instance.LocalPlayer.CreateSummon(__instance.spell, chara.MyCharmedNPC.gameObject);
+						if (ent is PlayerSync)
+							ClientConnectionManager.Instance.LocalPlayer.CreateSummon(__instance.spell, chara.MyCharmedNPC.gameObject);
+						else
+						{
+							ent.CreateSummon(__instance.spell, chara.MyCharmedNPC.gameObject);
+						}
 					}
 				}
+				pack.isSim = ent is SimSync;
 			}
-			else
+			else if(ent is NPCSync)
 			{
-				var pack = PacketManager.GetOrCreatePacket<EntityActionPacket>(entityID, PacketType.ENTITY_ACTION);
+				var pack = PacketManager.GetOrCreatePacket<EntityActionPacket>(ent.entityID, PacketType.ENTITY_ACTION);
 				pack.dataTypes.Add(ActionType.SPELL_END);
 				pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
-				if (ServerConnectionManager.Instance.IsRunning)
-				{
-					if (SharedNPCSyncManager.Instance.sims.ContainsKey(entityID))
-						sourceType = EntityType.SIM;
-				}
 
 				if (__instance.spell.Type == Spell.SpellType.Pet)
 				{
@@ -1454,7 +1174,7 @@ namespace ErenshorCoop
 						en.CreateSummon(__instance.spell, chara.MyCharmedNPC.gameObject);
 					}
 				}
-				pack.entityType = sourceType;
+				pack.entityType = ent.type;
 			}
 		}
 
@@ -1462,73 +1182,24 @@ namespace ErenshorCoop
 		{
 			if (!ClientConnectionManager.Instance.IsRunning) return;
 
-			var isUserPlayer = true;
-			short entityID = -1;
-
 			var chara = _source.MyChar;
-			EntityType sourceType = EntityType.ENEMY;
+			var ent = GetEntityByCharacter(chara);
+			if (ent == null) return;
 
-			if (chara != ClientConnectionManager.Instance.LocalPlayer.character)
+			if (ent is PlayerSync || ent is SimSync)
 			{
-				if (ClientZoneOwnership.isZoneOwner)
-				{
-					foreach (var m in SharedNPCSyncManager.Instance.mobs)
-					{
-						if (m.Value.character == chara)
-						{
-							isUserPlayer = false;
-							entityID = m.Key;
-							sourceType = m.Value.type;
-							break;
-						}
-					}
-					foreach (var m in SharedNPCSyncManager.Instance.sims)
-					{
-						if (m.Value.character == chara)
-						{
-							isUserPlayer = false;
-							entityID = m.Key;
-							sourceType = m.Value.type;
-							break;
-						}
-					}
-
-					if (isUserPlayer) return;
-				}
-				else
-				{
-					//are we a pet?
-					var n = chara.GetComponent<NPCSync>();
-					if(n != null && n.type == EntityType.PET)
-					{
-						isUserPlayer = false;
-						entityID = n.entityID;
-						sourceType = n.type;
-					}
-					else
-						return;
-				}
-			}
-
-			if (isUserPlayer)
-			{
-				var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_ACTION);
+				var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(ent.entityID, PacketType.PLAYER_ACTION);
 				pack.dataTypes.Add(ActionType.SPELL_CHARGE);
 				pack.SpellChargeFXIndex = _spell.SpellChargeFXIndex;
+				pack.isSim = ent is SimSync;
 			}
-			else
+			else if (ent is NPCSync)
 			{
-				var pack = PacketManager.GetOrCreatePacket<EntityActionPacket>(entityID, PacketType.ENTITY_ACTION);
+				var pack = PacketManager.GetOrCreatePacket<EntityActionPacket>(ent.entityID, PacketType.ENTITY_ACTION);
 				pack.dataTypes.Add(ActionType.SPELL_CHARGE);
 				pack.SpellChargeFXIndex = _spell.SpellChargeFXIndex;
 				pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
-
-				if (ServerConnectionManager.Instance.IsRunning)
-				{
-					if (SharedNPCSyncManager.Instance.sims.ContainsKey(entityID))
-						sourceType = EntityType.SIM;
-				}
-				pack.entityType = sourceType;
+				pack.entityType = ent.type;
 			}
 		}
 
@@ -1552,36 +1223,40 @@ namespace ErenshorCoop
 
 #region SIMPLAYERGROUPING
 
-		//Yes it's annoying to have to do each individually, the game should really be using indices to address group members.
+		//Yes it's annoying to have to do each individually, the game should really be using a list to address group members.
 		public static bool DismissMember1_Prefix(SimPlayerGrouping __instance)
 		{
-			if (ClientConnectionManager.Instance.IsRunning)
+			if (!ClientConnectionManager.Instance.IsRunning) return true;
+
+			if (GameData.GroupMember1 != null && GameData.GroupMember1.MyAvatar != null && GameData.GroupMember1.simIndex < 0)
 			{
-				if (GameData.GroupMember1 != null && GameData.GroupMember1.MyAvatar != null && GameData.GroupMember1.simIndex < 0)
+				int pid = Math.Abs(GameData.GroupMember1.simIndex) - 1;
+				var player = ClientConnectionManager.Instance.GetPlayerFromID((short)pid);
+				if (player != null)
 				{
-					int pid = Math.Abs(GameData.GroupMember1.simIndex) - 1;
-					var player = ClientConnectionManager.Instance.GetPlayerFromID((short)pid);
-					if (player != null)
+					//we also need to check something else here, because the simindex can be the same as a player id
+					if (( (NetworkedPlayer)player ).sim.MyStats == GameData.GroupMember1.MyStats)
 					{
-						//we also need to check something else here, because the simindex can be the same as a player id
-						if (( (NetworkedPlayer)player ).sim.MyStats == GameData.GroupMember1.MyStats)
-						{
-							Grouping.RemoveFromGroup((short)pid);
-							return false;
-						}
+						Grouping.RemoveFromGroup((short)pid);
+						return false;
 					}
 				}
 			}
+			
 
-			if (ServerConnectionManager.Instance.IsRunning)
+			//if (ServerConnectionManager.Instance.IsRunning)
 			{
-				if (GameData.GroupMember1 != null && GameData.GroupMember1.MyAvatar != null && GameData.GroupMember1.simIndex >= 0)
+
+				if (GameData.GroupMember1 != null && GameData.GroupMember1.MyAvatar != null)
 				{
-					var npcsync = GameData.GroupMember1.MyAvatar.GetComponent<NPCSync>();
+					Entity npcsync = GameData.GroupMember1.MyAvatar.GetComponent<SimSync>();
+					if (npcsync == null)
+						npcsync = GameData.GroupMember1.MyAvatar.GetComponent<NetworkedSim>();
 					if (npcsync != null)
 					{
-						SharedNPCSyncManager.Instance.ServerRemoveSim(npcsync.entityID);
-						Grouping.RemoveSim(GameData.GroupMember1);
+						//SharedNPCSyncManager.Instance.ServerRemoveSim(npcsync.entityID);
+						Grouping.RemoveFromGroup(npcsync.entityID);
+						return false;
 					}
 				}
 			}
@@ -1591,33 +1266,36 @@ namespace ErenshorCoop
 
 		public static bool DismissMember2_Prefix(SimPlayerGrouping __instance)
 		{
-			if (ClientConnectionManager.Instance.IsRunning)
+			if (!ClientConnectionManager.Instance.IsRunning) return true;
+
+			if (GameData.GroupMember2 != null && GameData.GroupMember2.MyAvatar != null && GameData.GroupMember2.simIndex < 0)
 			{
-				if (GameData.GroupMember2 != null && GameData.GroupMember2.MyAvatar != null && GameData.GroupMember2.simIndex < 0)
+				int pid = Math.Abs(GameData.GroupMember2.simIndex) - 1;
+				var player = ClientConnectionManager.Instance.GetPlayerFromID((short)pid);
+				if (player != null)
 				{
-					int pid = Math.Abs(GameData.GroupMember2.simIndex) - 1;
-					var player = ClientConnectionManager.Instance.GetPlayerFromID((short)pid);
-					if (player != null)
+					//we also need to check something else here, because the simindex can be the same as a player id
+					if (( (NetworkedPlayer)player ).sim.MyStats == GameData.GroupMember2.MyStats)
 					{
-						//we also need to check something else here, because the simindex can be the same as a player id
-						if (( (NetworkedPlayer)player ).sim.MyStats == GameData.GroupMember2.MyStats)
-						{
-							Grouping.RemoveFromGroup((short)pid);
-							return false;
-						}
+						Grouping.RemoveFromGroup((short)pid);
+						return false;
 					}
 				}
 			}
+			
 
-			if (ServerConnectionManager.Instance.IsRunning)
+			//if (ServerConnectionManager.Instance.IsRunning)
 			{
-				if (GameData.GroupMember2 != null && GameData.GroupMember2.MyAvatar != null && GameData.GroupMember2.simIndex >= 0)
+				if (GameData.GroupMember2 != null && GameData.GroupMember2.MyAvatar != null)
 				{
-					var npcsync = GameData.GroupMember2.MyAvatar.GetComponent<NPCSync>();
+					Entity npcsync = GameData.GroupMember2.MyAvatar.GetComponent<SimSync>();
+					if (npcsync == null)
+						npcsync = GameData.GroupMember2.MyAvatar.GetComponent<NetworkedSim>();
 					if (npcsync != null)
 					{
-						SharedNPCSyncManager.Instance.ServerRemoveSim(npcsync.entityID);
-						Grouping.RemoveSim(GameData.GroupMember2);
+						//SharedNPCSyncManager.Instance.ServerRemoveSim(npcsync.entityID);
+						Grouping.RemoveFromGroup(npcsync.entityID);
+						return false;
 					}
 				}
 			}
@@ -1626,33 +1304,37 @@ namespace ErenshorCoop
 		}
 		public static bool DismissMember3_Prefix(SimPlayerGrouping __instance)
 		{
-			if (ClientConnectionManager.Instance.IsRunning)
+			if (!ClientConnectionManager.Instance.IsRunning) return true;
+
+			
+			if (GameData.GroupMember3 != null && GameData.GroupMember3.MyAvatar != null && GameData.GroupMember3.simIndex < 0)
 			{
-				if (GameData.GroupMember3 != null && GameData.GroupMember3.MyAvatar != null && GameData.GroupMember3.simIndex < 0)
+				int pid = Math.Abs(GameData.GroupMember3.simIndex) - 1;
+				var player = ClientConnectionManager.Instance.GetPlayerFromID((short)pid);
+				if (player != null)
 				{
-					int pid = Math.Abs(GameData.GroupMember3.simIndex) - 1;
-					var player = ClientConnectionManager.Instance.GetPlayerFromID((short)pid);
-					if (player != null)
+					//we also need to check something else here, because the simindex can be the same as a player id
+					if (( (NetworkedPlayer)player ).sim.MyStats == GameData.GroupMember3.MyStats)
 					{
-						//we also need to check something else here, because the simindex can be the same as a player id
-						if (( (NetworkedPlayer)player ).sim.MyStats == GameData.GroupMember3.MyStats)
-						{
-							Grouping.RemoveFromGroup((short)pid);
-							return false;
-						}
+						Grouping.RemoveFromGroup((short)pid);
+						return false;
 					}
 				}
 			}
+			
 
-			if (ServerConnectionManager.Instance.IsRunning)
+			//if (ServerConnectionManager.Instance.IsRunning)
 			{
-				if (GameData.GroupMember3 != null && GameData.GroupMember3.MyAvatar != null && GameData.GroupMember3.simIndex >= 0)
+				if (GameData.GroupMember3 != null && GameData.GroupMember3.MyAvatar != null)
 				{
-					var npcsync = GameData.GroupMember3.MyAvatar.GetComponent<NPCSync>();
+					Entity npcsync = GameData.GroupMember3.MyAvatar.GetComponent<SimSync>();
+					if(npcsync == null)
+						npcsync = GameData.GroupMember3.MyAvatar.GetComponent<NetworkedSim>();
 					if (npcsync != null)
 					{
-						SharedNPCSyncManager.Instance.ServerRemoveSim(npcsync.entityID);
-						Grouping.RemoveSim(GameData.GroupMember3);
+						//SharedNPCSyncManager.Instance.ServerRemoveSim(npcsync.entityID);
+						Grouping.RemoveFromGroup(npcsync.entityID);
+						return false;
 					}
 				}
 			}
@@ -1660,55 +1342,65 @@ namespace ErenshorCoop
 			return true;
 		}
 
-
+		/*private static bool noInvitePostFix = false;
 		//At this point we know we haven't invited a player
 		public static void InviteToGroup_Postfix(SimPlayerGrouping __instance)
 		{
-			if (ServerConnectionManager.Instance.IsRunning)
+			return;
+
+			if (!noInvitePostFix)
 			{
+				Logging.Log($"pf run");
 				//We know if it's a sim if the index is geater or equal to 0 because we're writing negatives for players
 				if (GameData.GroupMember1 != null && GameData.GroupMember1.simIndex >= 0)
 				{
-					Grouping.InviteSim(GameData.GroupMember1);
+					Entity npcsync = GameData.GroupMember1.MyAvatar.GetComponent<SimSync>();
+					if (npcsync == null)
+						npcsync = GameData.GroupMember1.MyAvatar.GetComponent<NetworkedSim>();
+					if(npcsync != null && !Grouping.IsPlayerInGroup(npcsync.entityID, true))
+						Grouping.InvitePlayer(npcsync);
 				}
 
 				if (GameData.GroupMember2 != null && GameData.GroupMember2.simIndex >= 0)
 				{
-					Grouping.InviteSim(GameData.GroupMember2);
+					Entity npcsync = GameData.GroupMember2.MyAvatar.GetComponent<SimSync>();
+					if (npcsync == null)
+						npcsync = GameData.GroupMember2.MyAvatar.GetComponent<NetworkedSim>();
+					if (npcsync != null && !Grouping.IsPlayerInGroup(npcsync.entityID, true))
+						Grouping.InvitePlayer(npcsync);
 				}
 
 				if (GameData.GroupMember3 != null && GameData.GroupMember3.simIndex >= 0)
 				{
-					Grouping.InviteSim(GameData.GroupMember3);
+					Entity npcsync = GameData.GroupMember3.MyAvatar.GetComponent<SimSync>();
+					if (npcsync == null)
+						npcsync = GameData.GroupMember3.MyAvatar.GetComponent<NetworkedSim>();
+					if (npcsync != null && !Grouping.IsPlayerInGroup(npcsync.entityID, true))
+						Grouping.InvitePlayer(npcsync);
 				}
 			}
 
-		}
+			noInvitePostFix = false;
+
+		}*/
 
 		public static bool InviteToGroup_Prefix(SimPlayerGrouping __instance)
 		{
-			if (ClientConnectionManager.Instance.IsRunning)
+			if (ClientConnectionManager.Instance.IsRunning || ServerConnectionManager.Instance.IsRunning)
 			{
 				Character currentTarget = GameData.PlayerControl.CurrentTarget;
-				NetworkedPlayer simPlayer = null;
-				if (currentTarget != null && ( simPlayer = currentTarget.GetComponent<NetworkedPlayer>() ) != null)
+				if (currentTarget == null) return true;
+
+				Entity targ = currentTarget.GetComponent<Entity>();
+
+				if (targ != null && (targ is SimSync || targ is NetworkedSim || targ is NetworkedPlayer))
 				{
 					if (!GameData.PlayerControl.Myself.Alive) return true;
-
-					Grouping.InvitePlayer(simPlayer);
+					Grouping.InvitePlayer(targ);
 
 					return false;
 				}
-				else if (currentTarget != null)
-				{
-					if (!ServerConnectionManager.Instance.IsRunning)
-					{
-						Logging.LogGameMessage("[Grouping] Only the host can invite sims.");
-						return false;
-					}
-				}
 			}
-
 			return true;
 		}
 
@@ -1782,7 +1474,7 @@ namespace ErenshorCoop
 				}
 			}
 
-			if (ServerConnectionManager.Instance.IsRunning)
+			//if (ServerConnectionManager.Instance.IsRunning)
 			{
 				foreach (var mob in SharedNPCSyncManager.Instance.sims)
 				{
@@ -1825,7 +1517,7 @@ namespace ErenshorCoop
 				}
 			}
 
-			if (ServerConnectionManager.Instance.IsRunning)
+			//if (ServerConnectionManager.Instance.IsRunning)
 			{
 				foreach (var mob in SharedNPCSyncManager.Instance.sims)
 				{
@@ -1903,12 +1595,14 @@ namespace ErenshorCoop
 					}
 				}
 
-				foreach (var mob in SharedNPCSyncManager.Instance.sims)
+				
+			}
+
+			foreach (var mob in SharedNPCSyncManager.Instance.sims)
+			{
+				if (mob.Value.character.MyStats == _char)
 				{
-					if (mob.Value.character.MyStats == _char)
-					{
-						return mob.Value;
-					}
+					return mob.Value;
 				}
 			}
 
@@ -2001,24 +1695,47 @@ namespace ErenshorCoop
 					}
 					else //We're not the caster
 					{
-						if (ClientZoneOwnership.isZoneOwner)
+						if (ClientZoneOwnership.isZoneOwner || caster is SimSync)
 						{
-							string spellID = spell.Id;
-							var pack = PacketManager.GetOrCreatePacket<EntityActionPacket>(caster.entityID, PacketType.ENTITY_ACTION);
-							pack.dataTypes.Add(ActionType.STATUS_EFFECT_APPLY);
-							pack.effectData = new StatusEffectData()
+							if (caster is SimSync)
 							{
-								spellID = spellID,
-								damageBonus = _dmgBonus,
-								casterType = caster.type,
-								casterID = caster.entityID,
-								duration = -1,
-								targetID = target.entityID,
-								targetType = target.type,
-							};
-							if (target is NetworkedPlayer)
-								pack.effectData.targetType = EntityType.PLAYER;
-							pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
+								string spellID = spell.Id;
+								var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(caster.entityID, PacketType.PLAYER_ACTION);
+								pack.dataTypes.Add(ActionType.STATUS_EFFECT_APPLY);
+								pack.effectData = new StatusEffectData()
+								{
+									spellID = spellID,
+									damageBonus = _dmgBonus,
+									casterType = caster.type,
+									casterID = caster.entityID,
+									duration = -1,
+									targetID = target.entityID,
+									targetType = target.type,
+								};
+								if (target is NetworkedPlayer)
+									pack.effectData.targetType = EntityType.PLAYER;
+								pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
+								pack.isSim = true;
+							}
+							else
+							{
+								string spellID = spell.Id;
+								var pack = PacketManager.GetOrCreatePacket<EntityActionPacket>(caster.entityID, PacketType.ENTITY_ACTION);
+								pack.dataTypes.Add(ActionType.STATUS_EFFECT_APPLY);
+								pack.effectData = new StatusEffectData()
+								{
+									spellID = spellID,
+									damageBonus = _dmgBonus,
+									casterType = caster.type,
+									casterID = caster.entityID,
+									duration = -1,
+									targetID = target.entityID,
+									targetType = target.type,
+								};
+								if (target is NetworkedPlayer)
+									pack.effectData.targetType = EntityType.PLAYER;
+								pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
+							}
 						}
 					}
 				}
@@ -2077,24 +1794,47 @@ namespace ErenshorCoop
 					}
 					else //We're not the caster
 					{
-						if (ClientZoneOwnership.isZoneOwner)
+						if (ClientZoneOwnership.isZoneOwner || caster is SimSync)
 						{
-							string spellID = spell.Id;
-							var pack = PacketManager.GetOrCreatePacket<EntityActionPacket>(caster.entityID, PacketType.ENTITY_ACTION);
-							pack.dataTypes.Add(ActionType.STATUS_EFFECT_APPLY);
-							pack.effectData = new StatusEffectData()
+							if (caster is SimSync)
 							{
-								spellID = spellID,
-								damageBonus = _dmgBonus,
-								casterType = caster.type,
-								casterID = caster.entityID,
-								duration = _duration,
-								targetID = target.entityID,
-								targetType = target.type,
-							};
-							if (target is NetworkedPlayer)
-								pack.effectData.targetType = EntityType.PLAYER;
-							pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
+								string spellID = spell.Id;
+								var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(caster.entityID, PacketType.PLAYER_ACTION);
+								pack.dataTypes.Add(ActionType.STATUS_EFFECT_APPLY);
+								pack.effectData = new StatusEffectData()
+								{
+									spellID = spellID,
+									damageBonus = _dmgBonus,
+									casterType = caster.type,
+									casterID = caster.entityID,
+									duration = _duration,
+									targetID = target.entityID,
+									targetType = target.type,
+								};
+								if (target is NetworkedPlayer)
+									pack.effectData.targetType = EntityType.PLAYER;
+								pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
+								pack.isSim = true;
+							}
+							else
+							{
+								string spellID = spell.Id;
+								var pack = PacketManager.GetOrCreatePacket<EntityActionPacket>(caster.entityID, PacketType.ENTITY_ACTION);
+								pack.dataTypes.Add(ActionType.STATUS_EFFECT_APPLY);
+								pack.effectData = new StatusEffectData()
+								{
+									spellID = spellID,
+									damageBonus = _dmgBonus,
+									casterType = caster.type,
+									casterID = caster.entityID,
+									duration = _duration,
+									targetID = target.entityID,
+									targetType = target.type,
+								};
+								if (target is NetworkedPlayer)
+									pack.effectData.targetType = EntityType.PLAYER;
+								pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
+							}
 						}
 					}
 				}
@@ -2113,14 +1853,25 @@ namespace ErenshorCoop
 				}
 				else
 				{
-					if (ClientZoneOwnership.isZoneOwner)
+					Entity target = GetEntityByStats(__instance);
+					if (ClientZoneOwnership.isZoneOwner || target is SimSync)
 					{
-						Entity target = GetEntityByStats(__instance);
 						if (target == null) return;
-						var pack = PacketManager.GetOrCreatePacket<EntityActionPacket>(target.entityID, PacketType.ENTITY_ACTION);
-						pack.dataTypes.Add(ActionType.STATUS_EFFECT_REMOVE);
-						pack.statusID = index;
-						pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
+						if (target is SimSync)
+						{
+							var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(target.entityID, PacketType.PLAYER_ACTION);
+							pack.dataTypes.Add(ActionType.STATUS_EFFECT_REMOVE);
+							pack.statusID = index;
+							pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
+							pack.isSim = true;
+						}
+						else
+						{
+							var pack = PacketManager.GetOrCreatePacket<EntityActionPacket>(target.entityID, PacketType.ENTITY_ACTION);
+							pack.dataTypes.Add(ActionType.STATUS_EFFECT_REMOVE);
+							pack.statusID = index;
+							pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
+						}
 					}
 				}
 			}
@@ -2138,14 +1889,26 @@ namespace ErenshorCoop
 				}
 				else
 				{
-					if (ClientZoneOwnership.isZoneOwner)
+					Entity target = GetEntityByStats(__instance);
+					if (ClientZoneOwnership.isZoneOwner || target is SimSync)
 					{
-						Entity target = GetEntityByStats(__instance);
 						if (target == null) return;
-						var pack = PacketManager.GetOrCreatePacket<EntityActionPacket>(target.entityID, PacketType.ENTITY_ACTION);
-						pack.dataTypes.Add(ActionType.STATUS_EFFECT_REMOVE);
-						pack.RemoveAllStatus = true;
-						pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
+						if (target is SimSync)
+						{
+							var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(target.entityID, PacketType.PLAYER_ACTION);
+							pack.dataTypes.Add(ActionType.STATUS_EFFECT_REMOVE);
+							pack.RemoveAllStatus = true;
+							pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
+							pack.isSim = true;
+						}
+						else
+						{
+							var pack = PacketManager.GetOrCreatePacket<EntityActionPacket>(target.entityID, PacketType.ENTITY_ACTION);
+							pack.dataTypes.Add(ActionType.STATUS_EFFECT_REMOVE);
+							pack.RemoveAllStatus = true;
+							pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
+						}
+						
 					}
 				}
 			}
@@ -2163,14 +1926,25 @@ namespace ErenshorCoop
 				}
 				else
 				{
-					if (ClientZoneOwnership.isZoneOwner)
+					Entity target = GetEntityByStats(__instance);
+					if (ClientZoneOwnership.isZoneOwner || target is SimSync)
 					{
-						Entity target = GetEntityByStats(__instance);
 						if (target == null) return;
-						var pack = PacketManager.GetOrCreatePacket<EntityActionPacket>(target.entityID, PacketType.ENTITY_ACTION);
-						pack.dataTypes.Add(ActionType.STATUS_EFFECT_REMOVE);
-						pack.RemoveBreakable = true;
-						pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
+						if (target is SimSync)
+						{
+							var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(target.entityID, PacketType.PLAYER_ACTION);
+							pack.dataTypes.Add(ActionType.STATUS_EFFECT_REMOVE);
+							pack.RemoveBreakable = true;
+							pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
+							pack.isSim = true;
+						}
+						else
+						{
+							var pack = PacketManager.GetOrCreatePacket<EntityActionPacket>(target.entityID, PacketType.ENTITY_ACTION);
+							pack.dataTypes.Add(ActionType.STATUS_EFFECT_REMOVE);
+							pack.RemoveBreakable = true;
+							pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
+						}
 					}
 				}
 			}
@@ -2249,7 +2023,7 @@ namespace ErenshorCoop
 			return true;
 		}
 
-		private static void SyncDamage(Character attackedChar, int __result, GameData.DamageType _dmgType, Character _attacker, bool _animEffect, float resistMod)
+		private static void SyncDamage(Character attackedChar, int __result, GameData.DamageType _dmgType, Character _attacker, bool _animEffect, float resistMod, bool isCrit)
 		{
 
 			//See if this is a sync NPC
@@ -2260,6 +2034,8 @@ namespace ErenshorCoop
 			var networkedSync = attackedChar.GetComponent<NetworkedPlayer>();
 			//See if this is a network entity
 			var networkedEntity = attackedChar.GetComponent<NetworkedNPC>();
+			//See if this is a sim entity
+			var networkedSim = attackedChar.GetComponent<NetworkedSim>();
 
 			//how?
 			if (_attacker == null)
@@ -2269,50 +2045,64 @@ namespace ErenshorCoop
 
 			}
 
-			//See if the ATTACKER is a sync NPC
+			//See if the ATTACKER is a sync NPC or SIM
 			var attackerNpcSync = _attacker.GetComponent<NPCSync>();
+			var attackerSimSync = _attacker.GetComponent<SimSync>();
 
 
 			bool characterIsNPC = npcSync != null;
 			bool characterIsLocalPlayer = playerSync != null;
 			bool characterIsNetworked = networkedSync != null;
+			bool characterIsSim = networkedSim != null;
 			bool characterIsOutwardNPC = networkedEntity != null;
 
 			bool attackerIsNPC = attackerNpcSync != null;
+			bool attackerIsSIM = attackerSimSync != null;
 
 			//If none of those are networked we dont care
 
-			if (!attackerIsNPC) return;
+			if (!attackerIsNPC && !attackerIsSIM) return;
 			if (!characterIsNPC && !characterIsLocalPlayer && !characterIsNetworked && !characterIsOutwardNPC) return;
 
-			if (characterIsNPC)
+
+			if (attackerIsNPC)
 			{
-				attackerNpcSync.SendAttack(__result, npcSync.entityID, true, _dmgType, _animEffect, resistMod);
-			}
-			else if (characterIsNetworked)
-			{
-				attackerNpcSync.SendAttack(__result, networkedSync.playerID, false, _dmgType, _animEffect, resistMod);
-				if (ServerConnectionManager.Instance.IsRunning)
+				if (characterIsNPC || characterIsSim)
 				{
-					if (GameData.GroupMember1 != null && GameData.GroupMember1.simIndex >= 0)
-						attackerNpcSync.npc.ManageAggro(1, GameData.GroupMember1.MyStats.Myself);
-					if (GameData.GroupMember2 != null && GameData.GroupMember2.simIndex >= 0)
-						attackerNpcSync.npc.ManageAggro(1, GameData.GroupMember2.MyStats.Myself);
-					if (GameData.GroupMember3 != null && GameData.GroupMember3.simIndex >= 0)
-						attackerNpcSync.npc.ManageAggro(1, GameData.GroupMember3.MyStats.Myself);
+					attackerNpcSync.SendAttack(__result, npcSync.entityID, true, _dmgType, _animEffect, resistMod, isCrit);
 				}
-			}
-			else if (characterIsLocalPlayer)
+				else if (characterIsNetworked)
+				{
+					attackerNpcSync.SendAttack(__result, networkedSync.playerID, false, _dmgType, _animEffect, resistMod, isCrit);
+					if (ServerConnectionManager.Instance.IsRunning)
+					{
+						if (GameData.GroupMember1 != null && GameData.GroupMember1.simIndex >= 0)
+							attackerNpcSync.npc.ManageAggro(1, GameData.GroupMember1.MyStats.Myself);
+						if (GameData.GroupMember2 != null && GameData.GroupMember2.simIndex >= 0)
+							attackerNpcSync.npc.ManageAggro(1, GameData.GroupMember2.MyStats.Myself);
+						if (GameData.GroupMember3 != null && GameData.GroupMember3.simIndex >= 0)
+							attackerNpcSync.npc.ManageAggro(1, GameData.GroupMember3.MyStats.Myself);
+					}
+				}
+				else if (characterIsLocalPlayer)
+				{
+					attackerNpcSync.SendAttack(__result, ClientConnectionManager.Instance.LocalPlayerID, false, _dmgType, _animEffect, resistMod, isCrit);
+				}
+				else if (characterIsOutwardNPC)
+				{
+					attackerNpcSync.SendAttack(__result, networkedEntity.entityID, true, _dmgType, _animEffect, resistMod, isCrit);
+				}
+			} else if (attackerIsSIM)
 			{
-				attackerNpcSync.SendAttack(__result, ClientConnectionManager.Instance.LocalPlayerID, false, _dmgType, _animEffect, resistMod);
-			}else if (characterIsOutwardNPC)
-			{
-				attackerNpcSync.SendAttack(__result, networkedEntity.entityID, true, _dmgType, _animEffect, resistMod);
+				var e = attackedChar.GetComponent<Entity>();
+				if (e == null) Logging.Log("Cant get ent with unity wtf");
+
+				attackerSimSync.SendDamageAttack(__result, e.entityID, e.type == EntityType.ENEMY, _dmgType, _animEffect, resistMod, isCrit);
 			}
 			
 		}
 
-		private static void SyncDamageClient(Character attackedChar, int damage, GameData.DamageType _dmgType, Character _attacker, bool _animEffect, float resistMod)
+		private static void SyncDamageClient(Character attackedChar, int damage, GameData.DamageType _dmgType, Character _attacker, bool _animEffect, float resistMod, bool isCrit)
 		{
 			//how?
 			if (_attacker == null) return;
@@ -2372,38 +2162,42 @@ namespace ErenshorCoop
 			if (attackedID == -1) return;
 
 			//Logging.Log($"doing player attack  {attackedID} {attackedNPC} {damage}");
-			ClientConnectionManager.Instance.LocalPlayer.SendDamageAttack(damage, attackedID, attackedNPC, _dmgType, _animEffect, resistMod);
+			ClientConnectionManager.Instance.LocalPlayer.SendDamageAttack(damage, attackedID, attackedNPC, _dmgType, _animEffect, resistMod, isCrit);
 			//__result = 0;
 		}
 
-		public static void CharacterDamageMe_Postfix(Character __instance, ref int __result, int _incdmg, bool _fromPlayer, GameData.DamageType _dmgType, Character _attacker, bool _animEffect)
+		public static void CharacterDamageMe_Postfix(Character __instance, ref int __result, int _incdmg, bool _fromPlayer, GameData.DamageType _dmgType, Character _attacker, bool _animEffect, bool _criticalHit)
 		{
 			if(ClientZoneOwnership.isZoneOwner)
-				SyncDamage(__instance, __result, _dmgType, _attacker, _animEffect, 0);
+				SyncDamage(__instance, __result, _dmgType, _attacker, _animEffect, 0, _criticalHit);
+			if (_attacker != null && _attacker.GetComponent<SimSync>() != null)
+				SyncDamage(__instance, __result, _dmgType, _attacker, _animEffect, 0, _criticalHit);
 			if (ClientConnectionManager.Instance.IsRunning && _attacker != null && _attacker == ClientConnectionManager.Instance.LocalPlayer.character)
-				SyncDamageClient(__instance, __result, _dmgType, _attacker, _animEffect, 0);
+				SyncDamageClient(__instance, __result, _dmgType, _attacker, _animEffect, 0, _criticalHit);
 
 			if (ClientConnectionManager.Instance.LocalPlayer.MySummon != null)
 			{
 				if (ClientConnectionManager.Instance.LocalPlayer.MySummon.character == _attacker)
-					SyncDamage(__instance, __result, _dmgType, _attacker, _animEffect, 0);
+					SyncDamage(__instance, __result, _dmgType, _attacker, _animEffect, 0, _criticalHit);
 			}
 		}
 
 		public static void MagicDamageMe_Postfix(Character __instance, ref int __result, int _dmg, bool _fromPlayer, GameData.DamageType _dmgType, Character _attacker, float resistMod)
 		{
 			if(ClientZoneOwnership.isZoneOwner)
-				SyncDamage(__instance, __result, _dmgType, _attacker, false, resistMod);
+				SyncDamage(__instance, __result, _dmgType, _attacker, false, resistMod, false);
+			if(_attacker.GetComponent<SimSync>() != null)
+				SyncDamage(__instance, __result, _dmgType, _attacker, false, resistMod, false);
 			if (ClientConnectionManager.Instance.IsRunning && _attacker != null && _attacker == ClientConnectionManager.Instance.LocalPlayer.character)
-				SyncDamageClient(__instance, __result, _dmgType, _attacker, false, resistMod);
+				SyncDamageClient(__instance, __result, _dmgType, _attacker, false, resistMod, false);
 			if (ClientConnectionManager.Instance.LocalPlayer.MySummon != null)
 			{
 				if (ClientConnectionManager.Instance.LocalPlayer.MySummon.character == _attacker)
-					SyncDamage(__instance, __result, _dmgType, _attacker, false, resistMod);
+					SyncDamage(__instance, __result, _dmgType, _attacker, false, resistMod, false);
 			}
 		}
 
-		public static bool CharacterDamageMe_Prefix(Character __instance, ref int __result, int _incdmg, bool _fromPlayer, GameData.DamageType _dmgType, Character _attacker, bool _animEffect)
+		public static bool CharacterDamageMe_Prefix(Character __instance, ref int __result, int _incdmg, bool _fromPlayer, GameData.DamageType _dmgType, Character _attacker, bool _animEffect, bool _criticalHit)
 		{
 
 			return true;
@@ -2580,6 +2374,7 @@ namespace ErenshorCoop
 			var isNetworked = false;
 			var isPlayer = false;
 
+
 			foreach(var player in ClientConnectionManager.Instance.Players.Values)
 			{
 				if (player.npc == null || player.npc != __instance) continue;
@@ -2587,15 +2382,15 @@ namespace ErenshorCoop
 				isPlayer = true;
 				break;
 			}
+			/*foreach (var mob in ClientNPCSyncManager.Instance.NetworkedSims)
+			{
+				if (mob.Value.npc == null || mob.Value.npc != __instance) continue;
+				isNetworked = true;
+				break;
+			}*/
 			if (!ClientZoneOwnership.isZoneOwner)
 			{
 				foreach (var mob in ClientNPCSyncManager.Instance.NetworkedMobs)
-				{
-					if (mob.Value.npc == null || mob.Value.npc != __instance) continue;
-					isNetworked = true;
-					break;
-				}
-				foreach (var mob in ClientNPCSyncManager.Instance.NetworkedSims)
 				{
 					if (mob.Value.npc == null || mob.Value.npc != __instance) continue;
 					isNetworked = true;
@@ -2634,14 +2429,14 @@ namespace ErenshorCoop
 				if (player.npc != null && player.npc == __instance)
 					return false;
 			}
+			foreach (var mob in ClientNPCSyncManager.Instance.NetworkedSims)
+			{
+				if (mob.Value.npc == __instance)
+					return false;
+			}
 			if (!ClientZoneOwnership.isZoneOwner)
 			{
 				foreach (var mob in ClientNPCSyncManager.Instance.NetworkedMobs)
-				{
-					if (mob.Value.npc == __instance)
-						return false;
-				}
-				foreach (var mob in ClientNPCSyncManager.Instance.NetworkedSims)
 				{
 					if (mob.Value.npc == __instance)
 						return false;
@@ -2663,31 +2458,95 @@ namespace ErenshorCoop
 		{
 			if (!ClientConnectionManager.Instance.IsRunning) return true;
 
-			var sim = other.GetComponent<SimPlayer>();
-			if (sim == null) return true;
+			if (GameData.Zoning) return false;
 
-			var np = other.GetComponent<NetworkedPlayer>();
-			if (np != null)
+			var ent = other.GetComponent<Entity>();
+			if (ent == null) return true;
+
+			if (ent.type != EntityType.PLAYER && ent.type != EntityType.SIM) return false;
+			
+			if (ent.type == EntityType.PLAYER && ent.entityID != ClientConnectionManager.Instance.LocalPlayerID)
 			{
-				if (!Grouping.IsPlayerInGroup(np.playerID, false)) return false;
+				if (!Grouping.IsPlayerInGroup(ent.entityID, false)) return false;
 			}
-			else
+			if(ent.type == EntityType.SIM)
 			{
-				if (!Grouping.IsPlayerInGroup((short)sim.myIndex, true)) return true;
+				var simInGrp = Grouping.IsPlayerInGroup(ent.entityID, true);
+				if (!simInGrp && ent is SimSync) return true;
+				if (!simInGrp && ent is NetworkedSim) return false;
 			}
 
 
-			//thisZoning.SetValue(__instance, true);
-			//GameData.Zoning = true;
-			//
-			if(ServerConnectionManager.Instance.IsRunning)
-				SharedNPCSyncManager.Instance.ServerRemoveSims();
-			__instance.CallZoning();
+			if (Grouping.IsLocalLeader())
+			{
+				//Check for other ppls sims in grp and remove them
+				if (GameData.GroupMember1 != null && GameData.GroupMember1.MyAvatar != null)
+				{
+					Entity npcsync1 = GameData.GroupMember1.MyAvatar.GetComponent<Entity>();
+					if (npcsync1 != null)
+					{
+						if (npcsync1 is NetworkedSim)
+						{
+							Grouping.GroupListCallback += GroupListCB;
+							hasGRPCB = true;
+							zl = __instance;
+							Grouping.RemoveFromGroup(npcsync1.entityID);
+						}
+					}
+
+				}
+				if (GameData.GroupMember2 != null && GameData.GroupMember2.MyAvatar != null)
+				{
+					Entity npcsync2 = GameData.GroupMember2.MyAvatar.GetComponent<Entity>();
+					if (npcsync2 != null)
+					{
+						if (npcsync2 is NetworkedSim)
+						{
+							if (!hasGRPCB)
+							{
+								Grouping.GroupListCallback += GroupListCB;
+								hasGRPCB = true;
+								zl = __instance;
+							}
+							Grouping.RemoveFromGroup(npcsync2.entityID);
+						}
+					}
+				}
+				if (GameData.GroupMember3 != null && GameData.GroupMember3.MyAvatar != null)
+				{
+					Entity npcsync = GameData.GroupMember3.MyAvatar.GetComponent<Entity>();
+					if (npcsync != null)
+					{
+						if (npcsync is NetworkedSim)
+						{
+							if (!hasGRPCB)
+							{
+								Grouping.GroupListCallback += GroupListCB;
+								hasGRPCB = true;
+								zl = __instance;
+							}
+							Grouping.RemoveFromGroup(npcsync.entityID);
+						}
+					}
+				}
+			}
+
+			if(!hasGRPCB)
+				__instance.CallZoning();
 			//ClientConnectionManager.Instance.LocalPlayer.StartZoneTransfer(__instance);
 
-
-
 			return false;
+		}
+
+		public static bool hasGRPCB = false;
+		public static Zoneline zl;
+
+		public static void GroupListCB()
+		{
+			zl.CallZoning();
+			zl = null;
+			hasGRPCB = false;
+			Grouping.GroupListCallback -= GroupListCB;
 		}
 
 #endregion
@@ -2709,11 +2568,11 @@ namespace ErenshorCoop
 		public static FieldInfo animatorController;
 
 		//I think we can do it like this, even if the param changes multiple times a frame we should keep a record of it and send it
-		private static void SendAnimData(string param, object value, AnimatorSyncType syncType)
+		private static void SendAnimData(string param, object value, AnimatorSyncType syncType, bool isSim=false, short simEntId=-1)
 		{
-			var pack = PacketManager.GetOrCreatePacket<PlayerDataPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_DATA);
+			var pack = PacketManager.GetOrCreatePacket<PlayerDataPacket>(isSim?simEntId:ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_DATA);
 			pack.AddType(PlayerDataType.ANIM);
-
+			pack.isSim = isSim;
 			AnimationData animData = new()
 			{
 				param = param,
@@ -2721,7 +2580,6 @@ namespace ErenshorCoop
 				syncType = syncType
 			};
 			pack.animData.Add(animData);
-
 		}
 
 		private static void SendMobAnimData(short mobID, string param, object value, AnimatorSyncType syncType, bool issim = false)
@@ -2769,23 +2627,23 @@ namespace ErenshorCoop
 					SendMobAnimData(ClientConnectionManager.Instance.LocalPlayer.MySummon.entityID, name, value.name, AnimatorSyncType.OVERRIDE);
 			}
 
-			if (ClientZoneOwnership.isZoneOwner && ServerConnectionManager.Instance.IsRunning)
+			//if (ClientConnectionManager.Instance.LocalPlayer != null && ClientConnectionManager.Instance.LocalPlayer.AnimOverride != null && ClientConnectionManager.Instance.LocalPlayer.AnimOverride == __instance)
 			{
-				
 				bool hasSim = false;
-				short simentid = 0;
+				short simentid = -1;
 				foreach (var sim in SharedNPCSyncManager.Instance.sims)
 				{
-					if (sim.Value.anim.runtimeAnimatorController == __instance)
+					if (sim.Value.animator.runtimeAnimatorController == __instance)
 					{
 						hasSim = true;
 						simentid = sim.Key;
 						break;
 					}
 				}
-				if(hasSim)
-					SendMobAnimData(simentid, name, value.name, AnimatorSyncType.OVERRIDE, true);
+				if (hasSim)
+					SendAnimData(name, value.name, AnimatorSyncType.OVERRIDE, true, simentid);
 			}
+
 		}
 		public static void SetBool_Prefix(Animator __instance, string name, bool value)
 		{
@@ -2808,13 +2666,13 @@ namespace ErenshorCoop
 					SendMobAnimData(ClientConnectionManager.Instance.LocalPlayer.MySummon.entityID, name, value, AnimatorSyncType.BOOL);
 			}
 
-			if (ServerConnectionManager.Instance.IsRunning)
+			//if (ServerConnectionManager.Instance.IsRunning)
 			{
 				var hasSim = false;
 				short simentid = 0;
 				foreach (var sim in SharedNPCSyncManager.Instance.sims)
 				{
-					if (sim.Value.anim == __instance)
+					if (sim.Value.animator == __instance)
 					{
 						hasSim = true;
 						simentid = sim.Key;
@@ -2822,7 +2680,7 @@ namespace ErenshorCoop
 					}
 				}
 				if (hasSim)
-					SendMobAnimData(simentid, name, value, AnimatorSyncType.BOOL, true);
+					SendAnimData(name, value, AnimatorSyncType.BOOL, true, simentid);
 			}
 		}
 
@@ -2847,13 +2705,13 @@ namespace ErenshorCoop
 					SendMobAnimData(ClientConnectionManager.Instance.LocalPlayer.MySummon.entityID, name, value, AnimatorSyncType.FLOAT);
 			}
 
-			if (ClientZoneOwnership.isZoneOwner)
+			//if (ClientZoneOwnership.isZoneOwner)
 			{
 				bool hasSim = false;
 				short simentid = 0;
 				foreach (var sim in SharedNPCSyncManager.Instance.sims)
 				{
-					if (sim.Value.anim == __instance)
+					if (sim.Value.animator == __instance)
 					{
 						hasSim = true;
 						simentid = sim.Key;
@@ -2861,7 +2719,7 @@ namespace ErenshorCoop
 					}
 				}
 				if (hasSim)
-					SendMobAnimData(simentid, name, value, AnimatorSyncType.FLOAT, true);
+					SendAnimData(name, value, AnimatorSyncType.FLOAT, true, simentid);
 			}
 		}
 
@@ -2887,13 +2745,13 @@ namespace ErenshorCoop
 					SendMobAnimData(ClientConnectionManager.Instance.LocalPlayer.MySummon.entityID, name, value, AnimatorSyncType.INT);
 			}
 
-			if (ClientZoneOwnership.isZoneOwner)
+			//if (ClientZoneOwnership.isZoneOwner)
 			{
 				bool hasSim = false;
 				short simentid = 0;
 				foreach (var sim in SharedNPCSyncManager.Instance.sims)
 				{
-					if (sim.Value.anim == __instance)
+					if (sim.Value.animator == __instance)
 					{
 						hasSim = true;
 						simentid = sim.Key;
@@ -2901,7 +2759,7 @@ namespace ErenshorCoop
 					}
 				}
 				if (hasSim)
-					SendMobAnimData(simentid, name, value, AnimatorSyncType.INT, true);
+					SendAnimData(name, value, AnimatorSyncType.INT, true, simentid);
 			}
 		}
 
@@ -2923,13 +2781,13 @@ namespace ErenshorCoop
 					SendMobAnimData(ClientConnectionManager.Instance.LocalPlayer.MySummon.entityID, name, true, AnimatorSyncType.TRIG);
 			}
 
-			if (ClientZoneOwnership.isZoneOwner)
+			//if (ClientZoneOwnership.isZoneOwner)
 			{
 				bool hasSim = false;
 				short simentid = 0;
 				foreach (var sim in SharedNPCSyncManager.Instance.sims)
 				{
-					if (sim.Value.anim == __instance)
+					if (sim.Value.animator == __instance)
 					{
 						hasSim = true;
 						simentid = sim.Key;
@@ -2937,7 +2795,7 @@ namespace ErenshorCoop
 					}
 				}
 				if (hasSim)
-					SendMobAnimData(simentid, name, true, AnimatorSyncType.TRIG, true);
+					SendAnimData(name, true, AnimatorSyncType.TRIG, true, simentid);
 			}
 		}
 
@@ -2959,13 +2817,13 @@ namespace ErenshorCoop
 					SendMobAnimData(ClientConnectionManager.Instance.LocalPlayer.MySummon.entityID, name, false, AnimatorSyncType.RSTTRIG);
 			}
 
-			if (ClientZoneOwnership.isZoneOwner)
+			//if (ClientZoneOwnership.isZoneOwner)
 			{
 				bool hasSim = false;
 				short simentid = 0;
 				foreach (var sim in SharedNPCSyncManager.Instance.sims)
 				{
-					if (sim.Value.anim == __instance)
+					if (sim.Value.animator == __instance)
 					{
 						hasSim = true;
 						simentid = sim.Key;
@@ -2973,7 +2831,7 @@ namespace ErenshorCoop
 					}
 				}
 				if (hasSim)
-					SendMobAnimData(simentid, name, false, AnimatorSyncType.RSTTRIG, true);
+					SendAnimData(name, false, AnimatorSyncType.RSTTRIG, true, simentid);
 			}
 		}
 #endregion

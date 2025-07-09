@@ -15,20 +15,13 @@ namespace ErenshorCoop
 {
 	public class NetworkedNPC : Entity
 	{
-		//public short entityID = 0;
 		public Vector3 pos;
 		public Quaternion rot;
 
 		public NPC npc;
 		public Animator MyAnim;
-		//public Character character;
 		public SimPlayer sim;
 		public AnimatorOverrideController AnimOverride;
-
-		private GameObject spellEffect;
-
-
-		//private string currentScene = "";
 
 		public int associatedSpawner = -1;
 
@@ -49,10 +42,6 @@ namespace ErenshorCoop
 
 			//Forces behaviour update to stop
 			GameHooks.leashing.SetValue(npc, 100f);
-			//if(npc.navDo != null)
-			//	StopCoroutine(npc.navDo);
-			//if(npc.behDo != null)
-			//	StopCoroutine(npc.behDo);
 		}
 
 
@@ -68,12 +57,6 @@ namespace ErenshorCoop
 
 		private void OnDestroy()
 		{
-			//Logging.LogError($"{name} Destroyed.");
-			//if (npc.navDo != null)
-			//	StartCoroutine(npc.navDo);
-			//if (npc.behDo != null)
-			//	StartCoroutine(npc.behDo);
-			//	GameHooks.leashing.SetValue(npc, false);
 			HandleEndSpell();
 			GameHooks.leashing.SetValue(npc, 0f);
 			ClientNPCSyncManager.Instance.OnClientMobDestroyed(entityID);
@@ -205,7 +188,7 @@ namespace ErenshorCoop
 				attacked.MyFaction = Character.Faction.PC;
 
 			if (data.damageType == GameData.DamageType.Physical)
-				ret = attacked.DamageMe(data.damage, isPlayer, data.damageType, character, data.effect);
+				ret = attacked.DamageMe(data.damage, isPlayer, data.damageType, character, data.effect, data.isCrit);
 			else
 				ret = attacked.MagicDamageMe(data.damage, isPlayer, data.damageType, character, data.resistMod);
 
@@ -216,114 +199,6 @@ namespace ErenshorCoop
 
 			Variables.DontCalculateDamageMitigationCharacters.Remove(attacked);
 		}
-
-		public void HandleSpellCharge(int SpellChargeFXIndex)
-		{
-			//if (currentScene != SceneManager.GetActiveScene().name) return;
-			if (transform == null) return;
-
-			spellEffect = new GameObject();
-			spellEffect.transform.position = transform.position + transform.forward + Vector3.up * 1.5f;
-			spellEffect.transform.SetParent(transform);
-
-			var ChargeFX = Instantiate(GameData.EffectDB.SpellEffects[SpellChargeFXIndex], spellEffect.transform.position, spellEffect.transform.rotation);
-			ChargeFX.transform.SetParent(spellEffect.transform);
-		}
-
-		public void HandleSpellEffect(string spellID, short targetID, bool targetIsNPC, bool isSim)
-		{
-			if (spellEffect == null) return;
-
-			Spell spell = GameData.SpellDatabase.GetSpellByID(spellID);
-
-			if (Vector3.Distance(spellEffect.transform.position, GameData.PlayerControl.transform.position) < 30f && spell.ShakeDur > 0f)
-			{
-				GameData.CamControl.ShakeScreen(spell.ShakeAmp, spell.ShakeDur);
-			}
-
-			GameObject targ = null;
-			if (!targetIsNPC)
-			{
-				targ = ClientConnectionManager.Instance.GetPlayerFromID(targetID).gameObject;
-			}
-			else
-			{
-				Entity f = ClientNPCSyncManager.Instance.GetEntityFromID(targetID, isSim);
-				
-				if(f == null)
-					f = SharedNPCSyncManager.Instance.GetEntityFromID(targetID, isSim);
-
-				if (f != null)
-					targ = f.gameObject;
-			}
-
-			if (targ == null)
-			{
-				Instantiate(GameData.EffectDB.SpellEffects[spell.SpellResolveFXIndex], transform.position, Quaternion.identity);
-				return;
-			}
-
-			switch (spell.Type)
-			{
-				case Spell.SpellType.Damage:
-				case Spell.SpellType.StatusEffect:
-				case Spell.SpellType.Beneficial:
-				case Spell.SpellType.PBAE:
-				case Spell.SpellType.Heal:
-					Instantiate(GameData.EffectDB.SpellEffects[spell.SpellResolveFXIndex], targ.transform.position, Quaternion.identity);
-					break;
-				case Spell.SpellType.Pet:
-					//Vector3? vector = null;
-					//if (NavMesh.SamplePosition(transform.position, out var navMeshHit, 5f, -1))
-					//{
-					//	vector = navMeshHit.position;
-					//}
-					//vector ??= transform.position;
-					//pet = Instantiate(spell.PetToSummon, vector.Value, transform.rotation);
-					//pet.AddComponent<NetworkedNPC>();
-					Instantiate(GameData.EffectDB.SpellEffects[spell.SpellResolveFXIndex], targ.transform.position, Quaternion.identity);
-					break;
-			}
-		}
-
-		public void HandleEndSpell()
-		{
-			if (spellEffect != null)
-			{
-				//this.ChargeFX.GetComponent<ParticleSystem>().Stop();
-				Destroy(spellEffect);
-			}
-		}
-
-		public void HandleHeal(List<HealingData> healing)
-		{
-			foreach (var healingData in healing)
-			{
-
-				(bool isPlayer, var target) = Extensions.GetCharacterFromID(healingData.targetIsNPC, healingData.targetID, healingData.targetIsSim);
-				if (target == null) continue;
-
-				if (!healingData.isMP)
-				{
-					//Note: even if each player sends their updated health, this might actually be faster
-					if (type != EntityType.ENEMY) //!We don't want mobs to spam the chat with their healing
-					{
-						bool targetIsLocal = healingData.targetID == ClientConnectionManager.Instance.LocalPlayerID;
-						UpdateSocialLog.LogAdd($"{name}'s {(healingData.isCrit ? "CRITICAL " : "")}healing spell restores {healingData.amount} of {(targetIsLocal ? "your" : target.name + "'s")} life!", "green");
-					}
-
-					target.MyStats.HealMe(healingData.amount);
-				}
-				else
-				{
-					target.MyStats.CurrentMana += healingData.amount;
-					//having the bar extend for a frame kinda sucks so we handle it ourselves
-					if (target.MyStats.CurrentMana > target.MyStats.GetCurrentMaxMana())
-						target.MyStats.CurrentMana = target.MyStats.GetCurrentMaxMana();
-				}
-			}
-		}
-
 
 		public void HandleStatusEffectApply(StatusEffectData effectData)
 		{

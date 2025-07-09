@@ -1,3 +1,31 @@
+## v2.0.0
+- Added New UI!
+  - Can be found in the escape menu
+- Added Steam Lobby Support!
+  - Lobbies have a maximum player count of 100
+  - Supports Friend invites
+  - Supports starting the game and auto joining through an invite
+- Added Full Sim Sync!
+  - You are now able to invite sims even if you're not the host
+  - Does not work across zones unfortunately (yet)
+  - Sims from other players are automatically kicked from the group when zoning
+- Weather/Time sync is now slightly more accurate
+- Removed Connect/Disconnect chat commands
+- Added Kick/Ban commands
+  - Can only be used in lobbies
+- Added the ability to add moderators
+  - Can only be used in lobbies
+  - Enables them to kick/ban other players
+- Fixed healing not resonating
+- Fixed healing affecting charmed npcs not being synced
+- Wand bolts are now visible for all players (i hope)
+- Fixed damage sync being broken due to game update
+- Players are no longer allowed to swap/delete/upgrade gear on sims from others
+- Summons of players and sims will get sent to connecting players now
+
+## v1.5.2
+- Fixed an error with useable AE items
+
 ## v1.5.1
 - Fixed non-damaging spells not adding aggro
 - Fixed (hopefully) MP not properly being displayed when player joins

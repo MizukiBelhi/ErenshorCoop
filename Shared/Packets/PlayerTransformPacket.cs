@@ -16,12 +16,13 @@ namespace ErenshorCoop.Shared.Packets
 		public Vector3 position;
 		public Quaternion rotation;
 
-		public PlayerTransformPacket() : base(DeliveryMethod.Sequenced) { }
+		public PlayerTransformPacket() : base(DeliveryMethod.Unreliable) { }
 
 		public override void Write(NetDataWriter writer)
 		{
 			writer.Put((byte)PacketType.PLAYER_TRANSFORM);
 			writer.Put(entityID);
+			writer.Put(isSim);
 			writer.Put(Extensions.GetSubTypeFlag(dataTypes));
 
 			if (dataTypes.Contains(PlayerDataType.POSITION))
@@ -30,9 +31,10 @@ namespace ErenshorCoop.Shared.Packets
 				writer.Put(rotation);
 		}
 
-		public override void Read(NetPacketReader reader)
+		public override void Read(NetDataReader reader)
 		{
 			entityID = reader.GetShort();
+			isSim = reader.GetBool();
 
 			dataTypes = Extensions.ReadSubTypeFlag<PlayerDataType>(reader.GetUShort());
 

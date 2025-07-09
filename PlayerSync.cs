@@ -7,6 +7,7 @@ using System.Linq;
 using ErenshorCoop.Client;
 using ErenshorCoop.Shared;
 using ErenshorCoop.Shared.Packets;
+using ErenshorCoop.Server;
 
 namespace ErenshorCoop
 {
@@ -19,16 +20,11 @@ namespace ErenshorCoop
 		public int previousLevel = 0;
 		public int previousMP = 0;
 		public Entity previousTarget = null;
-		public short playerID = -1;
 
 		public Animator animator;
 		public Inventory inventory;
 		public Stats stats;
 		public AnimatorOverrideController AnimOverride;
-
-		//interp
-		private float lastInterpTime = 0f;
-		private readonly float interpCall = 1f / 60f;
 
 		public bool hasSentConnect = false;
 
@@ -55,9 +51,11 @@ namespace ErenshorCoop
 
 			previousLevel = GameData.PlayerStats.Level;
 			entityName = GameData.CurrentCharacterSlot.CharName;
-			currentScene = SceneManager.GetActiveScene().name;
+			zone = SceneManager.GetActiveScene().name;
 
 			type = EntityType.PLAYER;
+
+			
 		}
 
 		
@@ -84,10 +82,10 @@ namespace ErenshorCoop
 					Extensions.BuildPlayerClipLookup(pc, com);
 					previousLevel = GameData.PlayerStats.Level;
 					entityName = GameData.CurrentCharacterSlot.CharName;
-					currentScene = SceneManager.GetActiveScene().name;
+					zone = SceneManager.GetActiveScene().name;
 				}
 
-				var packet = PacketManager.GetOrCreatePacket<PlayerConnectionPacket>(playerID, PacketType.PLAYER_CONNECT, true)
+				var packet = PacketManager.GetOrCreatePacket<PlayerConnectionPacket>(entityID, PacketType.PLAYER_CONNECT, true)
 					.SetData("scene",    sceneIDX)
 					.SetData("name",     GameData.CurrentCharacterSlot.CharName)
 					.SetData("position", transform.position)
@@ -113,7 +111,18 @@ namespace ErenshorCoop
 				Logging.LogError($"{ex.Message} \r\n {ex.StackTrace}");
 			}
 
-			
+			if (MySummon == null || MySummon.character.MyNPC != character.MyCharmedNPC)
+			{
+				if (character.MyCharmedNPC != null)
+				{
+					Destroy(character.MyCharmedNPC.gameObject);
+				}
+			}
+			if (MySummon != null)
+			{
+				MySummon.ReceiveRequestID(MySummon.entityID);
+			}
+
 		}
 
 		public IEnumerator DelayedSendPet()
@@ -134,17 +143,17 @@ namespace ErenshorCoop
 
 		private void OnGameMapLoad(Scene scene)
 		{
-			currentScene = scene.name;
+			zone = scene.name;
 
 			if (!ClientConnectionManager.Instance.IsRunning) return;
 			if (!hasSentConnect) return;
 
-			PacketManager.GetOrCreatePacket<PlayerDataPacket>(playerID, PacketType.PLAYER_DATA).AddPacketData(PlayerDataType.SCENE, "scene", currentScene);
+			PacketManager.GetOrCreatePacket<PlayerDataPacket>(entityID, PacketType.PLAYER_DATA).AddPacketData(PlayerDataType.SCENE, "scene", zone);
 
 			//Check if other players are in same scene, this is kinda hacky but it absolutely makes sure they are visible or not
 			foreach (var p in ClientConnectionManager.Instance.Players)
 			{
-				if (p.Value.currentScene == currentScene || p.Value.zone == currentScene)
+				if (p.Value.zone == zone || p.Value.zone == zone)
 				{
 					p.Value.gameObject.SetActive(true);
 					if(p.Value.MySummon != null && p.Value.MySummon.gameObject != null)
@@ -164,11 +173,11 @@ namespace ErenshorCoop
 				CreateSummon(GameData.SpellDatabase.GetSpellByID(MySummon.spellID), MySummon.gameObject);
 			}
 
-			if (Variables.droppedItems.TryGetValue(currentScene, out var items))
+			if (Variables.droppedItems.TryGetValue(zone, out var items))
 			{
 				foreach (var itm in items)
 				{
-					ClientConnectionManager.Instance.SpawnItem(itm.item, itm.quantity, itm.pos, currentScene, itm.id,true);
+					ClientConnectionManager.Instance.SpawnItem(itm.item, itm.quantity, itm.pos, zone, itm.id,true);
 				}
 			}
 		}
@@ -185,7 +194,7 @@ namespace ErenshorCoop
 			var sceneIDX = SceneManager.GetActiveScene().name;
 			(_, LookData l, List<GearData> gear) = GetLookData(true);
 
-			var packet = PacketManager.GetOrCreatePacket<PlayerConnectionPacket>(playerID, PacketType.PLAYER_CONNECT, true)
+			var packet = PacketManager.GetOrCreatePacket<PlayerConnectionPacket>(entityID, PacketType.PLAYER_CONNECT, true)
 				.SetData("scene",    sceneIDX)
 				.SetData("name",     GameData.CurrentCharacterSlot.CharName)
 				.SetData("position", transform.position)
@@ -209,7 +218,7 @@ namespace ErenshorCoop
 
 		public void SendLevelUpdate()
 		{
-			PacketManager.GetOrCreatePacket<PlayerDataPacket>(playerID, PacketType.PLAYER_DATA).AddPacketData(PlayerDataType.LEVEL, "level", GameData.PlayerStats.Level);
+			PacketManager.GetOrCreatePacket<PlayerDataPacket>(entityID, PacketType.PLAYER_DATA).AddPacketData(PlayerDataType.LEVEL, "level", GameData.PlayerStats.Level);
 		}
 
 		private void OnDestroy()
@@ -223,26 +232,27 @@ namespace ErenshorCoop
 		}
 		public void Update()
 		{
+			if (ServerConnectionManager.Instance != null && ServerConnectionManager.Instance.IsRunning)
+				hasSentConnect = true;
+
 			if (!ClientConnectionManager.Instance.IsRunning) return;
 			if (!hasSentConnect) return;
-
-			lastInterpTime += Time.deltaTime;
 
 			//if (Vector3.Distance(transform.position,previousPosition) > 0.1f && lastInterpTime >= interpCall)
 			if(transform.position != previousPosition)
 			{
-				PacketManager.GetOrCreatePacket<PlayerTransformPacket>(playerID, PacketType.PLAYER_TRANSFORM).AddPacketData(PlayerDataType.POSITION, "position", transform.position);
+				PacketManager.GetOrCreatePacket<PlayerTransformPacket>(entityID, PacketType.PLAYER_TRANSFORM).AddPacketData(PlayerDataType.POSITION, "position", transform.position);
 				previousPosition = transform.position;
 			}
 			if (previousRotation != transform.rotation)
 			{
-				PacketManager.GetOrCreatePacket<PlayerTransformPacket>(playerID, PacketType.PLAYER_TRANSFORM).AddPacketData(PlayerDataType.ROTATION, "rotation", transform.rotation);
+				PacketManager.GetOrCreatePacket<PlayerTransformPacket>(entityID, PacketType.PLAYER_TRANSFORM).AddPacketData(PlayerDataType.ROTATION, "rotation", transform.rotation);
 				previousRotation = transform.rotation;
 			}
 
 			if (previousHealth != stats.CurrentHP)
 			{
-				PacketManager.GetOrCreatePacket<PlayerDataPacket>(playerID, PacketType.PLAYER_DATA).AddPacketData(PlayerDataType.HEALTH, "health", stats.CurrentHP);
+				PacketManager.GetOrCreatePacket<PlayerDataPacket>(entityID, PacketType.PLAYER_DATA).AddPacketData(PlayerDataType.HEALTH, "health", stats.CurrentHP);
 				previousHealth = stats.CurrentHP;
 			}
 
@@ -254,7 +264,7 @@ namespace ErenshorCoop
 
 			if (previousMP != stats.CurrentMana)
 			{
-				PacketManager.GetOrCreatePacket<PlayerDataPacket>(playerID, PacketType.PLAYER_DATA).AddPacketData(PlayerDataType.MP, "mp", stats.CurrentMana);
+				PacketManager.GetOrCreatePacket<PlayerDataPacket>(entityID, PacketType.PLAYER_DATA).AddPacketData(PlayerDataType.MP, "mp", stats.CurrentMana);
 				previousMP = stats.CurrentMana;
 			}
 			
@@ -269,7 +279,7 @@ namespace ErenshorCoop
 				//Logging.Log($"{name} target set {curTarEnt.name}");
 				if (previousTarget != curTarEnt)
 				{
-					var p = PacketManager.GetOrCreatePacket<PlayerDataPacket>(playerID, PacketType.PLAYER_DATA);
+					var p = PacketManager.GetOrCreatePacket<PlayerDataPacket>(entityID, PacketType.PLAYER_DATA);
 					p.AddPacketData(PlayerDataType.CURTARGET, "targetID", curTarEnt.entityID);
 					p.targetType = curTarEnt.type;
 					if (curTarEnt is PlayerSync || curTarEnt is NetworkedPlayer)
@@ -282,7 +292,7 @@ namespace ErenshorCoop
 			{
 				if (previousTarget != null)
 				{
-					var p = PacketManager.GetOrCreatePacket<PlayerDataPacket>(playerID, PacketType.PLAYER_DATA);
+					var p = PacketManager.GetOrCreatePacket<PlayerDataPacket>(entityID, PacketType.PLAYER_DATA);
 					p.AddPacketData(PlayerDataType.CURTARGET, "targetID", (short)-1);
 					p.targetType = EntityType.LOCAL_PLAYER;
 					previousTarget = null;
@@ -296,17 +306,17 @@ namespace ErenshorCoop
 			(bool hasChanged, LookData lookData, List<GearData> gearData ) = GetLookData();
 			if (hasChanged)
 			{
-				PacketManager.GetOrCreatePacket<PlayerDataPacket>(playerID, PacketType.PLAYER_DATA)
+				PacketManager.GetOrCreatePacket<PlayerDataPacket>(entityID, PacketType.PLAYER_DATA)
 					.AddPacketData(PlayerDataType.GEAR, "lookData", lookData)
 					.SetData("gearData", gearData);
 			}
 		}
 
-		public void SendDamageAttack(int damage, short attackedID, bool attackedIsNPC, GameData.DamageType dmgType, bool effect, float resistMod)
+		public void SendDamageAttack(int damage, short attackedID, bool attackedIsNPC, GameData.DamageType dmgType, bool effect, float resistMod, bool isCrit)
 		{
 			if (!hasSentConnect) return;
 
-			PacketManager.GetOrCreatePacket<PlayerActionPacket>(playerID, PacketType.PLAYER_ACTION).AddPacketData(ActionType.ATTACK, "attackData", 
+			PacketManager.GetOrCreatePacket<PlayerActionPacket>(entityID, PacketType.PLAYER_ACTION).AddPacketData(ActionType.ATTACK, "attackData", 
 				new PlayerAttackData()
 				{
 					attackedID = attackedID,
@@ -314,7 +324,8 @@ namespace ErenshorCoop
 					damage = damage,
 					damageType = dmgType,
 					effect = effect,
-					resistMod = resistMod
+					resistMod = resistMod,
+					isCrit = isCrit
 				});
 		}
 
@@ -474,11 +485,20 @@ namespace ErenshorCoop
 		//Sends packet when we're using a healing spell (mp or hp)
 		public void SendHeal(HealingData hd)
 		{
-			var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(playerID, PacketType.PLAYER_ACTION);
+			var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(entityID, PacketType.PLAYER_ACTION);
 			var healingData = pack.healingData ?? new();
 			healingData.Add(hd);
 			pack.dataTypes.Add(ActionType.HEAL);
 			pack.healingData = healingData;
+		}
+
+		public void SendWand(WandAttackData wa)
+		{
+			var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(entityID, PacketType.PLAYER_ACTION);
+			var wandData = pack.wandData ?? new();
+			wandData.Add(wa);
+			pack.dataTypes.Add(ActionType.WAND_ATTACK);
+			pack.wandData = wandData;
 		}
 	}
 }

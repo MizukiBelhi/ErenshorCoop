@@ -12,7 +12,7 @@ namespace ErenshorCoop.Shared
 	public interface IPacket
 	{
 		void Write(NetDataWriter writer);
-		void Read(NetPacketReader reader);
+		void Read(NetDataReader reader);
 	}
 
 
@@ -63,7 +63,8 @@ namespace ErenshorCoop.Shared
 		MEMBER_LIST,
 		REMOVE,
 		INVITE_SIM,
-		EXPERIENCE
+		EXPERIENCE,
+		SIM_FOLLOW
 	}
 
 	public enum GroupLeaveReason : byte
@@ -100,6 +101,7 @@ namespace ErenshorCoop.Shared
 		CLASS,
 		MP,
 		CURTARGET,
+		DESTR_SIM
 	}
 
 	public enum EntityDataType : byte
@@ -124,7 +126,8 @@ namespace ErenshorCoop.Shared
 		REVIVE,
 		STATUS_EFFECT_APPLY,
 		STATUS_EFFECT_REMOVE,
-		HEAL
+		HEAL,
+		WAND_ATTACK
 	}
 	public enum AnimatorSyncType : byte
 	{
@@ -143,6 +146,7 @@ namespace ErenshorCoop.Shared
 		ZONE_OWNERSHIP,
 		SERVER_SETTINGS,
 		HOST_MODS,
+		PLAYER_LIST,
 	}
 
 	public enum CustomSpawnID
@@ -157,5 +161,6 @@ namespace ErenshorCoop.Shared
 	public enum Request : byte
 	{
 		ENTITY_ID,
+		MOD_COMMAND,
 	}
 }

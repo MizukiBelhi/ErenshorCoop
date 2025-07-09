@@ -33,6 +33,7 @@ namespace ErenshorCoop.Shared.Packets
 		{
 			writer.Put((byte)PacketType.PLAYER_DATA);
 			writer.Put(entityID);
+			writer.Put(isSim);
 			writer.Put(Extensions.GetSubTypeFlag(dataTypes));
 
 			if (dataTypes.Contains(PlayerDataType.POSITION))
@@ -82,10 +83,10 @@ namespace ErenshorCoop.Shared.Packets
 			}
 		}
 
-		public override void Read(NetPacketReader reader)
+		public override void Read(NetDataReader reader)
 		{
 			entityID = reader.GetShort();
-
+			isSim = reader.GetBool();
 			dataTypes = Extensions.ReadSubTypeFlag<PlayerDataType>(reader.GetUShort());
 
 			if (dataTypes.Contains(PlayerDataType.POSITION))
@@ -101,14 +102,14 @@ namespace ErenshorCoop.Shared.Packets
 			if(dataTypes.Contains(PlayerDataType.LEVEL))
 				level = reader.GetByte();
 			if(dataTypes.Contains(PlayerDataType.NAME))
-				name = reader.GetString();
+				name = reader.GetString().Sanitize();
 			if (dataTypes.Contains(PlayerDataType.CURTARGET))
 			{
 				targetID = reader.GetShort();
 				targetType = (EntityType)reader.GetByte();
 			}
 			if(dataTypes.Contains(PlayerDataType.SCENE))
-				scene = reader.GetString();
+				scene = reader.GetString().Sanitize();
 			if (dataTypes.Contains(PlayerDataType.ANIM))
 			{
 				int animCount = reader.GetInt();
@@ -136,7 +137,7 @@ namespace ErenshorCoop.Shared.Packets
 				lookData = new()
 				{
 					isMale = reader.GetBool(),
-					hairName = reader.GetString(),
+					hairName = reader.GetString().Sanitize(),
 					hairColor = reader.GetColor(),
 					skinColor = reader.GetColor(),
 				};
@@ -147,7 +148,7 @@ namespace ErenshorCoop.Shared.Packets
 					GearData gd = new()
 					{
 						slotType = (Item.SlotType)reader.GetByte(),
-						itemID = reader.GetString(),
+						itemID = reader.GetString().Sanitize(),
 						quality = reader.GetByte()
 					};
 					gearData.Add(gd);

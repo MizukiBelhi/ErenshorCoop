@@ -1,7 +1,10 @@
 ﻿using ErenshorCoop.Client;
 using ErenshorCoop.Server;
+using ErenshorCoop.Shared;
+using ErenshorCoop.Shared.Packets;
 using HarmonyLib;
 using System.Net;
+using UnityEngine;
 
 
 namespace ErenshorCoop
@@ -24,55 +27,62 @@ namespace ErenshorCoop
 				//Split
 				string[] spl = txt.Substring(1).Split(' ');
 				string command = spl[0].ToLower();
-				var port = 0;
-
 
 				//FIXME: Improve
 				switch (command)
 				{
+#if DEBUG
+					case "warpto":
+						foreach(var p in ClientConnectionManager.Instance.Players)
+						{
+							if(p.Value.name == "Valk")
+							{
+								GameData.PlayerControl.transform.GetComponent<CharacterController>().enabled = false;
+								ClientConnectionManager.Instance.LocalPlayer.transform.position = p.Value.transform.position;
+									Logging.Log($"dbg warped");
+								GameData.PlayerControl.transform.GetComponent<CharacterController>().enabled = true;
+								break;
+							}
+						}
+						break;
+#endif
+					case "kick":
+					case "ban":
+						if (!ClientConnectionManager.Instance.IsRunning)
+						{
+							return true;//Not connected
+						}
+						if (!Steam.Lobby.isInLobby)
+						{
+							//Only supported on steam
+							Logging.WriteInfoMessage("Moderator commands are only supported using steam lobbies.");
 
-					case "host" when spl.Length < 2:
-						Logging.LogError($"Not enough arguments for \"host\". Usage: /host port");
-						return false;
-					case "host":
-						if(!int.TryParse(spl[1], out port))
-						{
-							Logging.LogError($"Could not parse port. ({spl[2]})");
-						}
-						else
-						{
-							if(ServerConnectionManager.Instance.StartHost(port))
-								ClientConnectionManager.Instance.Connect("localhost", port);
-						}
-						return false;
-					case "connect" when spl.Length == 1:
-						ClientConnectionManager.Instance.Connect("localhost", 7777);
-						return false;
-					case "connect" when spl.Length < 3:
-						Logging.LogError($"Not enough arguments for \"connect\". Usage: /connect ip port");
-						return false;
-					case "connect":
-						{
-						string ip = spl[1];
-						if(ip != "localhost" && !IPAddress.TryParse(ip, out _))
-						{
-							Logging.LogError($"{ip} is not a valid IP Address.");
 							return false;
 						}
-
-						if (!int.TryParse(spl[2], out port))
+						if (spl.Length < 2 || spl.Length > 2)
 						{
-							Logging.LogError($"Could not parse port. ({spl[2]})");
+							Logging.WriteInfoMessage($"Usage: /{command} <name>");
+							return false;
+						}
+						var pln = spl[1].ToLower();
+						if (pln == GameData.CurrentCharacterSlot.CharName.ToLower())
+						{
+							//cant kick/ban self...
+							Logging.WriteInfoMessage($"Cannot {command} self!");
+							return false;
+						}
+						if(ServerConnectionManager.Instance.IsRunning)
+						{
+							ClientConnectionManager.Instance.HandleModCommand((byte)(command == "kick" ? 0 : 1), pln);
 						}
 						else
 						{
-							ClientConnectionManager.Instance.Connect(ip, port);
+							//Send packet
+							var pa = PacketManager.GetOrCreatePacket<PlayerRequestPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_REQUEST);
+							pa.dataTypes.Add(Request.MOD_COMMAND);
+							pa.playerName = pln;
+							pa.commandType = (byte)(command == "kick" ? 0 : 1);
 						}
-						return false;
-						}
-					case "disconnect":
-						ClientConnectionManager.Instance?.Disconnect();
-						ServerConnectionManager.Instance?.Disconnect();
 						return false;
 				}
 			}

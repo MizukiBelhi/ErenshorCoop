@@ -22,6 +22,7 @@ namespace ErenshorCoop.Shared
 		public static Dictionary<int, SpawnPoint> spawnPoints = new();
 
 		public static Dictionary<string, List<ItemDropData>> droppedItems = new();
+		public static Dictionary<int, short> savedZoneSimID = new();
 
 		public struct ItemDropData
 		{

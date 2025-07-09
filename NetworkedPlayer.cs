@@ -10,6 +10,7 @@ using ErenshorCoop.Shared.Packets;
 using TMPro;
 using UnityEngine.SceneManagement;
 using System.Linq;
+using Steamworks;
 
 namespace ErenshorCoop
 {
@@ -43,21 +44,23 @@ namespace ErenshorCoop
 		SimInvSlot MH = new(Item.SlotType.Primary) { Quant = 1 };
 		SimInvSlot OH = new(Item.SlotType.Secondary) { Quant = 1 };
 
-
-		//Interpolation
-		private bool firstInterpUpdate;
-		private const float interpDuration = 0.1f;
-		private Coroutine interpRoutine;
-
-		private GameObject spellEffect;
-		
-
 		public void Init(Vector3 position, Quaternion rotation, string pName, string scene, short playerID, NetPeer peer)
 		{
 			this.peer = peer;
+			_Init(position, rotation, pName, scene, playerID);
+		}
+
+		public void Init(Vector3 position, Quaternion rotation, string pName, string scene, short playerID, CSteamID steamID)
+		{
+			this.steamID = steamID;
+			_Init(position, rotation, pName, scene, playerID);
+		}
+
+		private void _Init(Vector3 position, Quaternion rotation, string pName, string scene, short playerID)
+		{
 			rot = rotation;
 			playerName = pName;
-			currentScene = scene;
+			zone = scene;
 			sceneChanged = true;
 			this.playerID = playerID;
 
@@ -93,8 +96,8 @@ namespace ErenshorCoop
 			sim.MyStats.OverrideHPforNPC = false;
 			DontDestroyOnLoad(gameObject);
 
-			if(ServerConnectionManager.Instance.IsRunning)
-				character.MyFaction = ServerConfig.IsPVPEnabled.Value?Character.Faction.PC:Character.Faction.Player;
+			if (ServerConnectionManager.Instance.IsRunning)
+				character.MyFaction = ServerConfig.IsPVPEnabled.Value ? Character.Faction.PC : Character.Faction.Player;
 			else
 				character.MyFaction = ServerConfig.clientIsPvpEnabled ? Character.Faction.PC : Character.Faction.Player;
 			character.isNPC = false;
@@ -378,7 +381,7 @@ namespace ErenshorCoop
 			Variables.DontCalculateDamageMitigationCharacters.Add(attacked);
 
 			if (data.damageType == GameData.DamageType.Physical)
-				attacked.DamageMe(data.damage, fromPlayer, data.damageType, character, data.effect);
+				attacked.DamageMe(data.damage, fromPlayer, data.damageType, character, data.effect, data.isCrit);
 			else
 				attacked.MagicDamageMe(data.damage, fromPlayer, data.damageType, character, data.resistMod);
 
@@ -405,7 +408,7 @@ namespace ErenshorCoop
 			Variables.DontCalculateDamageMitigationCharacters.Add(character);
 
 			if (data.damageType == GameData.DamageType.Physical)
-				character.DamageMe(data.damage, false, data.damageType, attacker, data.effect);
+				character.DamageMe(data.damage, false, data.damageType, attacker, data.effect, data.isCrit);
 			else
 				character.MagicDamageMe(data.damage, false, data.damageType, attacker, data.resistMod);
 
@@ -419,7 +422,6 @@ namespace ErenshorCoop
 			sim.MyStats.Level = packet.level;
 			sim.MyStats.CharacterClass = packet._class;
 			zone = packet.scene;
-			currentScene = packet.scene;
 			UpdateLooks(packet.lookData, packet.gearData);
 
 			sim.MyStats.CurrentHP = packet.health;
@@ -468,15 +470,14 @@ namespace ErenshorCoop
 				}
 				if (playerDataPacket.dataTypes.Contains(PlayerDataType.SCENE))
 				{
-					if (currentScene != playerDataPacket.scene)
+					if (zone != playerDataPacket.scene)
 					{
 						sceneChanged = true;
 						if(ServerConnectionManager.Instance.IsRunning)
 							ServerConnectionManager.Instance.OnClientSwapZone?.Invoke(playerID, peer);
 					}
-				
-					currentScene =	playerDataPacket.scene;
-					zone = currentScene;
+
+					zone = playerDataPacket.scene;
 				}
 				if (playerDataPacket.dataTypes.Contains(PlayerDataType.ANIM))
 				{
@@ -525,6 +526,11 @@ namespace ErenshorCoop
 					HandleStatusRemoval(playerActionPacket.RemoveAllStatus, playerActionPacket.RemoveBreakable, playerActionPacket.statusID);
 				if (playerActionPacket.dataTypes.Contains(ActionType.HEAL))
 					HandleHeal(playerActionPacket.healingData);
+				if (playerActionPacket.dataTypes.Contains(ActionType.WAND_ATTACK))
+				{
+					foreach(var wd in playerActionPacket.wandData)
+						HandleWand(wd);
+				}
 			}
 
 		}
@@ -805,112 +811,6 @@ namespace ErenshorCoop
 			}
 		}
 
-		public void HandleSpellCharge(int SpellChargeFXIndex)
-		{
-			if (currentScene != SceneManager.GetActiveScene().name) return;
-
-			if(spellEffect != null)
-				DestroyImmediate(spellEffect);
-
-			spellEffect = new GameObject();
-			spellEffect.transform.position = transform.position + transform.forward + Vector3.up * 1.5f;
-			spellEffect.transform.SetParent(transform);
-
-			var ChargeFX = Instantiate(GameData.EffectDB.SpellEffects[SpellChargeFXIndex], spellEffect.transform.position, spellEffect.transform.rotation);
-			ChargeFX.transform.SetParent(spellEffect.transform);
-			//spellEffect.AddComponent<DestroyObjectTimer>().TimeToDestroy = 600f;
-		}
-
-		public void HandleSpellEffect(string spellID, short targetID, bool targetIsNPC, bool isSim)
-		{
-			if (spellEffect == null) return;
-
-			Spell spell = GameData.SpellDatabase.GetSpellByID(spellID);
-
-			if (Vector3.Distance(spellEffect.transform.position, GameData.PlayerControl.transform.position) < 30f && spell.ShakeDur > 0f)
-			{
-				GameData.CamControl.ShakeScreen(spell.ShakeAmp, spell.ShakeDur);
-			}
-
-			Entity targ = null;
-			if (!targetIsNPC)
-			{
-				targ = ClientConnectionManager.Instance.GetPlayerFromID(targetID);
-			}
-			else
-			{
-				if(targ == null)
-					targ = SharedNPCSyncManager.Instance.GetEntityFromID(targetID, isSim);
-				if (targ == null)
-					targ = ClientNPCSyncManager.Instance.GetEntityFromID(targetID, isSim);
-			}
-
-			if (targ == null) return;
-
-			//Logging.Log($"{targetIsNPC}");
-
-			switch (spell.Type)
-			{
-				case Spell.SpellType.Damage:
-					
-					if (targ.character.isNPC && ClientZoneOwnership.isZoneOwner)
-					{
-						targ.character.MyNPC.ManageAggro(spell.Aggro, character);
-					}
-					Instantiate(GameData.EffectDB.SpellEffects[spell.SpellResolveFXIndex], targ.transform.position, Quaternion.identity);
-
-				break;
-				case Spell.SpellType.StatusEffect:
-				case Spell.SpellType.Beneficial:
-				case Spell.SpellType.PBAE:
-				case Spell.SpellType.Heal:
-					Instantiate(GameData.EffectDB.SpellEffects[spell.SpellResolveFXIndex], targ.transform.position, Quaternion.identity);
-						//.AddComponent<DestroyObjectTimer>().TimeToDestroy = 600f;
-					break;
-				case Spell.SpellType.Pet:
-					Instantiate(GameData.EffectDB.SpellEffects[spell.SpellResolveFXIndex], targ.transform.position, Quaternion.identity);
-						//.AddComponent<DestroyObjectTimer>().TimeToDestroy = 600f;
-					UpdateSocialLog.LogAdd($"{playerName} summoned a companion!", "lightblue");
-
-				break;
-			}
-		}
-
-		public void HandleEndSpell()
-		{
-			if (spellEffect != null)
-			{
-				//this.ChargeFX.GetComponent<ParticleSystem>().Stop();
-				Destroy(spellEffect);
-			}
-		}
-
-
-		private void HandleHeal(List<HealingData> healing)
-		{
-			foreach (var healingData in healing)
-			{
-	
-				( bool isPlayer, var target ) = Extensions.GetCharacterFromID(healingData.targetIsNPC, healingData.targetID, healingData.targetIsSim);
-				if (target == null) continue;
-
-				if (!healingData.isMP)
-				{
-					//Note: even if each player sends their updated health, this might actually be faster
-					bool targetIsLocal = healingData.targetID == ClientConnectionManager.Instance.LocalPlayerID;
-					UpdateSocialLog.LogAdd($"{playerName}'s {( healingData.isCrit ? "CRITICAL " : "" )}healing spell restores {healingData.amount} of {( targetIsLocal ? "your" : target.name + "'s" )} life!", "green");
-
-					target.MyStats.HealMe(healingData.amount);
-				}
-				else
-				{
-					target.MyStats.CurrentMana += healingData.amount;
-					//having the bar extend for a frame kinda sucks so we handle it ourselves
-					if(target.MyStats.CurrentMana > target.MyStats.GetCurrentMaxMana())
-						target.MyStats.CurrentMana = target.MyStats.GetCurrentMaxMana();
-				}
-			}
-		}
 
 		public void ResetPlayerVisuals(ModularParts mod)
 		{

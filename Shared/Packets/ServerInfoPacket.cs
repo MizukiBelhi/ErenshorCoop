@@ -17,7 +17,7 @@ namespace ErenshorCoop.Shared.Packets
 
 		public ServerSettings serverSettings;
 		public List<PluginData> plugins;
-
+		public List<Steam.Networking.PlayerData> playerInfoList;
 		public override void Write(NetDataWriter writer)
 		{
 			writer.Put((byte)PacketType.SERVER_INFO);
@@ -54,9 +54,21 @@ namespace ErenshorCoop.Shared.Packets
 				foreach(short p in playerList)
 					writer.Put(p);
 			}
+			if(dataTypes.Contains(ServerInfoType.PLAYER_LIST))
+			{
+				writer.Put(playerInfoList.Count);
+				foreach(var p in playerInfoList)
+				{
+					writer.Put(p.playerID);
+					writer.Put(p.ping);
+					writer.Put(p.isMod);
+					writer.Put(p.isHost);
+					writer.Put(p.isDev);
+				}
+			}
 		}
 
-		public override void Read(NetPacketReader reader)
+		public override void Read(NetDataReader reader)
 		{
 			dataTypes = Extensions.ReadSubTypeFlag<ServerInfoType>(reader.GetUShort());
 
@@ -90,11 +102,26 @@ namespace ErenshorCoop.Shared.Packets
 			if (dataTypes.Contains(ServerInfoType.ZONE_OWNERSHIP))
 			{
 				zoneOwner = reader.GetShort();
-				zone = reader.GetString();
+				zone = reader.GetString().Sanitize();
 				playerList = new();
 				int count = reader.GetInt();
 				for(var i=0;i<count;i++)
 					playerList.Add(reader.GetShort());
+			}
+			if (dataTypes.Contains(ServerInfoType.PLAYER_LIST))
+			{
+				playerInfoList = new();
+				var c = reader.GetInt();
+				for(int i=0;i<c;i++)
+				{
+					var plID = reader.GetShort();
+					var ping = reader.GetInt();
+					var isMod = reader.GetBool();
+					var isHost = reader.GetBool();
+					var isDev = reader.GetBool();
+
+					playerInfoList.Add(new() { playerID = plID, ping = ping, isMod = isMod, isHost = isHost, isDev = isDev });
+				}
 			}
 		}
 
