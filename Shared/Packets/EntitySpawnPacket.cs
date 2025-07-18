@@ -34,6 +34,7 @@ namespace ErenshorCoop.Shared.Packets
 				writer.Put(s.position);
 				writer.Put(s.rotation);
 				writer.Put((byte)s.entityType);
+				writer.Put(s.zone);
 				writer.Put(s.syncStats);
 				if (s.entityType == EntityType.PET)
 				{
@@ -80,6 +81,7 @@ namespace ErenshorCoop.Shared.Packets
 					position = reader.GetVector3(),
 					rotation = reader.GetRotation(),
 					entityType = (EntityType)reader.GetByte(),
+					zone = reader.GetString(),
 					syncStats = reader.GetBool()
 				};
 				s.ownerID = s.entityType == EntityType.PET ? reader.GetShort() : (short)-1;
@@ -121,5 +123,6 @@ namespace ErenshorCoop.Shared.Packets
 		public int basePR;
 		public int baseDMG;
 		public float mhatkDelay;
+		public string zone;
 	}
 }

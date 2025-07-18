@@ -1,8 +1,6 @@
 ﻿using BepInEx.Configuration;
 using System;
-using ErenshorCoop.Client;
-using ErenshorCoop.Shared;
-using ErenshorCoop.Shared.Packets;
+using UnityEngine;
 
 namespace ErenshorCoop.Client
 {
@@ -14,6 +12,10 @@ namespace ErenshorCoop.Client
 		public static ConfigEntry<bool> ItemDropConfirm;
 		public static ConfigEntry<bool> DisplayMetrics;
 		public static ConfigEntry<bool> CloseMenu;
+		public static ConfigEntry<bool> DisplayCompassMarker;
+		public static ConfigEntry<bool> DisplayOffScreenMarker;
+		public static ConfigEntry<bool> MarkersOnlyGroup;
+		public static ConfigEntry<Color> OffScreenMarkerColor;
 
 		private static ConfigFile config;
 		public static void Load(ConfigFile configFile)
@@ -43,6 +45,31 @@ namespace ErenshorCoop.Client
 				"Client Settings",
 				"!!!!Close Menu On Connect",
 				false,
+				""
+			);
+
+			DisplayCompassMarker = config.Bind(
+				"Client Settings",
+				"!!!!!Display Compass Markers",
+				true,
+				"Displays a marker on the compass pointing towards players"
+			);
+			DisplayOffScreenMarker = config.Bind(
+				"Client Settings",
+				"!!!!!Display Off-Screen Markers",
+				true,
+				"Displays a marker on the screen if a player is off screen"
+			);
+			MarkersOnlyGroup = config.Bind(
+				"Client Settings",
+				"!!!!!Off-Screen Markers group only",
+				true,
+				"When enabled, off-screen markers are only displayed for group"
+			);
+			OffScreenMarkerColor = config.Bind(
+				"Client Settings",
+				"!!!!!Off-Screen Marker Color",
+				Color.green,
 				""
 			);
 

@@ -134,18 +134,6 @@ namespace ErenshorCoop
 			{
 				Logging.LogError($"{ex.Message} \r\n {ex.StackTrace}");
 			}
-
-			if (MySummon == null || MySummon.character.MyNPC != character.MyCharmedNPC)
-			{
-				if (character.MyCharmedNPC != null)
-				{
-					Destroy(character.MyCharmedNPC.gameObject);
-				}
-			}
-			if (MySummon != null)
-			{
-				MySummon.ReceiveRequestID(MySummon.entityID);
-			}
 		}
 
 
@@ -325,13 +313,19 @@ namespace ErenshorCoop
 			//Happens when zoning, we need to set the follow again
 			if (Grouping.IsLocalLeader() && Grouping.IsPlayerInGroup(entityID, true) && target == null)
 				target = ClientConnectionManager.Instance.LocalPlayer.transform;
-			if(target != null && GameHooks.followPlayer != null)
+			if(target != null && GameHooks.followPlayer != null && character.Alive)
 			{
 				sim.InGroup = true;
 				GameHooks.followPlayer.Invoke(sim, null);
 			}
 			if(target == null)
 				sim.InGroup = false;
+
+			if (!Grouping.IsPlayerInGroup(entityID, true) && simIndex > 0 && (GameData.SimMngr.Sims[simIndex].Grouped || npc.InGroup))
+			{
+				npc.InGroup = false;
+				GameData.SimMngr.Sims[simIndex].Grouped = false;
+			}
 		}
 
 		public void SendDamageAttack(int damage, short attackedID, bool attackedIsNPC, GameData.DamageType dmgType, bool effect, float resistMod, bool isCrit)

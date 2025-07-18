@@ -4,13 +4,13 @@ Brings Co-Op to Erenshor.
 Please see the changelog for updates.<br><br><br>
 
 ## Current Features
+- Steam Lobby support
 - Player sync
 - Enemy and NPC sync
 - Chat (Including Whispers)
 - Grouping
 - Spell Effects
-- Sims in groups are synced (only pre-made sims! If you invite sims that are auto-generated this will not work)
-  - Only the host can invite sims to group
+- Sims are fully synced
 - HP and MP healing spells
 - UI! Press escape in-game to see the UI (might be off-screen, please report)
 - Boss adds
@@ -28,10 +28,7 @@ Please see the changelog for updates.<br><br><br>
   - The items get deleted if you disconnect
   - They should appear again after a zone change, if not let me know
   - Confirmation window (can be disabled in the settings)
-
-## Not Implemented
-- Treasure Chests
-  - Guardians are synced
+- Player Markers
 
 
 ## Known Bugs
@@ -40,22 +37,17 @@ Please see the changelog for updates.<br><br><br>
 
 ## Mention Worthy
 - Skin Colors are not correctly applied (game bug).
-- Interpolation is currently turned off. Expect some lagginess if you're connecting over long distances.
 - Each player requires around ~20kb/s upload.
-- The host will need around ~80kb/s upload per player.
+- The host will need around ~100kb/s upload per player.
 
 ## Usage
-When in-game, use the UI that opens when pressing escape or alternatively:
-
- - host using ```/host <port>``` 
- - connect using ```/connect <ip> <port>``` 
- - disconnect using ```/disconnect```
+When in-game, use the UI in the escape menu.
 
 
 ## FAQ
 
     Q: How much bandwidth do I require to host?
-    A: You will need around ~80kb/s upload for each player connected to you.
+    A: You will need around ~100-150kb/s upload for each player connected to you.
 
     Q: Can there be a standalone server?
     A: No, due to legal reasons this won't be possible.

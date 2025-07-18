@@ -439,112 +439,33 @@ namespace ErenshorCoop
 
 			var mod = 1f;
 
+
+
 			int idx = 0;
 			if (useMod)
 			{
 				foreach (var member in group.groupList)
 				{
-					if (member.entityID == playerID && !member.isSim) continue;
-
 					switch (idx)
 					{
 						case 0:
-							if (member.isSim && GameData.GroupMember1.MyAvatar.GetComponent<SimSync>() != null)
-							{
-								GameData.SimMngr.Sims[GameData.GroupMember1.simIndex].OpinionOfPlayer += 0.01f;
-							}
-
 							mod -= 0.3f;
 							break;
 						case 1:
-							if (member.isSim && GameData.GroupMember2.MyAvatar.GetComponent<SimSync>() != null)
-						{
-								GameData.SimMngr.Sims[GameData.GroupMember2.simIndex].OpinionOfPlayer += 0.01f;
-							}
-
 							mod -= 0.2f;
 							break;
 						case 2:
-							if (member.isSim && GameData.GroupMember3.MyAvatar.GetComponent<SimSync>() != null)
-							{
-								GameData.SimMngr.Sims[GameData.GroupMember3.simIndex].OpinionOfPlayer += 0.01f;
-							}
-
 							mod -= 0.1f;
 							break;
 					}
-
 					++idx;
 				}
 			}
 
 			int xpEarned = Mathf.RoundToInt((float)xp * mod);
 
-			var simMessage = "";
-
-
-			
-
-			idx = 0;
-			foreach (var member in group.groupList)
-			{
-				if (member.entityID == playerID && !member.isSim) continue;
-
-				switch (idx)
-				{
-					case 0:
-						if (member.isSim && GameData.GroupMember1.MyAvatar.GetComponent<SimSync>() != null)
-						{
-							var st = GameData.GroupMember1.MyStats;
-							HandleXPGain(st, xpEarned, xpBonus);
-							
-
-							simMessage += MakeSimString(st, xpEarned, xpBonus);
-						}
-						break;
-					case 1:
-						if (member.isSim && GameData.GroupMember2.MyAvatar.GetComponent<SimSync>() != null)
-						{
-							var st = GameData.GroupMember2.MyStats;
-							HandleXPGain(st, xpEarned, xpBonus);
-
-
-							simMessage += simMessage.Length>1?"\r\n":""+MakeSimString(st, xpEarned, xpBonus);
-						}
-						break;
-					case 2:
-						if (member.isSim && GameData.GroupMember3.MyAvatar.GetComponent<SimSync>() != null)
-						{
-							var st = GameData.GroupMember3.MyStats;
-							HandleXPGain(st, xpEarned, xpBonus);
-
-
-							simMessage += simMessage.Length>1?"\r\n":""+MakeSimString(st, xpEarned, xpBonus);
-						}
-						break;
-				}
-				++idx;
-			}
-
 			foreach (var member in group.internalList)
 			{
-				if (member.entityID != playerID)
-				{
-					if (simMessage.Length > 1)
-					{
-						if (IsPlayerHost(member.entityID))
-						{
-							Logging.WriteInfoMessage(simMessage);
-						}
-						else
-						{
-							PacketManager.GetOrCreatePacket<PlayerMessagePacket>(member.entityID, PacketType.PLAYER_MESSAGE)
-								.SetTarget(member)
-								.SetData("message", simMessage)
-								.SetData("messageType", MessageType.INFO);
-						}
-					}
-				}
 				if (IsPlayerHost(member.entityID))
 				{
 					var p = new ServerGroupPacket();
@@ -716,7 +637,7 @@ namespace ErenshorCoop
 				
 
 
-				if (!packet.isSim && playerSc != null && playerSc.peer != null) //Happens when they disconnect
+				if (!packet.isSim && playerSc != null && (playerSc.peer != null || playerSc.steamID != null)) //Happens when they disconnect
 				{
 					PacketManager.GetOrCreatePacket<PlayerMessagePacket>(playerSc.entityID, PacketType.PLAYER_MESSAGE)
 						.SetTarget(playerSc)
@@ -845,14 +766,16 @@ namespace ErenshorCoop
 			{
 				string simMessage = "";
 				int idx = 0;
-				foreach (var member in currentGroup.groupList)
+				//if (!IsLocalLeader())
 				{
-					if (!member.isSim) continue;
-					
-					switch (idx)
+					foreach (var member in currentGroup.groupList)
 					{
-						case 0:
-							if (member.isSim && GameData.GroupMember1.MyAvatar.GetComponent<SimSync>() != null)
+						if (!member.isSim) continue;
+
+						switch (idx)
+						{
+							case 0:
+							if (member.isSim && GameData.GroupMember1 != null && GameData.GroupMember1.MyAvatar != null && GameData.GroupMember1.MyAvatar.GetComponent<SimSync>() != null)
 							{
 								GameData.SimMngr.Sims[GameData.GroupMember1.simIndex].OpinionOfPlayer += 0.01f;
 								var st = GameData.GroupMember1.MyStats;
@@ -860,8 +783,8 @@ namespace ErenshorCoop
 								simMessage += MakeSimString(st, packet.earnedXP, packet.xpBonus);
 							}
 							break;
-						case 1:
-							if (member.isSim && GameData.GroupMember2.MyAvatar.GetComponent<SimSync>() != null)
+							case 1:
+							if (member.isSim && GameData.GroupMember2 != null && GameData.GroupMember2.MyAvatar != null && GameData.GroupMember2.MyAvatar.GetComponent<SimSync>() != null)
 							{
 								GameData.SimMngr.Sims[GameData.GroupMember2.simIndex].OpinionOfPlayer += 0.01f;
 								var st = GameData.GroupMember2.MyStats;
@@ -869,8 +792,8 @@ namespace ErenshorCoop
 								simMessage += simMessage.Length > 1 ? "\r\n" : "" + MakeSimString(st, packet.earnedXP, packet.xpBonus);
 							}
 							break;
-						case 2:
-							if (member.isSim && GameData.GroupMember3.MyAvatar.GetComponent<SimSync>() != null)
+							case 2:
+							if (member.isSim && GameData.GroupMember3 != null && GameData.GroupMember3.MyAvatar != null && GameData.GroupMember3.MyAvatar.GetComponent<SimSync>() != null)
 							{
 								GameData.SimMngr.Sims[GameData.GroupMember3.simIndex].OpinionOfPlayer += 0.01f;
 								var st = GameData.GroupMember3.MyStats;
@@ -878,12 +801,13 @@ namespace ErenshorCoop
 								simMessage += simMessage.Length > 1 ? "\r\n" : "" + MakeSimString(st, packet.earnedXP, packet.xpBonus);
 							}
 							break;
-					}
+						}
 
-					++idx;
+						++idx;
+					}
+					//if (!string.IsNullOrEmpty(simMessage))
+					//	UpdateSocialLog.LogAdd(simMessage, "yellow");
 				}
-				if(!string.IsNullOrEmpty(simMessage))
-					UpdateSocialLog.LogAdd(simMessage, "yellow");
 				HandleXPGain(GameData.PlayerStats, packet.earnedXP, packet.xpBonus);
 			}
 			if (packet.dataTypes.Contains(GroupDataType.SIM_FOLLOW))
@@ -921,10 +845,13 @@ namespace ErenshorCoop
 					GameData.SimPlayerGrouping.PlayerThreeName
 				};
 
+				List<SimPlayerTracking> _saved = new();
+
 				if (packet.groupList.Count <= 1) //Group disbanded
 				{
 					if (GameData.GroupMember1 != null)
 					{
+						_saved.Add(GameData.GroupMember1);
 						GameData.GroupMember1.Grouped = false;
 						if (GameData.GroupMember1.MyAvatar != null)
 						{
@@ -934,6 +861,7 @@ namespace ErenshorCoop
 					}
 					if (GameData.GroupMember2 != null)
 					{
+						_saved.Add(GameData.GroupMember2);
 						GameData.GroupMember2.Grouped = false;
 						if (GameData.GroupMember2.MyAvatar != null)
 						{
@@ -943,6 +871,7 @@ namespace ErenshorCoop
 					}
 					if (GameData.GroupMember3 != null)
 					{
+						_saved.Add(GameData.GroupMember3);
 						GameData.GroupMember3.Grouped = false;
 						if (GameData.GroupMember3.MyAvatar != null)
 						{
@@ -1089,6 +1018,23 @@ namespace ErenshorCoop
 						if(packet.leaderID == ClientConnectionManager.Instance.LocalPlayerID)
 							idk[plidx].SetActive(true);
 						plidx++;
+					}
+				}
+
+				foreach(var s in _saved)
+				{
+					if(s != null && GameData.SimMngr.Sims.Contains(s))
+					{
+						if(s.MyAvatar != null && s.MyAvatar.GetComponent<Entity>() != null)
+						{
+							var e = s.MyAvatar.GetComponent<Entity>();
+							if (e.type == EntityType.SIM && !IsPlayerInGroup(e.entityID, true))
+							{
+								if (e is SimSync)
+									((SimSync)e).npc.InGroup = false;
+								s.Grouped = false;
+							}
+						}
 					}
 				}
 

@@ -93,6 +93,12 @@ namespace ErenshorCoop.Shared
 
 		public void ConvertOwnedToUnowned()
 		{
+			var spawns = FindObjectsOfType<SpawnPoint>(true);
+			foreach (var spawn in spawns)
+			{
+				spawn.gameObject.SetActive(false);
+			}
+
 			Logging.Log($"Converting {mobs.Count}");
 			foreach (var m in mobs)
 			{
@@ -102,6 +108,8 @@ namespace ErenshorCoop.Shared
 				if (!npc.character.Alive) continue;
 				if (npc == null) continue;
 				if(npc.gameObject == null) continue;
+				if (npc.type == EntityType.PET) continue;
+
 				var sync = npc.gameObject.AddComponent<NetworkedNPC>();
 				var _npc = npc.gameObject.GetComponent<NPC>();
 
@@ -147,13 +155,14 @@ namespace ErenshorCoop.Shared
 			//CollectSpawnData();
 
 			Logging.Log($"Converting {ClientNPCSyncManager.Instance.NetworkedMobs.Count}");
-			short lastHighMobID = GetFreeId();
+			//short lastHighMobID = GetFreeId();
 			foreach (var m in ClientNPCSyncManager.Instance.NetworkedMobs)
 			{
 				var npc = m.Value;
 				short id = m.Key;
 
 				if (!npc.character.Alive) continue;
+				if (npc.type == EntityType.PET) continue;
 
 				var sync = npc.gameObject.AddComponent<NPCSync>();
 				var _npc = npc.gameObject.GetComponent<NPC>();
@@ -165,6 +174,16 @@ namespace ErenshorCoop.Shared
 					GameHooks.spawnPoint.SetValue(_npc, point);
 					point.SpawnedNPC = _npc;
 					point.gameObject.SetActive(true);
+					if (point.PatrolPoints.Count > 0)
+					{
+						_npc.InitNewNPC(point, point.PatrolPoints);
+					}
+					else
+					{
+						_npc.InitNewNPC(point, point.RandomWanderRange);
+					}
+					point.NPCCurrentlySpawned = true;
+					point.MyNPCAlive = true;
 				}
 
 				//GameHooks.startMethod.Invoke(_npc, null);
@@ -175,7 +194,7 @@ namespace ErenshorCoop.Shared
 				if(!mobs.ContainsKey(id))
 					mobs.Add(id, sync);
 				sync.entityID = id;
-				//if(id > lastHighMobID) lastHighMobID = id;
+				sync.type = EntityType.ENEMY;
 
 				NPCTable.LiveNPCs.Add(_npc);	
 			}
@@ -337,88 +356,6 @@ namespace ErenshorCoop.Shared
 			else
 				SendMobData(playerID);
 		}
-		public void ServerCheckSims(short toPlayer=-1)
-		{
-			var currentGroup = Grouping.currentGroup;
-
-			if (currentGroup.groupList == null) return;
-			if (currentGroup.groupList.Count <= 0) return;
-
-			List<EntitySpawnData> spawnData = new();
-			var pidx = 0;
-			for (var i = 0; i < currentGroup.groupList.Count; i++)
-			{
-				short playerID = currentGroup.groupList[i].entityID;
-				bool isSim = currentGroup.groupList[i].isSim;
-				if (playerID == ClientConnectionManager.Instance.LocalPlayerID) continue;
-
-				switch (pidx)
-				{
-					case 0:
-						if (isSim)
-						{
-							if (GameData.GroupMember1 != null)
-							{
-								//spawnData.Add(ServerSpawnSim(GameData.GroupMember1.MyAvatar.gameObject, GameData.GroupMember1.simIndex));
-								//GameData.GroupMember1.MyAvatar.GetComponent<NPCSync>().OnClientConnect(-1,"",""); //Force pet spawn
-							}
-						}
-						break;
-					case 1:
-						if (isSim)
-						{
-							if (GameData.GroupMember2 != null)
-							{ 
-								//spawnData.Add(ServerSpawnSim(GameData.GroupMember2.MyAvatar.gameObject, GameData.GroupMember2.simIndex)); 
-								//GameData.GroupMember2.MyAvatar.GetComponent<NPCSync>().OnClientConnect(-1, "", "");
-							}
-						}
-						break;
-					case 2:
-						if (isSim)
-						{
-							if (GameData.GroupMember3 != null)
-							{
-								//spawnData.Add(ServerSpawnSim(GameData.GroupMember3.MyAvatar.gameObject, GameData.GroupMember3.simIndex));
-								//GameData.GroupMember3.MyAvatar.GetComponent<NPCSync>().OnClientConnect(-1, "", "");
-							}
-						}
-						break;
-				}
-				pidx++;
-			}
-			SendEntitySpawnPacket(spawnData, EntityType.SIM, toPlayer);
-		}
-
-		/// <summary>
-		/// Tells clients to "free" the sims if we zone or something
-		/// </summary>
-		public void ServerRemoveSims()
-		{
-			List<short> playerIDs = ClientConnectionManager.Instance.Players.Keys.ToList();
-			foreach (var si in sims)
-			{
-				var p = PacketManager.GetOrCreatePacket<EntityDataPacket>(si.Key, PacketType.ENTITY_DATA);
-				p.dataTypes.Add(EntityDataType.SIM_REMOVE);
-				p.entityType = EntityType.SIM;
-				p.SetData("targetPlayerIDs", playerIDs);
-			}
-		}
-
-		/// <summary>
-		/// Tells clients to "free" a sim when we remove them from the party
-		/// </summary>
-		public void ServerRemoveSim(short entityID)
-		{
-			List<short> playerIDs = ClientConnectionManager.Instance.Players.Keys.ToList();
-
-			var p = PacketManager.GetOrCreatePacket<EntityDataPacket>(entityID, PacketType.ENTITY_DATA);
-			p.dataTypes.Add(EntityDataType.SIM_REMOVE);
-			p.entityType = EntityType.SIM;
-			p.SetData("targetPlayerIDs", playerIDs);
-			
-		}
-
 
 		public List<short> GetPlayerSendList() => ClientZoneOwnership._zonePlayers.Keys.ToList();
 
@@ -490,18 +427,15 @@ namespace ErenshorCoop.Shared
 		}
 
 
-
-
-
 		/// <summary>
 		/// Sends mob data to a specific player or all players in the zone.
 		/// </summary>
 		public void SendMobData(short playerID, bool sendToAll = false)
 		{
-			Logging.LogError($"Trying to send mob data.....");
+			//Logging.LogError($"Trying to send mob data.....");
 			if (!CanRun || !ClientZoneOwnership.isZoneOwner) return;
 
-			Logging.LogError($"Trying to send mob data. {Variables.spawnData.Count}");
+			//Logging.LogError($"Trying to send mob data. {Variables.spawnData.Count}");
 
 			var spawns = FindObjectsOfType<SpawnPoint>(true);
 			List<EntitySpawnData> spawnData = new();
@@ -559,7 +493,7 @@ namespace ErenshorCoop.Shared
 			packet.SetData("spawnData", spawnData).SetData("targetPlayerIDs", targetPlayers);
 			packet.zone = SceneManager.GetActiveScene().name;
 
-			Logging.Log($"Sending {spawnData.Count} mobs.");
+			//Logging.Log($"Sending {spawnData.Count} mobs.");
 		}
 
 		/// <summary>
@@ -669,32 +603,6 @@ namespace ErenshorCoop.Shared
 			SendEntitySpawnPacket(spawnData, EntityType.PET);
 		}
 
-		/// <summary>
-		/// Creates SpawnData for Sim
-		/// </summary>
-		/*public EntitySpawnData ServerSpawnSim(GameObject sim, int simIndex)
-		{
-			if (!CanRun) return new();
-
-			var s = sim.GetOrAddComponent<NPCSync>();
-			if (!sims.Values.Contains(s))
-			{
-				s.type = EntityType.SIM;
-				s.entityID = GetFreeId();
-				sims[s.entityID] = s;
-			}
-			s.zone = SceneManager.GetActiveScene().name;
-			return CreateEntitySpawnData(
-				s.entityID,
-				simIndex.ToString(),
-				-1,
-				false,
-				sim.transform.position,
-				sim.transform.rotation,
-				EntityType.SIM
-			);
-		}*/
-
 
 		/// <summary>
 		/// Sends Spawn Packet
@@ -777,7 +685,8 @@ namespace ErenshorCoop.Shared
 				position = position,
 				rotation = rotation,
 				entityType = type,
-				ownerID = ownerID
+				ownerID = ownerID,
+				zone = SceneManager.GetActiveScene().name
 			};
 
 			if(sync != null && sync.isGuardian)

@@ -25,7 +25,7 @@ namespace ErenshorCoop.UI
 
 		private static GameObject mainMenuButton;
 		private static TextMeshProUGUI promptText;
-		private static GameObject promptPanel;
+		public static GameObject promptPanel;
 		private static Action acceptCB;
 		private static Action cancelCB;
 		public static InputField promptInput;

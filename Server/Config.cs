@@ -51,12 +51,12 @@ namespace ErenshorCoop.Server
 			);
 			IsPVPEnabled.SettingChanged += OnPVPSettingChanged;
 
-			EnableModWhitelist = config.Bind(
+			/*EnableModWhitelist = config.Bind(
 				"Host Settings",
 				"!!!!!Enable Mod Whitelist",
 				false,
 				"When this is enabled, only players with the same mods can join you."
-			);
+			);*/
 
 			ModeratorListRaw = config.Bind(
 				"Host Settings",

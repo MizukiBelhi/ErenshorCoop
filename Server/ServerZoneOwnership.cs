@@ -82,6 +82,7 @@ namespace ErenshorCoop.Server
 
 		public static void OnClientChangeZone(short playerID, string newZone, string previousZone)
 		{
+			Logging.Log($"wtf {newZone} {previousZone}");
 			if (newZone == previousZone) return;
 
 			if (!_zoneMembers.TryGetValue(newZone, out var newList))
@@ -115,6 +116,15 @@ namespace ErenshorCoop.Server
 					Logging.Log($" {previousZone}.O = {pList[0]}");
 					SendZoneOwnershipPacket(pList[0],pList[0], previousZone, ClientConnectionManager.Instance.GetPlayerFromID(pList[0]));
 				}
+
+				if(_zoneMembers[previousZone].Count == 0)
+				{
+					if (zoneEntities.ContainsKey(previousZone))
+					{
+						zoneEntities[previousZone].Clear();
+						Logging.Log($"Cleared {previousZone} mobs");
+					}
+				}
 			}
 			
 
@@ -142,6 +152,7 @@ namespace ErenshorCoop.Server
 
 
 			SendZoneOwnershipPacket(playerID, _zoneOwners[newZone], newZone, ClientConnectionManager.Instance.GetPlayerFromID(playerID));
+
 		}
 
 

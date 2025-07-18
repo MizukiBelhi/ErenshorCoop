@@ -10,6 +10,7 @@ using UnityEngine.AI;
 using UnityEngine.SceneManagement;
 using System;
 using TMPro;
+using System.Runtime.Remoting.Messaging;
 
 namespace ErenshorCoop
 {
@@ -141,39 +142,35 @@ namespace ErenshorCoop
 
 		public void HandleAttack(EntityAttackData data)
 		{
-			(bool isPlayer, var attacked) = Extensions.GetCharacterFromID(data.attackedIsNPC, data.attackedID, false);
+			var ent = Extensions.GetEntityByID(data.attackedID);
 
-			//Logging.Log($"{name} attacked {attacked.name} {data.damage}");
+			
 
-			if (attacked == null)
+			if (ent == null)
 			{
-				//Logging.Log($"But something was null? {attacked == null} {data.attackedIsNPC} {data.attackedID}");
+				Logging.Log($"[Entity Attack ({entityName})] But something was null? {ent == null} {data.attackedIsNPC} {data.attackedID}");
 				return;
 			}
-
+			var attacked = ent.character;
+			if (ent.character == null) return;
+			if (character == null) return;
+			//Logging.Log($"{name} attacked {attacked.name} {data.damage}");
 
 			if (Grouping.HasGroup)
 			{
 				//Set fromPlayer to if this player is in our group and we're the leader
-				//fromPlayer = Grouping.IsLocalLeader() && Grouping.IsPlayerInGroup(entityID, false);
-				//FIXME: attacked could be a sim
-				if (isPlayer && Grouping.IsPlayerInGroup(data.attackedID, false)) //If the target isn't a player and the player is in our group
+				if ((ent is NetworkedPlayer || ent is PlayerSync || ent is NetworkedSim || ent is SimSync) && Grouping.IsPlayerInGroup(data.attackedID, ent.type == EntityType.SIM)) //If the target isn't a player and the player is in our group
 				{
-					//We add ourselves to the aggro list, this way everyone in the group is automatically in the aggro list
-					//if (data.damage > 0) //Make sure we actually did damage
+					//Logging.Log($"beep boop aggro {attacked.name} vs {name} to us");
+					npc.ManageAggro(1, ClientConnectionManager.Instance.LocalPlayer.character);
+					//if (ServerConnectionManager.Instance.IsRunning)
 					{
-						//Logging.Log($"beep boop aggro {attacked.name} vs {name} to us");
-						npc.ManageAggro(1, ClientConnectionManager.Instance.LocalPlayer.character);
-						if (ServerConnectionManager.Instance.IsRunning)
-						{
-							if (GameData.GroupMember1 != null && GameData.GroupMember1.simIndex >= 0)
-								npc.ManageAggro(1, GameData.GroupMember1.MyStats.Myself);
-							if (GameData.GroupMember2 != null && GameData.GroupMember2.simIndex >= 0)
-								npc.ManageAggro(1, GameData.GroupMember2.MyStats.Myself);
-							if (GameData.GroupMember3 != null && GameData.GroupMember3.simIndex >= 0)
-								npc.ManageAggro(1, GameData.GroupMember3.MyStats.Myself);
-						}
-						//GameData.GroupMatesInCombat.Add(npc);
+						if (GameData.GroupMember1 != null && GameData.GroupMember1.simIndex >= 0)
+							npc.ManageAggro(1, GameData.GroupMember1.MyStats.Myself);
+						if (GameData.GroupMember2 != null && GameData.GroupMember2.simIndex >= 0)
+							npc.ManageAggro(1, GameData.GroupMember2.MyStats.Myself);
+						if (GameData.GroupMember3 != null && GameData.GroupMember3.simIndex >= 0)
+							npc.ManageAggro(1, GameData.GroupMember3.MyStats.Myself);
 					}
 				}
 			}
@@ -184,18 +181,16 @@ namespace ErenshorCoop
 			Variables.DontCalculateDamageMitigationCharacters.Add(attacked);
 			int ret = 999;
 
-			if (isPlayer)
+			if (ent is NetworkedPlayer || ent is PlayerSync)
 				attacked.MyFaction = Character.Faction.PC;
 
 			if (data.damageType == GameData.DamageType.Physical)
-				ret = attacked.DamageMe(data.damage, isPlayer, data.damageType, character, data.effect, data.isCrit);
+				ret = attacked.DamageMe(data.damage, (ent is NetworkedPlayer || ent is PlayerSync), data.damageType, character, data.effect, data.isCrit);
 			else
-				ret = attacked.MagicDamageMe(data.damage, isPlayer, data.damageType, character, data.resistMod);
+				ret = attacked.MagicDamageMe(data.damage, (ent is NetworkedPlayer || ent is PlayerSync), data.damageType, character, data.resistMod);
 
-			if (isPlayer)
+			if (ent is NetworkedPlayer || ent is PlayerSync)
 				attacked.MyFaction = attacked.BaseFaction;
-
-			//Logging.Log($"{ret}");
 
 			Variables.DontCalculateDamageMitigationCharacters.Remove(attacked);
 		}
@@ -231,16 +226,6 @@ namespace ErenshorCoop
 
 			if (effectData.targetID >= 0)
 			{
-				//Check if we are in a group, and its a sim in our group
-				if (Grouping.HasGroup && Grouping.IsPlayerInGroup(entityID, type == EntityType.SIM))
-				{
-					if (target.type == EntityType.ENEMY) //If the target is an enemy
-					{
-						//We add ourselves to the aggro list, this way everyone in the group is automatically in the aggro list
-						targetChar.MyNPC.ManageAggro(1, ClientConnectionManager.Instance.LocalPlayer.character);
-					}
-				}
-
 				if (effectData.duration >= 0)
 					targetChar.MyStats.AddStatusEffect(spell, true, effectData.damageBonus, character, effectData.duration);
 				else if (effectData.duration <= 0)

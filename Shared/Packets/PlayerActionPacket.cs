@@ -96,8 +96,7 @@ namespace ErenshorCoop.Shared.Packets
 				foreach (var h in healingData)
 				{
 					writer.Put(h.targetID);
-					writer.Put(h.targetIsNPC);
-					writer.Put(h.targetIsSim);
+					writer.Put(h.spellID);
 					writer.Put(h.amount);
 					writer.Put(h.isCrit);
 					writer.Put(h.isMP);
@@ -185,8 +184,7 @@ namespace ErenshorCoop.Shared.Packets
 					HealingData h = new()
 					{
 						targetID = reader.GetShort(),
-						targetIsNPC = reader.GetBool(),
-						targetIsSim = reader.GetBool(),
+						spellID = reader.GetString(),
 						amount = reader.GetInt(),
 						isCrit = reader.GetBool(),
 						isMP = reader.GetBool()
@@ -247,8 +245,7 @@ namespace ErenshorCoop.Shared.Packets
 	public struct HealingData
 	{
 		public short targetID;
-		public bool targetIsNPC;
-		public bool targetIsSim;
+		public string spellID;
 		public int amount;
 		public bool isMP;
 		public bool isCrit;

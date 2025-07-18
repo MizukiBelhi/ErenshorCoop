@@ -10,6 +10,7 @@ using TMPro;
 using UnityEngine.SceneManagement;
 using Random = UnityEngine.Random;
 using System.Runtime.Remoting.Messaging;
+using JetBrains.Annotations;
 
 namespace ErenshorCoop
 {
@@ -152,20 +153,32 @@ namespace ErenshorCoop
 			if (rot != transform.rotation)
 				transform.rotation = rot;
 
-			HandleAggro();
+			if (sim.MyStats.CurrentHP != _savedHP)
+				sim.MyStats.CurrentHP = _savedHP;
+			if (sim.MyStats.CurrentMana != _savedMP)
+				sim.MyStats.CurrentMana = _savedMP;
 
+			HandleAggro();
+			if ((npc.CurrentAggroTarget == null) || !character.Alive)
+			{
+				character.Relax = true;
+			}
+			else if (character.Alive)
+			{
+				character.Relax = false;
+			}
 		}
 
 		private void HandleAggro()
 		{
-			if (npc.CurrentAggroTarget != null && character.Alive && aggroTarget != null && aggroTarget.type == EntityType.ENEMY)
+			if (npc != null && npc.CurrentAggroTarget != null && character != null && character.Alive && aggroTarget != null && aggroTarget.type == EntityType.ENEMY && npc.NameFlash != null)
 			{
 				if (!npc.NameFlash.flashing)
 				{
 					npc.NameFlash.Flash(true);
 				}
 			}
-			else
+			else if(npc != null && npc.NameFlash != null)
 			{
 				if (npc.NameFlash.flashing)
 				{
@@ -203,8 +216,8 @@ namespace ErenshorCoop
 					}
 				}
 			}
-			npc.HailTimer = 99999f;
-
+			if(npc != null)
+				npc.HailTimer = 99999f;
 
 		}
 
@@ -230,6 +243,7 @@ namespace ErenshorCoop
 
 			}
 			if (requiresSimUpdate) isNextFrame = true;
+
 		}
 
 
@@ -245,11 +259,13 @@ namespace ErenshorCoop
 			character.Alive = true;
 			MyAnim.SetBool("Dead", false);
 			//MyAnim.SetTrigger("Revive");
+			
 
 			npc.NPCName = playerName;
 			npc.GuildName = "";
 			name = playerName;
 			gameObject.layer = 9;
+			npc.noClick = false;
 
 			var component = npc.NamePlate.GetComponent<TextMeshPro>();
 			component.text = component.text.Replace("'s corpse", "");
@@ -258,6 +274,7 @@ namespace ErenshorCoop
 
 		private void HandlePlayerAttack(PlayerAttackData data)
 		{
+			if (zone != SceneManager.GetActiveScene().name) return;
 			//TODO: attacked could potentially be a sim with PVP mod
 			(bool isPlayer, var attacked) = Extensions.GetCharacterFromID(data.attackedIsNPC, data.attackedID, false);
 
@@ -265,7 +282,7 @@ namespace ErenshorCoop
 
 			if (attacked == null)
 			{
-				Logging.Log($"[SIM ATTACK] But something was null? {attacked == null} {data.attackedIsNPC} {data.attackedID}");
+				Logging.Log($"[SIM ATTACK ({entityName})] But something was null? {attacked == null} {data.attackedIsNPC} {data.attackedID}");
 				return;
 			}
 			if(character == null)
@@ -275,7 +292,7 @@ namespace ErenshorCoop
 
 			bool fromPlayer = false; //This should be false by default, otherwise every player that receives this will be
 									 //Adding player damage to the enemy, which would cause everyone to get xp
-									 //Check if we are in a group
+			//Check if we are in a group
 			if (Grouping.HasGroup)
 			{
 				//Set fromPlayer to if this player is in our group and we're the leader
@@ -287,7 +304,7 @@ namespace ErenshorCoop
 					{
 						//Logging.Log($"beep boop aggro {playerName} vs {attacked.name} to us");
 						attacked.MyNPC.ManageAggro(1, ClientConnectionManager.Instance.LocalPlayer.character);
-						if (ServerConnectionManager.Instance.IsRunning)
+						//if (ServerConnectionManager.Instance.IsRunning)
 						{
 							if (GameData.GroupMember1 != null && GameData.GroupMember1.simIndex >= 0)
 								attacked.MyNPC.ManageAggro(1, GameData.GroupMember1.MyStats.Myself);
@@ -317,6 +334,7 @@ namespace ErenshorCoop
 
 		private void HandleDamageTaken(DamageTakenData data)
 		{
+			if (zone != SceneManager.GetActiveScene().name) return;
 			//TODO: attacker could potentially be a sim with PVP mod
 			(bool isPlayer, var attacker) = Extensions.GetCharacterFromID(data.attackerIsNPC, data.attackerID, false);
 

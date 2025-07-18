@@ -38,7 +38,7 @@ namespace ErenshorCoop
 			sim = GetComponent<SimPlayer>();
 			ClientConnectionManager.Instance.OnClientConnect += OnClientConnect;
 
-			type = EntityType.SIM;
+			type = EntityType.ENEMY;
 		}
 
 		public void OnDestroy()
@@ -157,9 +157,28 @@ namespace ErenshorCoop
 			}
 
 
-			
 
-			
+			//check everyone in aggro table
+			if (npc.AggroTable != null && npc.AggroTable.Count > 0)
+			{
+				for (int i = 0; i < npc.AggroTable.Count; i++)
+				{
+					var p = npc.AggroTable[i];
+					if (p == null || p.Player == null) //cleanup
+					{
+						npc.AggroTable.Remove(p);
+						continue;
+					}
+					var ent = p.Player.GetComponent<Entity>(); //Remove if they are in a different zone
+					if (ent != null && (ent is NetworkedPlayer || ent is NetworkedSim) && ent.zone != SceneManager.GetActiveScene().name)
+					{
+						if (npc.CurrentAggroTarget == p.Player)
+							npc.CurrentAggroTarget = null;
+						npc.AggroTable.Remove(p);
+					}
+				}
+			}
+
 		}
 
 		public void LateUpdate()

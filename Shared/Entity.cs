@@ -51,6 +51,17 @@ namespace ErenshorCoop.Shared
 				if (Variables.savedZoneSimID.ContainsKey(sim.myIndex))
 				{
 					entityID = Variables.savedZoneSimID[sim.myIndex];
+					if(SharedNPCSyncManager.Instance.sims.ContainsKey(entityID))
+					{
+						var e = SharedNPCSyncManager.Instance.sims[entityID];
+						if (e != null)
+						{
+							//Logging.Log($"[{entityName}] We already have a sim with id {entityID}: {e.entityName}");
+							DestroyImmediate(e.gameObject);
+							//SharedNPCSyncManager.Instance.sims.Remove(entityID);
+						}
+					}
+
 					SharedNPCSyncManager.Instance.sims.Add(entityID, ((SimSync)this));
 					StartCoroutine(DelayedSendConnect());
 					return;
@@ -84,7 +95,23 @@ namespace ErenshorCoop.Shared
 					SharedNPCSyncManager.Instance.sims.Add(entityID, ((SimSync)this));
 					((SimSync)this).SendConnectData();
 					Variables.savedZoneSimID.Add(((SimSync)this).simIndex, entityID);
+					CheckSummon();
 				}
+			}
+		}
+
+		public void CheckSummon()
+		{
+			if (MySummon == null || MySummon.character.MyNPC != character.MyCharmedNPC)
+			{
+				if (character.MyCharmedNPC != null)
+				{
+					Destroy(character.MyCharmedNPC.gameObject);
+				}
+			}
+			if (MySummon != null)
+			{
+				MySummon.ReceiveRequestID(MySummon.entityID);
 			}
 		}
 
@@ -92,6 +119,7 @@ namespace ErenshorCoop.Shared
 		{
 			yield return new WaitForSeconds(3f);
 			((SimSync)this).SendConnectData();
+			CheckSummon();
 		}
 
 		public void ReceiveRequestID(short id)
@@ -115,6 +143,7 @@ namespace ErenshorCoop.Shared
 				SharedNPCSyncManager.Instance.sims.Add(entityID, ((SimSync)this));
 				((SimSync)this).SendConnectData();
 				Variables.savedZoneSimID.Add(((SimSync)this).simIndex, entityID);
+				CheckSummon();
 			}
 		}
 
@@ -228,26 +257,37 @@ namespace ErenshorCoop.Shared
 			foreach (var healingData in healing)
 			{
 
-				(bool isPlayer, var target) = Extensions.GetCharacterFromID(healingData.targetIsNPC, healingData.targetID, healingData.targetIsSim);
+				var target = Extensions.GetEntityByID(healingData.targetID);
 				if (target == null) continue;
+				var spell = GameData.SpellDatabase.GetSpellByID(healingData.spellID);
+				if (spell == null) continue;
 
 				if (!healingData.isMP)
 				{
 
-					if (Vector3.Distance(transform.position, GameData.PlayerControl.transform.position) <= 15)
+					if (Vector3.Distance(transform.position, GameData.PlayerControl.transform.position) <= 15 && healingData.amount > 0)
 					{
 						bool targetIsLocal = healingData.targetID == ClientConnectionManager.Instance.LocalPlayerID;
 						UpdateSocialLog.LogAdd($"{name}'s {(healingData.isCrit ? "CRITICAL " : "")}healing spell restores {healingData.amount} of {(targetIsLocal ? "your" : target.name + "'s")} life!", "green");
 					}
 
-					target.MyStats.HealMe(healingData.amount);
+					target.character.MyStats.HealMe(healingData.amount);
 				}
 				else
 				{
-					target.MyStats.CurrentMana += healingData.amount;
+					target.character.MyStats.CurrentMana += healingData.amount;
 					//having the bar extend for a frame kinda sucks so we handle it ourselves
-					if (target.MyStats.CurrentMana > target.MyStats.GetCurrentMaxMana())
-						target.MyStats.CurrentMana = target.MyStats.GetCurrentMaxMana();
+					if (target.character.MyStats.CurrentMana > target.character.MyStats.GetCurrentMaxMana())
+						target.character.MyStats.CurrentMana = target.character.MyStats.GetCurrentMaxMana();
+				}
+
+				if ((target.type == EntityType.SIM || target.type == EntityType.ENEMY || target is NetworkedPlayer) && Vector3.Distance(transform.position, target.transform.position) < 10f && healingData.amount > 0)
+				{
+					UpdateSocialLog.LogAdd(target.name + " " + spell.StatusEffectMessageOnNPC, "lightblue");
+				}
+				else if (target is PlayerSync && healingData.amount > 0)
+				{
+					UpdateSocialLog.LogAdd("You " + spell.StatusEffectMessageOnPlayer, "lightblue");
 				}
 			}
 		}
@@ -353,7 +393,7 @@ namespace ErenshorCoop.Shared
 
 		private void Update()
 		{
-			if (TargetChar == null)
+			if (TargetChar == null || SourceChar == null)
 			{
 				Destroy(gameObject);
 				return;

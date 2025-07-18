@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
-using System.Timers;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using ErenshorCoop.Shared;
@@ -11,10 +10,9 @@ using ErenshorCoop.Server;
 using ErenshorCoop.Shared.Packets;
 using Random = UnityEngine.Random;
 using System.Linq;
-using System.Runtime.Remoting.Messaging;
 using Steamworks;
 using LiteNetLib.Utils;
-using HarmonyLib;
+using System.Collections;
 
 namespace ErenshorCoop.Client
 {
@@ -89,7 +87,7 @@ namespace ErenshorCoop.Client
 			}
 			else
 			{
-				Logging.LogError($"Could not connect.");
+				Logging.Log($"Could not connect.");
 				netManager.Stop();
 				peer = null;
 			}
@@ -97,7 +95,9 @@ namespace ErenshorCoop.Client
 
 		public void Disconnect()
 		{
-			Logging.LogError($"Disconnected.");
+			CompassHandler.ClearMarkers();
+
+			Logging.Log($"Disconnected.");
 			if(IsConnected && IsRunning)
 				Logging.LogGameMessage($"Disconnected.");
 
@@ -144,10 +144,26 @@ namespace ErenshorCoop.Client
 			{
 				if (player.Value.sceneChanged)
 				{
-					player.Value.gameObject.SetActive(player.Value.zone == SceneManager.GetActiveScene().name);
+					var curScene = SceneManager.GetActiveScene().name;
+					player.Value.gameObject.SetActive(player.Value.zone == curScene);
 					player.Value.sceneChanged = false;
 
-					Logging.LogError($"[Client] Player changed scene");
+					Logging.Log($"[Client] Player changed scene");
+
+					if (curScene == player.Value.zone)
+						CompassHandler.AddMarker(player.Value);
+					else
+						CompassHandler.RemoveMarker(player.Value);
+
+					//Destroy their sims
+					foreach (var s in ClientNPCSyncManager.Instance.NetworkedSims)
+					{
+						if (s.Value != null && s.Value.ownerID == player.Key)
+						{
+							if (!Grouping.IsPlayerInGroup(s.Value.entityID, true))
+								Destroy(s.Value.gameObject);
+						}
+					}
 				}
 			}
 
@@ -176,17 +192,18 @@ namespace ErenshorCoop.Client
 		public void OnConnectDelayed(float delayInSeconds, short playerID, string scene)
 		{
 			//For some reason it's not invoking anymore..
-			ClientZoneOwnership.OnClientChangeZone(playerID, scene, null);
+			//ClientZoneOwnership.OnClientChangeZone(playerID, scene, "");
+			//ServerZoneOwnership.OnClientChangeZone(playerID, scene, "");
 
-			Timer timer = new(delayInSeconds * 1000);
-			timer.Elapsed += (_, _) =>
-			{
-				OnClientConnect?.Invoke(playerID, scene, null);
-			};
-			timer.AutoReset = false;
-			timer.Start();
+			StartCoroutine(_OnConnectDelayed(delayInSeconds, playerID, scene));
 		}
 
+
+		private IEnumerator _OnConnectDelayed(float delay, short playerID, string scene)
+		{
+			yield return new WaitForSeconds(delay);
+			OnClientConnect?.Invoke(playerID, scene, "");
+		}
 
 
 		private void OnPlayerConnect(short playerID, PlayerConnectionPacket packet, NetPeer peer)
@@ -274,25 +291,28 @@ namespace ErenshorCoop.Client
 				if (simSpawnQueue.Count > 0)
 				{
 					var (playerID, packet) = simSpawnQueue.Dequeue();
-					string scene = packet.scene;
-					string charName = packet.name;
-					var pos = packet.position;
-					var rot = packet.rotation;
-
-					var pl = GameHooks.CreateSim(playerID, pos, rot);
-					if (pl != null)
+					if (!ClientNPCSyncManager.Instance.NetworkedSims.ContainsKey(playerID))
 					{
-						ClientNPCSyncManager.Instance.NetworkedSims.Add(playerID, pl);
-						pl.Init(pos, rot, charName, scene, playerID);
-						pl.HandleConnectPacket(packet);
-						pl.ownerID = packet.ownerID;
-						pl.gameObject.SetActive(false);
+						string scene = packet.scene;
+						string charName = packet.name;
+						var pos = packet.position;
+						var rot = packet.rotation;
 
-						//Logging.Log($"SIM {charName} #{pl.ownerID} connected @{scene}");
-					}
-					else
-					{
-						Logging.LogError($"Unknown Error: Failed to Create Sim");
+						var pl = GameHooks.CreateSim(playerID, pos, rot);
+						if (pl != null)
+						{
+							ClientNPCSyncManager.Instance.NetworkedSims.Add(playerID, pl);
+							pl.Init(pos, rot, charName, scene, playerID);
+							pl.HandleConnectPacket(packet);
+							pl.ownerID = packet.ownerID;
+							pl.gameObject.SetActive(false);
+
+							//Logging.Log($"SIM {charName} #{pl.ownerID} connected @{scene}");
+						}
+						else
+						{
+							Logging.LogError($"Unknown Error: Failed to Create Sim");
+						}
 					}
 				}
 				if (ClientNPCSyncManager.Instance != null && ClientNPCSyncManager.Instance.NetworkedSims != null)
@@ -328,6 +348,7 @@ namespace ErenshorCoop.Client
 			if (Players.TryGetValue(playerID, out var p))
 			{
 				Logging.Log($"{p.name} Disconnected");
+				CompassHandler.RemoveMarker(p);
 				Destroy(p.gameObject);
 				Players.Remove(playerID);
 				OnPlayerDisconnect?.Invoke(playerID);
@@ -645,7 +666,7 @@ namespace ErenshorCoop.Client
 				}
 				if (((ServerInfoPacket)packet).dataTypes.Contains(ServerInfoType.HOST_MODS))
 				{
-					Logging.Log($"Received {packetType} of size {psize}");
+					//Logging.Log($"Received {packetType} of size {psize}");
 					//We just put it here
 					Logging.LogGameMessage($"Connected!");
 
@@ -742,9 +763,10 @@ namespace ErenshorCoop.Client
 				}
 				if (((ServerInfoPacket)packet).dataTypes.Contains(ServerInfoType.ZONE_OWNERSHIP))
 				{
+					Logging.Log($"Received {packetType} of size {psize}");
 					OnZoneOwnerChange?.Invoke(((ServerInfoPacket)packet).zoneOwner, ((ServerInfoPacket)packet).zone, ((ServerInfoPacket)packet).playerList);
-					return (null, 0);
 				}
+				return (null, 0);
 			}
 			else if (packetType == PacketType.SERVER_CONNECT)
 			{
@@ -972,7 +994,7 @@ namespace ErenshorCoop.Client
 				//GameData.MouseSlot.UpdateSlotImage();
 
 				var hasqual = item.RequiredSlot == Item.SlotType.General;
-				UI.Main.EnablePrompt($"Are you sure you want to drop {(hasqual?quantity:"")} {item.ItemName}.", () => { ConfirmDrop(item, quantity); }, () => { GameData.MouseSlot.dragging = true;});
+				UI.Main.EnablePrompt($"Are you sure you want to drop {(hasqual?quantity:"")} {item.ItemName}?", () => { ConfirmDrop(item, quantity); }, () => { GameData.MouseSlot.dragging = true; });
 			}
 			else
 			{

@@ -1,3 +1,59 @@
+## v2.0.7
+- Lobbies and direct connections are now being closed when the game is exited
+- You can no longer interact with left-click while a prompt is open
+- Changed error logs that aren't errors to non-errors
+
+## v2.0.6
+- Fixed sims sometimes not appearing (hopefully)
+- Fixed sims being removed from group for other players
+- Fixed sims not respawning with the player (hopefully)
+- Fixed client settings not being saved
+- Added additional checks so sims health is less likely to desync
+- Added player markers!
+  - Can be turned off in the settings
+  - By default only group members have off-screen markers
+
+## v2.0.5
+- Fixed rare bug where you would get stuck with a black screen after zoning
+- Fixed other players sims staying active after they zoned
+- Fixed complaints about spawn data missing for mobs when you zone quickly
+- Fixed other sims/players in different zones attacking mobs spamming the log
+- Fixed players and sims still being in aggro lists after they zone
+- Fixed zone ownership transfer being broken (hopefully)
+- Fixed sims that have been removed from group still acting like they are in the group
+- Fixed a bug where you could not respawn if a player in your group already respawned
+  - Will not work if they respawn on the same map you died on
+- Added additional checks so players health is less likely to desync
+- Removed auto heal on other players/sims/mobs
+
+## v2.0.4
+- Added the ability to right click->join your friends on steam
+- Fixed MP healing not working, also removed the text when healing for 0
+- Fixed a bug where dropped items came back when they were looted
+- Fixed a bug where you were unable to click on players or sims after they died
+- Fixed other players/sims being able to revive mid combat (hopefully)
+- You can no longer invite players and sims outside of your level range
+
+## v2.0.3
+- Fixed sims becoming a skateboard when dead
+- Fixed sims not attacking under certain circumstances
+- Fixed sims from players not taking damage
+- Fixed sims showing two messages for gaining xp
+- Fixed players not being able to heal
+- Fixed clients not being removed from groups in steam lobbies
+- Fixed error with wands
+- Added further preventions against saving other players or sims
+- Added further preventions to networked sims and players against navigation
+
+## v2.0.2
+- Fixed zoning breaking when a player is in the third group slot
+- Fixed sims duplicating on zone entry
+- Fixed a bug where the playerlist was updating icons incorrectly
+
+## v2.0.1
+- Fixed errors related to sims
+- Fixed sim summons (hopefully)
+
 ## v2.0.0
 - Added New UI!
   - Can be found in the escape menu

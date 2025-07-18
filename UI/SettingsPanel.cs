@@ -46,6 +46,9 @@ namespace ErenshorCoop.UI
 				var entryType = baseEntry.GetType();
 				Toggle tog = null;
 				InputField inp = null;
+				InputField inp1 = null;
+				InputField inp2 = null;
+				InputField inp3 = null;
 
 				//Hack: im lazy
 				if (def.Section != "Client Settings") continue;
@@ -79,6 +82,58 @@ namespace ErenshorCoop.UI
 					inp.onValueChanged.AddListener((string v) => { var c = float.TryParse(v, out var f); if(c) baseEntry.BoxedValue = f; });
 					yPos -= 20;
 				}
+				if (entryType == typeof(ConfigEntry<Color>))
+				{
+					var l = Base.AddLabel(parent, new Vector2(50, yPos - 20), new Vector2(200, 14), def.Key.Replace("!", ""));
+					l.alignment = TMPro.TextAlignmentOptions.Left;
+					var color = (Color)baseEntry.BoxedValue;
+					float fieldWidth = 40f;
+					float startX = 250f;
+					string[] channels = { "R", "G", "B", "A" };
+					float[] values = { color.r, color.g, color.b, color.a };
+					int[] intValues = values.Select(v => Mathf.RoundToInt(v * 255f)).ToArray();
+
+					for (int i = 0; i < 4; i++)
+					{
+						var t = Base.AddLabel(parent, new Vector2(startX + (fieldWidth + 5) * i, yPos - 40), new Vector2(fieldWidth, 10), channels[i]);
+						t.fontSize = 10;
+					}
+
+					var preview = Base.AddImage(parent, new Vector2(startX + 4 * (fieldWidth + 5) + 10, yPos - 20), new Vector2(32, 16), null);
+					preview.color = color;
+					List<InputField> inputs = new() { inp, inp1, inp2, inp3 };
+
+					for (int i = 0; i < 4; i++)
+					{
+						inputs[i] = Base.AddInputField(parent, new Vector2(startX + (fieldWidth + 5) * i, yPos - 20), new Vector2(fieldWidth, 16), "");
+						inputs[i].text = intValues[i].ToString();
+
+						inputs[i].onValueChanged.AddListener((string v) =>
+						{
+							if (int.TryParse(v, out var parsed))
+							{
+								parsed = Mathf.Clamp(parsed, 0, 255);
+								intValues[i] = parsed;
+
+								var newColor = new Color(
+									intValues[0] / 255f,
+									intValues[1] / 255f,
+									intValues[2] / 255f,
+									intValues[3] / 255f
+								);
+
+								baseEntry.BoxedValue = newColor;
+								preview.color = newColor;
+							}
+						});
+					}
+
+					inp = inputs[0];
+					inp1 = inputs[1];
+					inp2 = inputs[2];
+					inp3 = inputs[3];
+					yPos -= 25;
+				}
 
 
 
@@ -95,6 +150,18 @@ namespace ErenshorCoop.UI
 								inp.text = (string)baseEntry.BoxedValue;
 							if (entryType == typeof(ConfigEntry<float>))
 								inp.text = $"{(float)baseEntry.BoxedValue}";
+							if (entryType == typeof(ConfigEntry<Color>))
+							{
+								var color = (Color)baseEntry.BoxedValue;
+								float[] values = { color.r, color.g, color.b, color.a };
+								int[] intValues = values.Select(v => Mathf.RoundToInt(v * 255f)).ToArray();
+								inp.text = intValues[0].ToString();
+								inp1.text = intValues[1].ToString();
+								inp2.text = intValues[2].ToString();
+								inp3.text = intValues[3].ToString();
+							}
+
+							ErenshorCoopMod.config.Save();
 						};
 						eventInfo.AddEventHandler(baseEntry, handler);
 					}

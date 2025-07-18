@@ -598,7 +598,7 @@ namespace ErenshorCoop.Steam
 
 				isDev = usr.Key.m_SteamID == 76561198852628904;
 
-				lastPlayerData.Add(new() { name = ent.entityName, ping = _status.m_nPing, zone = ent.zone, playerID = ent.entityID, isMod = ServerConfig.ModeratorList.Contains(ent.steamID.m_SteamID), isDev = isDev });
+				lastPlayerData.Add(new() { name = ent.entityName, ping = _status.m_nPing, zone = ent.zone, playerID = ent.entityID, isMod = ServerConfig.ModeratorList.Contains(ent.steamID.m_SteamID), isDev = isDev, isHost = false });
 			}
 
 			var p = PacketManager.GetOrCreatePacket<ServerInfoPacket>(0, PacketType.SERVER_INFO);
@@ -606,9 +606,9 @@ namespace ErenshorCoop.Steam
 			p.dataTypes.Add(ServerInfoType.PLAYER_LIST);
 			p.playerInfoList = lastPlayerData;
 #if DEBUG
-			//lastPlayerData.Add(new() { name = "Scrubby", ping = UnityEngine.Random.Range(200,500), zone = SceneManager.GetActiveScene().name, playerID = 1, isHost = true });
-			//lastPlayerData.Add(new() { name = "Cyndara", ping = UnityEngine.Random.Range(35, 65), zone = SceneManager.GetActiveScene().name, playerID = 2, isMod = true });
-			//lastPlayerData.Add(new() { name = "Behox", ping = UnityEngine.Random.Range(101, 200), zone = SceneManager.GetActiveScene().name, playerID = 0 });
+			//lastPlayerData.Add(new() { name = "Scrubby", ping = UnityEngine.Random.Range(200,500), zone = SceneManager.GetActiveScene().name, playerID = 1, isHost = UnityEngine.Random.Range(0,100) >= 50, isMod = UnityEngine.Random.Range(0, 100) >= 50, isDev = UnityEngine.Random.Range(0, 100) >= 50 });
+			//lastPlayerData.Add(new() { name = "Cyndara", ping = UnityEngine.Random.Range(35, 65), zone = SceneManager.GetActiveScene().name, playerID = 2, isHost = UnityEngine.Random.Range(0, 100) >= 50, isMod = UnityEngine.Random.Range(0, 100) >= 50, isDev = UnityEngine.Random.Range(0, 100) >= 50 });
+			//lastPlayerData.Add(new() { name = "Behox", ping = UnityEngine.Random.Range(101, 200), zone = SceneManager.GetActiveScene().name, playerID = 0, isHost = UnityEngine.Random.Range(0, 100) >= 50, isMod = UnityEngine.Random.Range(0, 100) >= 50, isDev = UnityEngine.Random.Range(0, 100) >= 50 });
 			//lastPlayerData.Add(new() { name = "Turk", ping = UnityEngine.Random.Range(1, 5), zone = SceneManager.GetActiveScene().name, playerID = 0 });
 			//lastPlayerData.Add(new() { name = "Brian", ping = UnityEngine.Random.Range(998, 999), zone = SceneManager.GetActiveScene().name, playerID = 0 });
 #endif

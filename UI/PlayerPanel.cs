@@ -39,11 +39,13 @@ namespace ErenshorCoop.UI
 			return null;
 		}
 
-		public struct PlayerInfoObject
+		public class PlayerInfoObject
 		{
 			public GameObject go;
 			public TMP_Text text;
 			public Image pingIcon;
+			public Image modIcon;
+			public Text tooltip;
 		}
 
 		static private Dictionary<string, PlayerInfoObject> playerLabels = new();
@@ -214,16 +216,20 @@ namespace ErenshorCoop.UI
 						if (pl.isDev)
 							imgSprite = Base.bugIcon;
 
+						Image modIcon = null;
+
+						Text tooltipText = null;
+
 						if (imgSprite != null)
 						{
-							var img2 = Base.AddImage(g.transform, new Vector2(200 - 16, -7), new Vector2(16, 16), imgSprite);
-							img2.raycastTarget = true;
-							img2.color = Color.white;
+							modIcon = Base.AddImage(g.transform, new Vector2(200 - 16, -7), new Vector2(16, 16), imgSprite);
+							modIcon.raycastTarget = true;
+							modIcon.color = Color.white;
 
 							var tooltipGO = new GameObject("Tooltip");
-							tooltipGO.transform.SetParent(img2.transform, false);
+							tooltipGO.transform.SetParent(modIcon.transform, false);
 
-							var tooltipText = tooltipGO.AddComponent<Text>();
+							tooltipText = tooltipGO.AddComponent<Text>();
 							tooltipText.text = (pl.isDev ? "Mod Developer" : pl.isHost ? "Host" : "Moderator");
 							tooltipText.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
 							tooltipText.fontSize = 16;
@@ -238,7 +244,7 @@ namespace ErenshorCoop.UI
 
 							tooltipGO.SetActive(false);
 
-							var trig = img2.gameObject.AddComponent<EventTrigger>();
+							var trig = modIcon.gameObject.AddComponent<EventTrigger>();
 
 							var enter = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
 							enter.callback.AddListener((e) => { tooltipGO.SetActive(true); });
@@ -258,7 +264,7 @@ namespace ErenshorCoop.UI
 						z.raycastTarget = false;
 						z.alignment = TextAlignmentOptions.Right;
 
-						playerLabels.Add(pl.name, new() { go = g, text = z, pingIcon = img });
+						playerLabels.Add(pl.name, new() { go = g, text = z, pingIcon = img, modIcon = modIcon, tooltip = tooltipText });
 						y -= 35;
 					}
 					else
@@ -276,6 +282,61 @@ namespace ErenshorCoop.UI
 							playerLabels[pl.name].pingIcon.color = Color.red;
 						}
 						playerLabels[pl.name].text.text = $"{pl.ping}";
+
+						Sprite imgSprite = null;
+						if (pl.isMod)
+							imgSprite = Base.starIcon;
+						if (pl.isHost)
+							imgSprite = Base.crownIcon;
+						if (pl.isDev)
+							imgSprite = Base.bugIcon;
+
+							
+						if (imgSprite != null && playerLabels[pl.name].modIcon != null)
+						{
+							playerLabels[pl.name].modIcon.sprite = imgSprite;
+							playerLabels[pl.name].tooltip.text = (pl.isDev ? "Mod Developer" : pl.isHost ? "Host" : "Moderator");
+
+						}
+						else if(imgSprite != null && playerLabels[pl.name].modIcon == null)
+						{
+							playerLabels[pl.name].modIcon = Base.AddImage(playerLabels[pl.name].go.transform, new Vector2(200 - 16, -7), new Vector2(16, 16), imgSprite);
+							playerLabels[pl.name].modIcon.raycastTarget = true;
+							playerLabels[pl.name].modIcon.color = Color.white;
+
+							var tooltipGO = new GameObject("Tooltip");
+							tooltipGO.transform.SetParent(playerLabels[pl.name].modIcon.transform, false);
+
+							var tooltipText = tooltipGO.AddComponent<Text>();
+							tooltipText.text = (pl.isDev ? "Mod Developer" : pl.isHost ? "Host" : "Moderator");
+							tooltipText.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+							tooltipText.fontSize = 16;
+							tooltipText.color = Color.white;
+							tooltipText.alignment = TextAnchor.MiddleCenter;
+							tooltipText.raycastTarget = false;
+
+							playerLabels[pl.name].tooltip = tooltipText;
+							var rt = tooltipGO.GetComponent<RectTransform>();
+							rt.sizeDelta = new Vector2(150, 20);
+							rt.anchoredPosition = new Vector2(0, 20);
+
+							tooltipGO.SetActive(false);
+
+							var trig = playerLabels[pl.name].modIcon.gameObject.AddComponent<EventTrigger>();
+
+							var enter = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
+							enter.callback.AddListener((e) => { tooltipGO.SetActive(true); });
+							trig.triggers.Add(enter);
+
+							var exit = new EventTrigger.Entry { eventID = EventTriggerType.PointerExit };
+							exit.callback.AddListener((e) => { tooltipGO.SetActive(false); });
+							trig.triggers.Add(exit);
+						}
+						else if (imgSprite == null && playerLabels[pl.name].modIcon != null)
+						{
+							UnityEngine.Object.Destroy(playerLabels[pl.name].modIcon.gameObject);
+							playerLabels[pl.name].modIcon = null;
+						}
 					}
 
 				}

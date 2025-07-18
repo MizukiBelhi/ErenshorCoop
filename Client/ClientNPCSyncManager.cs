@@ -213,7 +213,7 @@ namespace ErenshorCoop.Client
 				owner = pl.character;
 			if (owner == null)
 			{
-				Logging.Log($"owner no exist");
+				//Logging.Log($"owner no exist");
 				return false;
 			}
 
@@ -257,10 +257,13 @@ namespace ErenshorCoop.Client
 				if (spawnQueue.Count > 0)
 				{
 					(int spawnID, string spawnMobID, bool isRare, short entityID, var pos, var rot, var data) = spawnQueue.Dequeue();
-					if (!SpawnMob(spawnID, spawnMobID, isRare, entityID, pos, rot, data))
+					if (data.zone == SceneManager.GetActiveScene().name) //Make sure we're in the correct scene
 					{
-						//Put it back on the queue, in case we're not on the same scene as the host
-						//spawnQueue.Enqueue((spawnID, spawnMobID, isRare, entityID, pos, rot));
+						if (!SpawnMob(spawnID, spawnMobID, isRare, entityID, pos, rot, data))
+						{
+							//Put it back on the queue, in case we're not on the same scene as the host
+							//spawnQueue.Enqueue((spawnID, spawnMobID, isRare, entityID, pos, rot));
+						}
 					}
 				}
 				yield return new WaitForSeconds(0.01f); //one spawn per second

@@ -89,7 +89,7 @@ namespace ErenshorCoop.Server
 
 		public void Disconnect()
 		{
-			Logging.LogError($"[Server] Closing Server.");
+			Logging.Log($"[Server] Closing Server.");
 			if (IsRunning)
 				Logging.LogGameMessage($"[Server] Closing Server.");
 

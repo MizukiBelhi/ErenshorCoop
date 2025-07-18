@@ -89,12 +89,17 @@ namespace ErenshorCoop.Steam
 		public static void LeaveLobby()
 		{
 			//if (!isInLobby) return;
-
-			Logging.Log($"LEAVING LOBBY");
-			SteamMatchmaking.LeaveLobby(lobbyID);
-			isInLobby = false;
-			isLobbyHost = false;
-			UI.ConnectPanel.EnableButtons();
+			try
+			{
+				Steamworks.InteropHelp.TestIfAvailableClient();
+				SteamFriends.ClearRichPresence();
+				Logging.Log($"LEAVING LOBBY");
+				SteamMatchmaking.LeaveLobby(lobbyID);
+				isInLobby = false;
+				isLobbyHost = false;
+				UI.ConnectPanel.EnableButtons();
+			}
+			catch(InvalidOperationException) {; }
 		}
 
 
@@ -219,6 +224,8 @@ namespace ErenshorCoop.Steam
 				SteamMatchmaking.SetLobbyData(lobbyID, "port", "7777");
 
 				Networking.StartHost(7777);
+
+				SteamFriends.SetRichPresence("connect", $"+connect_lobby {lobbyID.ToString()}");
 			}
 			else
 			{
@@ -276,23 +283,23 @@ namespace ErenshorCoop.Steam
 				{
 					string providedPassword = message.Substring(10).Trim();
 					providedPassword = System.Text.RegularExpressions.Regex.Replace(providedPassword, @"\s+$", "");
-					Logging.Log($"\"{lobbyPassword}\" == \"{providedPassword}\"");
+					//Logging.Log($"\"{lobbyPassword}\" == \"{providedPassword}\"");
 					if (!providedPassword.Equals(lobbyPassword))
 					{
-						Logging.Log($"sendin kick");
+						//Logging.Log($"sendin kick");
 						string mes = $"{senderID.m_SteamID}:kick";
 						SteamMatchmaking.SendLobbyChatMsg(lobbyID, Encoding.UTF8.GetBytes(mes), mes.Length);
 					}
 					else
 					{
-						Logging.Log($"sendin ok pass");
+						//Logging.Log($"sendin ok pass");
 						string mes = $"{senderID.m_SteamID}:canJoin";
 						SteamMatchmaking.SendLobbyChatMsg(lobbyID, Encoding.UTF8.GetBytes(mes), mes.Length);
 					}
 				}
 				else if (string.IsNullOrEmpty(lobbyPassword))
 				{
-					Logging.Log($"sendin ok");
+					//Logging.Log($"sendin ok");
 					string mes = $"{senderID.m_SteamID}:canJoin";
 					SteamMatchmaking.SendLobbyChatMsg(lobbyID, Encoding.UTF8.GetBytes(mes), mes.Length);
 				}
@@ -309,15 +316,15 @@ namespace ErenshorCoop.Steam
 
 				if (stmId == playerSteamID.m_SteamID)
 				{
-					Logging.Log($"recv cmd \"{cmd}\"");
+					//Logging.Log($"recv cmd \"{cmd}\"");
 					switch (cmd)
 					{
 						case "kick":
-						LeaveLobby();
-						break;
+							LeaveLobby();
+							break;
 						case "canJoin":
-						SuccessJoinLobby();
-						break;
+							SuccessJoinLobby();
+							break;
 					}
 				}
 			}
@@ -360,6 +367,7 @@ namespace ErenshorCoop.Steam
 		{
 			hostSteamID = SteamMatchmaking.GetLobbyOwner(lobbyID);
 			isInLobby = Networking.ConnectToPeer(hostSteamID, 7777);
+			SteamFriends.SetRichPresence("connect", $"+connect_lobby {lobbyID.ToString()}");
 		}
 
 
@@ -368,7 +376,7 @@ namespace ErenshorCoop.Steam
 		{
 			uint lobbyCount = callback.m_nLobbiesMatching;
 
-			Logging.Log($"Received {lobbyCount} lobbies.");
+			//Logging.Log($"Received {lobbyCount} lobbies.");
 
 			List<LobbyInfo> lobbies = new();
 

@@ -16,7 +16,7 @@ using System.Collections;
 
 namespace ErenshorCoop
 {
-	[BepInPlugin("mizuki.coop", "Erenshor Coop", "2.0.0")]
+	[BepInPlugin("mizuki.coop", "Erenshor Coop", "2.0.7")]
 	public class ErenshorCoopMod : BaseUnityPlugin
 	{
 		public static Action<Scene> OnGameMapLoad;
@@ -101,6 +101,9 @@ namespace ErenshorCoop
 				}
 			}
 
+			if(scene.name != "Menu" && scene.name != "LoadScene")
+				CompassHandler.Init();
+
 		}
 
 		public IEnumerator DelayedSteamworksInit()
@@ -112,7 +115,14 @@ namespace ErenshorCoop
 
 		public void OnApplicationQuit()
 		{
-
+			if(ClientConnectionManager.Instance != null && ClientConnectionManager.Instance.IsRunning)
+				Steam.Lobby.Cleanup();
+			if(ServerConnectionManager.Instance != null && ServerConnectionManager.Instance.IsRunning)
+				Steam.Networking.Cleanup();
+			if (ClientConnectionManager.Instance != null)
+				ClientConnectionManager.Instance.Disconnect();
+			if (ServerConnectionManager.Instance != null)
+				ServerConnectionManager.Instance.Disconnect();
 		}
 
 		private void OnDestroy()
@@ -136,6 +146,7 @@ namespace ErenshorCoop
 			Destroy(ui);
 			Destroy(mainGO);
 
+			CompassHandler.ClearMarkers();
 
 			harm.UnpatchSelf();
 
@@ -189,6 +200,7 @@ namespace ErenshorCoop
 			}
 
 			StartCoroutine(SteamCheckStart());
+			CompassHandler.Init();
 		}
 
 		public IEnumerator SteamCheckStart()

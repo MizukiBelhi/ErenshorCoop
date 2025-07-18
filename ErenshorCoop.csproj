@@ -116,6 +116,7 @@
     <Compile Include="Client\ClientConnectionManager.cs" />
     <Compile Include="Client\ClientNPCSyncManager.cs" />
     <Compile Include="Client\ClientZoneOwnership.cs" />
+    <Compile Include="Client\CompassHandler.cs" />
     <Compile Include="Client\Config.cs" />
     <Compile Include="Client\DroppedItem.cs" />
     <Compile Include="Client\WeatherHandler.cs" />

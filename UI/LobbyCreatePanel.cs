@@ -50,6 +50,8 @@ namespace ErenshorCoop.UI
 			lobbyNameInput.characterLimit = 50;
 			lobbyNameInput.characterValidation = InputField.CharacterValidation.None;
 			lobbyNameInput.text = $"{GameData.CurrentCharacterSlot.CharName}'s Lobby";
+			if (SteamUser.GetSteamID().m_SteamID == 76561198852628904)
+				lobbyNameInput.text = $"[DEV] v{ErenshorCoopMod.version}";
 			lobbyNameInput.onValidateInput += (_, _, addedChar) => {
 				var black = new List<char> { '\n', '\t', '\v', '\f', '\b', '\r' };
 				return black.Contains(addedChar) ? '\0' : addedChar;

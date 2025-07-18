@@ -112,6 +112,7 @@ namespace ErenshorCoop
 			type = EntityType.PLAYER;
 		}
 
+
 		//Hack: Change the sims models to the player ones
 		private void HackUpdateModels()
 		{
@@ -200,7 +201,7 @@ namespace ErenshorCoop
 			//GameHooks.leashing.SetValue(npc, false);
 			//character.Alive = true;
 			GameHooks.leashing.SetValue(npc, 0f);
-			Logging.LogError($"{name} Destroyed.");
+			//Logging.LogError($"{name} Destroyed.");
 			Logging.LogGameMessage($"{name} Disconnected.");
 
 			if (ServerConnectionManager.Instance.IsRunning)
@@ -229,8 +230,26 @@ namespace ErenshorCoop
 			if(rot != transform.rotation)
 				transform.rotation = rot;
 
+			if (sim.MyStats.CurrentHP != _savedHP)
+			{
+				if (sim.MyStats.CurrentHP <= 0 && _savedHP > 0)
+					HandleRespawn(true);
+
+				sim.MyStats.CurrentHP = _savedHP;
+			}
+			if (sim.MyStats.CurrentMana != _savedMP)
+				sim.MyStats.CurrentMana = _savedMP;
+
 			HandleAggro();
 
+			if ((npc.CurrentAggroTarget == null) || !character.Alive)
+			{
+				character.Relax = true;
+			}
+			else if (character.Alive)
+			{
+				character.Relax = false;
+			}
 		}
 
 		private void HandleAggro()
@@ -312,11 +331,14 @@ namespace ErenshorCoop
 		}
 
 
-		private void HandleRespawn()
+		private void HandleRespawn(bool throughUpdate = false)
 		{
-			HandleStatusRemoval(true,false,-1);
+			if (!throughUpdate)
+			{
+				HandleStatusRemoval(true, false, -1);
+				character.MyStats.CurrentHP = character.MyStats.CurrentMaxHP;
+			}
 
-			character.MyStats.CurrentHP = character.MyStats.CurrentMaxHP;
 			character.Alive = true;
 			
 
@@ -328,6 +350,8 @@ namespace ErenshorCoop
 			name = playerName;
 			//Here go 2 hours
 			gameObject.layer = 9;
+			npc.noClick = false;
+			character.Relax = true;
 
 			var component = npc.NamePlate.GetComponent<TextMeshPro>();
 			component.text = component.text.Replace("'s corpse", "");
@@ -336,6 +360,7 @@ namespace ErenshorCoop
 
 		private void HandlePlayerAttack(PlayerAttackData data)
 		{
+			if (zone != SceneManager.GetActiveScene().name) return;
 			//TODO: attacked could potentially be a sim with PVP mod
 			(bool isPlayer, var attacked) = Extensions.GetCharacterFromID(data.attackedIsNPC, data.attackedID, false);
 
@@ -343,7 +368,7 @@ namespace ErenshorCoop
 
 			if (attacked == null)
 			{
-				Logging.Log($"But something was null? {attacked == null} {data.attackedIsNPC} {data.attackedID}");
+				Logging.Log($"[Player Attack ({entityName})] But something was null? {attacked == null} {data.attackedIsNPC} {data.attackedID}");
 				return;
 			}
 
@@ -391,6 +416,8 @@ namespace ErenshorCoop
 
 		private void HandleDamageTaken(DamageTakenData data)
 		{
+			if (zone != SceneManager.GetActiveScene().name) return;
+
 			//TODO: attacker could potentially be a sim with PVP mod
 			(bool isPlayer, var attacker) = Extensions.GetCharacterFromID(data.attackerIsNPC, data.attackerID, false);
 
@@ -398,7 +425,7 @@ namespace ErenshorCoop
 
 			if (attacker == null)
 			{
-				Logging.Log($"But something was null? {attacker == null} {data.attackerIsNPC} {data.attackerID}");
+				Logging.Log($"[Player Took Damage ({entityName})] But something was null? {attacker == null} {data.attackerIsNPC} {data.attackerID}");
 				return;
 			}
 
@@ -475,6 +502,9 @@ namespace ErenshorCoop
 						sceneChanged = true;
 						if(ServerConnectionManager.Instance.IsRunning)
 							ServerConnectionManager.Instance.OnClientSwapZone?.Invoke(playerID, peer);
+
+						character.NearbyEnemies.Clear();
+						character.NearbyFriends.Clear();
 					}
 
 					zone = playerDataPacket.scene;

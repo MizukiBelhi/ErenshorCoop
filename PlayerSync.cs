@@ -228,7 +228,7 @@ namespace ErenshorCoop
 			ErenshorCoopMod.OnGameMapLoad -= OnGameMapLoad;
 			ClientConnectionManager.Instance.OnClientConnect -= OnClientConnect;
 			ClientConnectionManager.Instance.OnConnect -= OnGameConnect;
-			Logging.LogError("Destroyed.");
+			//Logging.LogError("Destroyed.");
 		}
 		public void Update()
 		{
