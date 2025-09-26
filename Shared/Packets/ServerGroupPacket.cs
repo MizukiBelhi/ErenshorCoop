@@ -13,7 +13,7 @@ namespace ErenshorCoop.Shared.Packets
 		public HashSet<GroupDataType> dataTypes = new();
 		public ServerGroupPacket() : base(DeliveryMethod.ReliableOrdered) { }
 
-		public List<Grouping.Member> groupList;
+		public List<SharedGroup.Member> groupList;
 		public short groupID;
 		public short inviteID;
 		public short leaderID;
@@ -41,8 +41,9 @@ namespace ErenshorCoop.Shared.Packets
 			{
 				writer.Put(leaderID);
 				writer.Put((byte)groupList.Count);
-				foreach (Grouping.Member member in groupList)
+				foreach (SharedGroup.Member member in groupList)
 				{
+					writer.Put(member.slot);
 					writer.Put(member.entityID);
 					writer.Put(member.isSim);
 					//writer.Put(member.simIndex);
@@ -78,12 +79,7 @@ namespace ErenshorCoop.Shared.Packets
 				groupList = new();
 				for (var i = 0; i < count; i++)
 				{
-					var m = new Grouping.Member
-					{
-						entityID = reader.GetShort(),
-						isSim = reader.GetBool(),
-						//simIndex = reader.GetShort(),
-					};
+					var m = new SharedGroup.Member(reader.GetByte(), reader.GetShort(), reader.GetBool());
 					groupList.Add(m);
 				}
 			}

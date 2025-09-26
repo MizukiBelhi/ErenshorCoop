@@ -17,6 +17,8 @@ namespace ErenshorCoop.Shared.Packets
 
 		public byte commandType;
 		public string playerName;
+		public short entityReqID;
+		public short ownerID;
 
 		public override void Write(NetDataWriter writer)
 		{
@@ -35,6 +37,11 @@ namespace ErenshorCoop.Shared.Packets
 			{
 				writer.Put(commandType);
 				writer.Put(playerName);
+			}
+			if(dataTypes.Contains(Request.ENTITY_SPAWN))
+			{
+				writer.Put(entityReqID);
+				writer.Put(ownerID);
 			}
 
 		}
@@ -56,7 +63,11 @@ namespace ErenshorCoop.Shared.Packets
 				commandType = reader.GetByte();
 				playerName = reader.GetString().Sanitize();
 			}
-
+			if (dataTypes.Contains(Request.ENTITY_SPAWN))
+			{
+				entityReqID = reader.GetShort();
+				ownerID = reader.GetShort();
+			}
 		}
 	}
 }

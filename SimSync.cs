@@ -1,4 +1,5 @@
 ﻿using ErenshorCoop.Client;
+using ErenshorCoop.Client.Grouping;
 using ErenshorCoop.Shared;
 using ErenshorCoop.Shared.Packets;
 using System;
@@ -19,7 +20,6 @@ namespace ErenshorCoop
 		public Vector3 previousPosition = Vector3.zero;
 		public Quaternion previousRotation = Quaternion.identity;
 		public int previousHealth = 0;
-		public int previousLevel = 0;
 		public int previousMP = 0;
 		public Entity previousTarget = null;
 		//public short entityID = -1;
@@ -65,7 +65,6 @@ namespace ErenshorCoop
 
 			Extensions.BuildClipLookup(npc);
 
-			previousLevel = stats.Level;
 			entityName = npc.NPCName + $" [{GameData.CurrentCharacterSlot.CharName}]";
 			zone = SceneManager.GetActiveScene().name;
 
@@ -101,7 +100,6 @@ namespace ErenshorCoop
 					modPar = GetComponentInChildren<ModularPar>();
 					Extensions.BuildClipLookup(npc);
 					simIndex = sim.myIndex;
-					previousLevel = stats.Level;
 					entityName = npc.NPCName + $" [{GameData.CurrentCharacterSlot.CharName}]";
 					zone = SceneManager.GetActiveScene().name;
 				}
@@ -120,6 +118,10 @@ namespace ErenshorCoop
 					.SetData("ownerID", ClientConnectionManager.Instance.LocalPlayerID);
 				packet.isSim = true;
 				packet.CanSend();
+
+				timeSinceLastPeriodicUpdate = Time.time;
+
+				StartCoroutine(DelayedSendEffects());
 
 				//Logging.Log($"sending sim client con {entityName}");
 
@@ -187,18 +189,14 @@ namespace ErenshorCoop
 			packet.isSim = true;
 			packet.CanSend();
 			hasSentConnect = true;
+			timeSinceLastPeriodicUpdate = Time.time;
+			StartCoroutine(DelayedSendEffects());
 		}
 
 		private void OnGameMenuLoad(Scene scene)
 		{
 			//ClientConnectionManager.Instance.Disconnect();
 			Destroy(this);
-		}
-
-		public void SendLevelUpdate()
-		{
-			var p = PacketManager.GetOrCreatePacket<PlayerDataPacket>(entityID, PacketType.PLAYER_DATA).AddPacketData(PlayerDataType.LEVEL, "level", GameData.PlayerStats.Level);
-			p.isSim = true;
 		}
 
 		private void OnDestroy()
@@ -221,8 +219,6 @@ namespace ErenshorCoop
 					SharedNPCSyncManager.Instance.simToSync.Remove(sim);
 			}
 
-
-
 			//Logging.LogError($"{name} Destroyed.");
 		}
 		public void Update()
@@ -234,14 +230,19 @@ namespace ErenshorCoop
 			//if (Vector3.Distance(transform.position,previousPosition) > 0.1f && lastInterpTime >= interpCall)
 			if (transform.position != previousPosition)
 			{
-				var p = PacketManager.GetOrCreatePacket<PlayerTransformPacket>(entityID, PacketType.PLAYER_TRANSFORM).AddPacketData(PlayerDataType.POSITION, "position", transform.position);
+				var p = PacketManager.GetOrCreatePacket<PlayerTransformPacket>(entityID, PacketType.PLAYER_TRANSFORM);
+				p.AddPacketData(PlayerDataType.POSITION, "position", transform.position);
 				p.isSim = true;
+				p.ownerID = ClientConnectionManager.Instance.LocalPlayerID;
+				
 				previousPosition = transform.position;
 			}
 			if (previousRotation != transform.rotation)
 			{
-				var p = PacketManager.GetOrCreatePacket<PlayerTransformPacket>(entityID, PacketType.PLAYER_TRANSFORM).AddPacketData(PlayerDataType.ROTATION, "rotation", transform.rotation);
+				var p = PacketManager.GetOrCreatePacket<PlayerTransformPacket>(entityID, PacketType.PLAYER_TRANSFORM);
+				p.AddPacketData(PlayerDataType.ROTATION, "rotation", transform.rotation);
 				p.isSim = true;
+				p.ownerID = ClientConnectionManager.Instance.LocalPlayerID;
 				previousRotation = transform.rotation;
 			}
 
@@ -250,12 +251,6 @@ namespace ErenshorCoop
 				var p = PacketManager.GetOrCreatePacket<PlayerDataPacket>(entityID, PacketType.PLAYER_DATA).AddPacketData(PlayerDataType.HEALTH, "health", stats.CurrentHP);
 				p.isSim = true;
 				previousHealth = stats.CurrentHP;
-			}
-
-			if (previousLevel != GameData.PlayerStats.Level)
-			{
-				SendLevelUpdate();
-				previousLevel = GameData.PlayerStats.Level;
 			}
 
 			if (previousMP != stats.CurrentMana)
@@ -311,9 +306,9 @@ namespace ErenshorCoop
 				p.isSim = true;
 			}
 			//Happens when zoning, we need to set the follow again
-			if (Grouping.IsLocalLeader() && Grouping.IsPlayerInGroup(entityID, true) && target == null)
+			if (ClientGroup.IsLocalLeader() && ClientGroup.IsPlayerInGroup(entityID, true) && target == null)
 				target = ClientConnectionManager.Instance.LocalPlayer.transform;
-			if(target != null && GameHooks.followPlayer != null && character.Alive)
+			if(target != null && GameHooks.followPlayer != null && character.Alive && !sim.GuardSpot && !GameData.SimMngr.Sims[simIndex].isPuller && !sim.IgnoreAllCombat)
 			{
 				sim.InGroup = true;
 				GameHooks.followPlayer.Invoke(sim, null);
@@ -321,14 +316,14 @@ namespace ErenshorCoop
 			if(target == null)
 				sim.InGroup = false;
 
-			if (!Grouping.IsPlayerInGroup(entityID, true) && simIndex > 0 && (GameData.SimMngr.Sims[simIndex].Grouped || npc.InGroup))
+			if (!ClientGroup.IsPlayerInGroup(entityID, true) && simIndex > 0 && (GameData.SimMngr.Sims[simIndex].Grouped || npc.InGroup))
 			{
 				npc.InGroup = false;
 				GameData.SimMngr.Sims[simIndex].Grouped = false;
 			}
 		}
 
-		public void SendDamageAttack(int damage, short attackedID, bool attackedIsNPC, GameData.DamageType dmgType, bool effect, float resistMod, bool isCrit)
+		public void SendDamageAttack(int damage, short attackedID, bool attackedIsNPC, GameData.DamageType dmgType, bool effect, float resistMod, bool isCrit, int baseDmg)
 		{
 			if (!hasSentConnect) return;
 
@@ -341,7 +336,8 @@ namespace ErenshorCoop
 					damageType = dmgType,
 					effect = effect,
 					resistMod = resistMod,
-					isCrit = isCrit
+					isCrit = isCrit,
+					baseDmg = baseDmg
 				});
 			p.isSim = true;
 		}
@@ -474,17 +470,7 @@ namespace ErenshorCoop
 			pack.isSim = true;
 		}
 
-		public void SendWand(WandAttackData wa)
-		{
-			var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(entityID, PacketType.PLAYER_ACTION);
-			var wandData = pack.wandData ?? new();
-			wandData.Add(wa);
-			pack.dataTypes.Add(ActionType.WAND_ATTACK);
-			pack.wandData = wandData;
-			pack.isSim = true;
-		}
-
-		public new void SendAttack(int damage, short attackerID, bool attackerNPC, GameData.DamageType dmgType, bool animEffect, float resistMod, bool isCrit)
+		/*public new void SendAttack(int damage, short attackerID, bool attackerNPC, GameData.DamageType dmgType, bool animEffect, float resistMod, bool isCrit, int baseDmg)
 		{
 			var p = PacketManager.GetOrCreatePacket<EntityActionPacket>(entityID, PacketType.PLAYER_ACTION);
 			p.AddPacketData(ActionType.ATTACK, "attackData",
@@ -496,12 +482,13 @@ namespace ErenshorCoop
 					damageType = dmgType,
 					effect = animEffect,
 					resistMod = resistMod,
-					isCrit = isCrit
+					isCrit = isCrit,
+					baseDmg = baseDmg
 				});
 			p.SetData("targetPlayerIDs", SharedNPCSyncManager.Instance.GetPlayerSendList());
 			p.entityType = type;
 			p.zone = SceneManager.GetActiveScene().name;
 			p.isSim = true;
-		}
+		}*/
 	}
 }

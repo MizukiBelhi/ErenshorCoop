@@ -13,6 +13,8 @@ using System.Linq;
 using Steamworks;
 using LiteNetLib.Utils;
 using System.Collections;
+using ErenshorCoop.Client.Grouping;
+using ErenshorCoop.Server.Grouping;
 
 namespace ErenshorCoop.Client
 {
@@ -46,7 +48,7 @@ namespace ErenshorCoop.Client
 
 		public List<Entity> requestReceivers = new();
 
-		private ServerSettings savedSettings;
+		public ServerSettings savedSettings;
 
 		private Coroutine spawnRoutine;
 
@@ -108,7 +110,7 @@ namespace ErenshorCoop.Client
 					Destroy(player.gameObject);
 			}
 
-			Grouping.ForceClearGroup(true);
+			ClientGroup.ForceClearGroup(true);
 
 			Players.Clear();
 			netManager.Stop();
@@ -122,7 +124,8 @@ namespace ErenshorCoop.Client
 			PacketManager.ClearQueue();
 
 			OnDisconnect?.Invoke();
-			Grouping.Cleanup();
+			ClientGroup.Cleanup();
+			Grouping.Invites.Cleanup();
 			WeatherHandler.Stop();
 
 			ClearDroppedItems();
@@ -160,7 +163,7 @@ namespace ErenshorCoop.Client
 					{
 						if (s.Value != null && s.Value.ownerID == player.Key)
 						{
-							if (!Grouping.IsPlayerInGroup(s.Value.entityID, true))
+							if (!ClientGroup.IsPlayerInGroup(s.Value.entityID, true))
 								Destroy(s.Value.gameObject);
 						}
 					}
@@ -196,6 +199,7 @@ namespace ErenshorCoop.Client
 			//ServerZoneOwnership.OnClientChangeZone(playerID, scene, "");
 
 			StartCoroutine(_OnConnectDelayed(delayInSeconds, playerID, scene));
+			//_OnConnectDelayed(delayInSeconds, playerID, scene);
 		}
 
 
@@ -206,7 +210,7 @@ namespace ErenshorCoop.Client
 		}
 
 
-		private void OnPlayerConnect(short playerID, PlayerConnectionPacket packet, NetPeer peer)
+		public void OnPlayerConnect(short playerID, PlayerConnectionPacket packet, NetPeer peer)
 		{
 			if (Players.ContainsKey(playerID))
 			{
@@ -238,7 +242,7 @@ namespace ErenshorCoop.Client
 			}
 		}
 
-		private void OnPlayerConnect(short playerID, PlayerConnectionPacket packet, CSteamID peer)
+		public void OnPlayerConnect(short playerID, PlayerConnectionPacket packet, CSteamID peer)
 		{
 			if (Players.ContainsKey(playerID))
 			{
@@ -270,14 +274,19 @@ namespace ErenshorCoop.Client
 			}
 		}
 
-		private void OnSimSpawn(short playerID, PlayerConnectionPacket packet)
+		public void OnSimSpawn(short playerID, PlayerConnectionPacket packet)
 		{
 			
 			if (ClientNPCSyncManager.Instance.NetworkedSims.ContainsKey(playerID))
 			{
 				//Logging.Log($"Already in list? {packet.name}");
 				//If the sim is already in the list.. update the zone
-				ClientNPCSyncManager.Instance.NetworkedSims[playerID].zone = SceneManager.GetActiveScene().name;
+				var s = ClientNPCSyncManager.Instance.NetworkedSims[playerID];
+				if (s.ownerID != -1)
+				{
+					var p = GetPlayerFromID(s.ownerID);
+					ClientNPCSyncManager.Instance.NetworkedSims[playerID].zone = p.zone;
+				}
 				return;
 			}
 
@@ -299,10 +308,11 @@ namespace ErenshorCoop.Client
 						var rot = packet.rotation;
 
 						var pl = GameHooks.CreateSim(playerID, pos, rot);
-						if (pl != null)
+						var p = GetPlayerFromID(packet.ownerID);
+						if (pl != null && p != null)
 						{
 							ClientNPCSyncManager.Instance.NetworkedSims.Add(playerID, pl);
-							pl.Init(pos, rot, charName, scene, playerID);
+							pl.Init(pos, rot, charName, p.zone, playerID);
 							pl.HandleConnectPacket(packet);
 							pl.ownerID = packet.ownerID;
 							pl.gameObject.SetActive(false);
@@ -311,6 +321,7 @@ namespace ErenshorCoop.Client
 						}
 						else
 						{
+							Destroy(pl.gameObject);
 							Logging.LogError($"Unknown Error: Failed to Create Sim");
 						}
 					}
@@ -361,7 +372,7 @@ namespace ErenshorCoop.Client
 					{
 						simsToRemove.Add(s.Key);
 						//This handles it on host only, who sends it to clients
-						Grouping.ForceRemoveFromGroup(s.Key, true);
+						ServerGroup.ForceRemoveFromGroup(s.Key, true);
 						Destroy(s.Value.gameObject);
 					}
 				}
@@ -406,7 +417,7 @@ namespace ErenshorCoop.Client
 		}
 
 
-		private NetPeer _lastPeer = null;
+		public NetPeer _lastPeer = null;
 		public CSteamID _lastSteamID;
 
 		public void OnNetworkReceive(NetPeer peer, NetPacketReader reader, byte channelNumber, DeliveryMethod deliveryMethod)
@@ -433,15 +444,31 @@ namespace ErenshorCoop.Client
 		}
 
 
+		public bool useSteam = false;
+
 		public (BasePacket, PacketType) OnNetworkHandle(NetDataReader reader, byte channelNumber, DeliveryMethod deliveryMethod, bool useSteam=false)
 		{
+			this.useSteam = useSteam;
 			var psize = reader.RawDataSize;
 			var packetType = (PacketType)reader.GetByte();
 
 			var isPlayerPacket = true;
 
 			BasePacket packet;
-			switch (packetType)
+
+			//Get packet from registered packets
+			var packetInfo = PacketManager.GetRegisteredPacket(packetType);
+			if(packetInfo == null)
+			{
+				Logging.LogError($"Received unregistered packet type {packetType}");
+				return (null, 0);
+			}
+			isPlayerPacket = !packetInfo.isServerPacket;
+			packet = (BasePacket)Activator.CreateInstance(packetInfo.type);
+
+		
+
+			/*switch (packetType)
 			{
 				case PacketType.PLAYER_DATA:
 					packet = new PlayerDataPacket();
@@ -508,107 +535,40 @@ namespace ErenshorCoop.Client
 					packet = new ServerRequestPacket();
 					break;
 				default: packet = new BasePacket(DeliveryMethod.Unreliable); Logging.LogError($"Unhandled PacketType: {packetType}."); isPlayerPacket = false; break;
-			}
+			}*/
 
 			packet.Read(reader);
-			//Logging.Log($"Received {packetType} of size {psize}");
+			
 
 			if (packet.GetType() == typeof(BasePacket))
 			{
-				return (null, 0); //Unknown packet
+				Logging.LogError($"Received unregistered packet type {packetType}");
+				return (null, PacketType.DONT_RESEND); //Unknown packet
 			}
 
+			(BasePacket bp, PacketType bpt) modified = (packet, packetType);
+
+			//Logging.Log($"Received {packetType} of size {psize} isPlayer: {isPlayerPacket}");
+
 			if (isPlayerPacket)
+				modified = ErenshorCoopMod.moduleMngr.DispatchClientPacket(packet, packetType);
+			else
+				modified = ErenshorCoopMod.moduleMngr.DispatchServerPacket(packet, packetType);
+
+			if(modified.bpt == PacketType.DONT_RESEND)
+				return (null, PacketType.DONT_RESEND); //Don't resend
+
+			return modified;
+
+/*			if (isPlayerPacket)
 			{
-				if (packetType == PacketType.ITEM_DROP)
-				{
-					var pack = (ItemDropPacket)packet;
-					if (pack.senderID != LocalPlayerID)
-					{
-						if (pack.dataTypes.Contains(ItemDropType.DROP))
-						{
-							var itm = GameData.ItemDB.GetItemByID(pack.itemID);
-							if (itm != GameData.PlayerInv.Empty)
-								SpawnItem(itm, pack.quality, pack.location, pack.zone, pack.id);
-						}
-
-						if (pack.dataTypes.Contains(ItemDropType.DESTROY))
-							ClearDroppedItem(pack.id);
-						if (pack.dataTypes.Contains(ItemDropType.NEW_QUANTITY))
-						{
-							UpdateQuantity(pack.id, pack.quality);
-						}
-					}
-				}
-
-				if (packetType == PacketType.WEATHER_DATA)
-				{
-					var pack = (WeatherPacket)packet;
-					if (pack.targetPlayerIDs.Contains(LocalPlayerID))
-					{
-						WeatherHandler.ReceiveWeatherData(pack.weatherData);
-					}
-				}
-				if (packetType == PacketType.SERVER_GROUP)
-				{
-					Grouping.HandleServerPacket((ServerGroupPacket)packet);
-					return (null, 0);
-				}
-				if (packet is PlayerMessagePacket messagePacket)
-				{
-					Logging.HandleMessage(GetPlayerFromID(packet.entityID), messagePacket);
-					if (messagePacket.messageType == MessageType.INFO)
-						return (null, 0); //don't resend
-				}
-				//Logging.Log($"{packet.GetType()}");
-				short playerID = packet.entityID;
-				//if (playerID == LocalPlayerID) return;
-
-				if (playerID != LocalPlayerID || packet.isSim)
-				{
-					if (packet is PlayerConnectionPacket)
-					{
-						if (!packet.isSim)
-						{
-							if(!useSteam)
-								OnPlayerConnect(playerID, (PlayerConnectionPacket)packet, _lastPeer);
-							else
-								OnPlayerConnect(playerID, (PlayerConnectionPacket)packet, _lastSteamID);
-						}
-						else
-						{
-							OnSimSpawn(playerID, (PlayerConnectionPacket)packet);
-						}
-					}
-					else
-					{
-
-						if (packet is PlayerDataPacket)
-						{
-							if (((PlayerDataPacket)packet).dataTypes.Contains(PlayerDataType.SCENE) && !packet.isSim)
-							{
-								if (Players.TryGetValue(playerID, out var pl))
-								{
-									if (pl.zone != ((PlayerDataPacket)packet).scene)
-									{
-										OnClientSwapZone?.Invoke(playerID, ((PlayerDataPacket)packet).scene, pl.zone);
-									}
-								}
-							}
-						}
-						if (Players.ContainsKey(playerID) && !packet.isSim)
-							Players[playerID].OnPlayerDataReceive(packet);
-						else if (packet.isSim && ClientNPCSyncManager.Instance.NetworkedSims.ContainsKey(playerID))
-							ClientNPCSyncManager.Instance.NetworkedSims[playerID].OnSimDataReceive(packet);
-					}
-				}
+				
 			}
 			else if (packetType == PacketType.GROUP)
 			{
-				Grouping.HandleClientPacket((GroupPacket)packet);
-				return (null, 0);
-			}
-			else if (packetType == PacketType.SERVER_INFO)
+				
+			}*/
+			/*else if (packetType == PacketType.SERVER_INFO)
 			{
 				//Logging.Log($"{packet.GetType()}");
 				if (((ServerInfoPacket)packet).dataTypes.Contains(ServerInfoType.PVP_MODE))
@@ -740,14 +700,6 @@ namespace ErenshorCoop.Client
 						}
 					}
 
-					if (coopDiff)
-					{
-						Logging.LogGameMessage($"Your COOP version differs from the hosts, this will cause major issues!", true);
-					}
-					else if (isMissingPlugin)
-					{
-						Logging.LogGameMessage($"Your mods differ from the hosts, this could cause issues.", true);
-					}
 					if (differentPlugins.Count > 0)
 					{
 						foreach (var plugin in differentPlugins)
@@ -760,10 +712,17 @@ namespace ErenshorCoop.Client
 								Logging.LogGameMessage($"\"{plugin.name}\" You: None - Host: v{plugin.other.ToString()}", true);
 						}
 					}
+					if (coopDiff)
+					{
+						Logging.LogGameMessage($"Your COOP version differs from the hosts, this will cause major issues!", true);
+					}
+					else if (isMissingPlugin)
+					{
+						Logging.LogGameMessage($"Your mods differ from the hosts, this could cause issues.", true);
+					}
 				}
 				if (((ServerInfoPacket)packet).dataTypes.Contains(ServerInfoType.ZONE_OWNERSHIP))
 				{
-					Logging.Log($"Received {packetType} of size {psize}");
 					OnZoneOwnerChange?.Invoke(((ServerInfoPacket)packet).zoneOwner, ((ServerInfoPacket)packet).zone, ((ServerInfoPacket)packet).playerList);
 				}
 				return (null, 0);
@@ -778,7 +737,7 @@ namespace ErenshorCoop.Client
 
 				UI.ConnectPanel._feedbackText.text = "Connected!";
 
-				Grouping.ForceClearGroup();
+				ClientGroup.ForceClearGroup();
 			}
 			else if (packetType == PacketType.PLAYER_REQUEST)
 			{
@@ -849,7 +808,7 @@ namespace ErenshorCoop.Client
 							{
 								PacketManager.GetOrCreatePacket<PlayerMessagePacket>(p.entityID, PacketType.PLAYER_MESSAGE)
 									.SetTarget((!useSteam) ? GetPlayerFromPeer(_lastPeer) : GetPlayerFromSteam(_lastSteamID))
-									.SetData("message", "[Host] Insufficent Permission.")
+									.SetData("message", "[Host] Insufficient Permission.")
 									.SetData("messageType", MessageType.INFO);
 								return (null, 0);
 							}
@@ -887,7 +846,7 @@ namespace ErenshorCoop.Client
 							{
 								PacketManager.GetOrCreatePacket<PlayerMessagePacket>(p.entityID, PacketType.PLAYER_MESSAGE)
 									.SetTarget((!useSteam) ? GetPlayerFromPeer(_lastPeer) : GetPlayerFromSteam(_lastSteamID))
-									.SetData("message", "[Host] Insufficent Permission.")
+									.SetData("message", "[Host] Insufficient Permission.")
 									.SetData("messageType", MessageType.INFO);
 								return (null, 0);
 							}
@@ -924,7 +883,15 @@ namespace ErenshorCoop.Client
 						Logging.HandleMessage(GetPlayerFromID(packet.entityID), (PlayerMessagePacket)pa);
 					}
 				}
-				return (null, 0);
+				if (p.dataTypes.Contains(Request.ENTITY_SPAWN))
+				{ 
+					if(p.ownerID == LocalPlayerID && SharedNPCSyncManager.Instance.sims.ContainsKey(p.entityReqID))
+					{
+						SharedNPCSyncManager.Instance.sims[p.entityReqID].SendConnectData();
+					}
+				}
+				else
+					return (null, 0);
 			}
 			else if (packetType == PacketType.SERVER_REQUEST)
 			{
@@ -976,9 +943,9 @@ namespace ErenshorCoop.Client
 
 				if (ServerConnectionManager.Instance.IsRunning)
 					ServerZoneOwnership.HandleEntityPacket(bp);
-			}
+			}*/
 
-			return (packet, packetType);
+			
 		}
 
 

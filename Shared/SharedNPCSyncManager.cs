@@ -30,10 +30,7 @@ namespace ErenshorCoop.Shared
 		
 
 		//TODO: Do this properly
-		public short sharedPetId = -1;
 		public short serverLastId = -1;
-		
-		
 
 		public void Awake()
 		{
@@ -121,8 +118,16 @@ namespace ErenshorCoop.Shared
 				NPCTable.LiveNPCs.Add(_npc);
 			}
 			Logging.Log($"Got {ClientNPCSyncManager.Instance.NetworkedMobs.Count}");
+			//We might still have spawned npcs, because portal spells do weird things
+			ClientNPCSyncManager.Instance.LoadAndDestroySpawns(false);
 
 			Cleanup(true);
+		}
+
+		public IEnumerator TakeOwnershipDelayed(string z)
+		{
+			yield return new WaitForSeconds(2);
+			TakeOwnership(z);
 		}
 
 		public void TakeOwnership(string zone)
@@ -134,7 +139,7 @@ namespace ErenshorCoop.Shared
 
 				Cleanup();
 				//Delete all mobs
-				ClientNPCSyncManager.Instance.LoadAndDestroySpawns();
+				ClientNPCSyncManager.Instance.LoadAndDestroySpawns(true);
 				Logging.Log($"Removed Spawns");
 				//Spawn all the spawns we've gotten so far
 				if (ServerZoneOwnership.zoneEntities.TryGetValue(zone, out var spawnData))
@@ -155,8 +160,9 @@ namespace ErenshorCoop.Shared
 			//CollectSpawnData();
 
 			Logging.Log($"Converting {ClientNPCSyncManager.Instance.NetworkedMobs.Count}");
-			//short lastHighMobID = GetFreeId();
-			foreach (var m in ClientNPCSyncManager.Instance.NetworkedMobs)
+
+			Dictionary<short, NetworkedNPC> sM = new(ClientNPCSyncManager.Instance.NetworkedMobs);
+			foreach (var m in sM)
 			{
 				var npc = m.Value;
 				short id = m.Key;
@@ -167,9 +173,10 @@ namespace ErenshorCoop.Shared
 				var sync = npc.gameObject.AddComponent<NPCSync>();
 				var _npc = npc.gameObject.GetComponent<NPC>();
 
-				int spawnerID = npc.associatedSpawner;
+				var spawnData = npc.associatedSpawner;
+				int spawnerID = spawnData.spawnerID;
 
-				if (Variables.spawnPoints.TryGetValue(spawnerID, out var point))
+				if (Variables.syncedSpawnPoints.TryGetValue(spawnerID, out var _point) && _point.TryGetTarget(out var point))
 				{
 					GameHooks.spawnPoint.SetValue(_npc, point);
 					point.SpawnedNPC = _npc;
@@ -182,6 +189,11 @@ namespace ErenshorCoop.Shared
 					{
 						_npc.InitNewNPC(point, point.RandomWanderRange);
 					}
+					if (Variables.syncedSpawns.TryGetValue(point, out var val))
+					{
+						val.isRare = spawnData.isRare;
+						val.index = int.Parse(spawnData.npcID);
+					}
 					point.NPCCurrentlySpawned = true;
 					point.MyNPCAlive = true;
 				}
@@ -190,7 +202,7 @@ namespace ErenshorCoop.Shared
 
 				GameHooks.animatorController.SetValue(_npc, (AnimatorOverrideController)npc.MyAnim.runtimeAnimatorController);
 
-				Destroy(npc);
+				DestroyImmediate(npc);
 				if(!mobs.ContainsKey(id))
 					mobs.Add(id, sync);
 				sync.entityID = id;
@@ -198,13 +210,21 @@ namespace ErenshorCoop.Shared
 
 				NPCTable.LiveNPCs.Add(_npc);	
 			}
-
 			Logging.Log($"Activating spawns");
-			var spawns = FindObjectsOfType<SpawnPoint>(true);
-			foreach (var spawner in spawns)
-				spawner.gameObject.SetActive(true);
+
+			foreach (var _spawn in Variables.syncedSpawnPoints)
+			{
+				if(_spawn.Value.TryGetTarget(out var spawner))
+					if(spawner != null && spawner.gameObject != null)
+						spawner.gameObject.SetActive(true);
+			}
 
 			Logging.Log($"clearing networked mobs");
+			foreach(var m in ClientNPCSyncManager.Instance.NetworkedMobs)
+			{
+				if (m.Value != null)
+					Logging.Log($"found active");
+			}
 			ClientNPCSyncManager.Instance.NetworkedMobs.Clear();
 
 			//SendMobData(0, true);
@@ -219,6 +239,8 @@ namespace ErenshorCoop.Shared
 			}
 
 			ServerZoneOwnership.hostIsTakingOver = false;
+
+			ClientZoneOwnership.HandlePreSyncs(true);
 		}
 
 		public void OnDestroy()
@@ -257,15 +279,9 @@ namespace ErenshorCoop.Shared
 				}
 			}
 
-			foreach (var s in sims)
-				Destroy(s.Value);
-
-			sims.Clear();
 			mobs.Clear();
 			animatorToMobID.Clear();
 			overrideToMobID.Clear();
-			Variables.spawnData.Clear();
-			Variables.spawnPoints.Clear();
 
 			Logging.Log($"SharedNPCSyncManager Cleaned up.");
 		}
@@ -288,18 +304,10 @@ namespace ErenshorCoop.Shared
 			Logging.Log("collecting");
 			
 
-			var spawns = FindObjectsOfType<SpawnPoint>(true);
-
-			foreach (var spawn in spawns)
+			foreach (var _spawn in Variables.syncedSpawnPoints)
 			{
-				int spawnID = Extensions.GenerateHash(spawn.transform.position, SceneManager.GetActiveScene().name);
-
-				if (!Variables.spawnData.ContainsKey(spawnID))
-				{
-					Variables.AddSpawn(spawnID, spawn);
-				}
-
-
+				if (!_spawn.Value.TryGetTarget(out var spawn)) continue;
+				var spawnID = _spawn.Key;
 				//Add our sync to the mob, if there is one
 				var spawnedNPC = spawn.SpawnedNPC;
 				if (spawnedNPC != null)
@@ -363,7 +371,8 @@ namespace ErenshorCoop.Shared
 		{
 			yield return new WaitForSeconds(1f);
 			var ff = (AnimatorOverrideController)GameHooks.animatorController.GetValue(npc);
-			overrideToMobID[ff] = entityID;
+			if(ff != null)
+				overrideToMobID[ff] = entityID;
 		}
 
 
@@ -398,8 +407,12 @@ namespace ErenshorCoop.Shared
 
 			if (mobs.ContainsKey(id))
 			{
-				animatorToMobID.Remove(mobs[id].anim);
-				overrideToMobID.Remove((AnimatorOverrideController)GameHooks.animatorController.GetValue(mobs[id].npc));
+				if(animatorToMobID.ContainsKey(mobs[id].anim))
+					animatorToMobID.Remove(mobs[id].anim);
+				var n = (AnimatorOverrideController)GameHooks.animatorController.GetValue(mobs[id].npc);
+				
+				if (n != null && overrideToMobID.ContainsKey(n))
+					overrideToMobID.Remove(n);
 				mobs.Remove(id);
 			}
 		}
@@ -417,6 +430,9 @@ namespace ErenshorCoop.Shared
 				if (f.Key > serverLastId)
 					serverLastId = f.Key;
 			foreach (var f in ClientNPCSyncManager.Instance.NetworkedSims)
+				if (f.Key > serverLastId)
+					serverLastId = f.Key;
+			foreach (var f in ClientConnectionManager.Instance.Players)
 				if (f.Key > serverLastId)
 					serverLastId = f.Key;
 
@@ -437,15 +453,16 @@ namespace ErenshorCoop.Shared
 
 			//Logging.LogError($"Trying to send mob data. {Variables.spawnData.Count}");
 
-			var spawns = FindObjectsOfType<SpawnPoint>(true);
 			List<EntitySpawnData> spawnData = new();
 
-			foreach (var spawn in spawns)
+			foreach (var _spawn in Variables.syncedSpawnPoints)
 			{
-				int spawnID = Extensions.GenerateHash(spawn.transform.position, SceneManager.GetActiveScene().name);
+				if (!_spawn.Value.TryGetTarget(out var spawn)) continue;
+				var spawnID = _spawn.Key;
+
 				var currentMob = spawn.SpawnedNPC;
 
-				if (currentMob != null && Variables.spawnData.ContainsKey(spawnID))
+				if (currentMob != null)
 				{
 					if (!currentMob.GetComponent<Character>().Alive)
 						continue;
@@ -459,23 +476,47 @@ namespace ErenshorCoop.Shared
 						animatorToMobID[anim] = mobSync.entityID;
 						overrideToMobID[(AnimatorOverrideController)anim.runtimeAnimatorController] = mobSync.entityID;
 					}
-
-					(int spawnMobID, bool isRare) = Variables.spawnData[spawnID].GetMob(currentMob.gameObject);
-					if (spawnMobID == -1)
+					if (Variables.syncedSpawns.TryGetValue(spawn, out var val))
 					{
-						Logging.Log($"Error getting mob for {spawnID} {currentMob.name}.");
-						continue;
-					}
 
-					EntitySpawnData entSpawn = CreateEntitySpawnData(
-						mobSync.entityID,
-						spawnMobID.ToString(),
-						spawnID,
-						isRare,
-						currentMob.transform.position,
-						currentMob.transform.rotation,
-						EntityType.ENEMY
-					);
+						EntitySpawnData entSpawn = CreateEntitySpawnData(
+							mobSync.entityID,
+							val.index.ToString(),
+							spawnID,
+							val.isRare,
+							mobSync.GetComponent<Stats>().CurrentMaxHP,
+							currentMob.transform.position,
+							currentMob.transform.rotation,
+							EntityType.ENEMY
+						);
+
+						mobSync.spawnData = entSpawn;
+						mobSync.type = EntityType.ENEMY;
+						mobSync.zone = SceneManager.GetActiveScene().name;
+						spawnData.Add(entSpawn);
+					}
+				}
+			}
+
+			ClientZoneOwnership.HandlePreSyncs(true);
+
+			foreach (var sync in GameHooks.preSyncList)
+			{
+				var mobSync = sync.GetComponent<NPCSync>();
+				if (mobSync != null)
+				{
+					var entSpawn = CreateEntitySpawnData(
+							mobSync.entityID,
+							$"{mobSync.treasureChestID},{mobSync.guardianId}",
+							(int)mobSync.spawnID,
+							mobSync.guardianId == 99,
+							mobSync.GetComponent<Stats>().CurrentMaxHP,
+							mobSync.transform.position,
+							mobSync.transform.rotation,
+							EntityType.ENEMY,
+							0,
+							null
+						);
 
 					mobSync.spawnData = entSpawn;
 					mobSync.type = EntityType.ENEMY;
@@ -520,6 +561,7 @@ namespace ErenshorCoop.Shared
 					spawnMobID,
 					spawnID,
 					isRare,
+					s.GetComponent<Stats>().CurrentMaxHP,
 					pos,
 					rot,
 					EntityType.ENEMY,
@@ -562,6 +604,7 @@ namespace ErenshorCoop.Shared
 					$"{fromID},{fids[i]}",
 					spawnID,
 					false,
+					s.GetComponent<Stats>().CurrentMaxHP,
 					mob.transform.position,
 					mob.transform.rotation,
 					EntityType.ENEMY
@@ -591,6 +634,7 @@ namespace ErenshorCoop.Shared
 					spellID,
 					0,
 					false,
+					s.GetComponent<Stats>().CurrentMaxHP,
 					spawnedNPC.transform.position,
 					spawnedNPC.transform.rotation,
 					EntityType.PET,
@@ -674,7 +718,7 @@ namespace ErenshorCoop.Shared
 		/// <summary>
 		/// Helper method to create an EntitySpawnData object.
 		/// </summary>
-		private EntitySpawnData CreateEntitySpawnData(short entityID, string npcID, int spawnerID, bool isRare, Vector3 position, Quaternion rotation, EntityType type, short ownerID = 0, NPCSync sync = null)
+		private EntitySpawnData CreateEntitySpawnData(short entityID, string npcID, int spawnerID, bool isRare, int maxHP, Vector3 position, Quaternion rotation, EntityType type, short ownerID = 0, NPCSync sync = null)
 		{
 			var es = new EntitySpawnData
 			{
@@ -686,7 +730,8 @@ namespace ErenshorCoop.Shared
 				rotation = rotation,
 				entityType = type,
 				ownerID = ownerID,
-				zone = SceneManager.GetActiveScene().name
+				zone = SceneManager.GetActiveScene().name,
+				maxHP = maxHP
 			};
 
 			if(sync != null && sync.isGuardian)

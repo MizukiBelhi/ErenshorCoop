@@ -11,6 +11,7 @@ using UnityEngine.SceneManagement;
 using Random = UnityEngine.Random;
 using System.Runtime.Remoting.Messaging;
 using JetBrains.Annotations;
+using ErenshorCoop.Client.Grouping;
 
 namespace ErenshorCoop
 {
@@ -33,7 +34,7 @@ namespace ErenshorCoop
 		private int _savedHP;
 
 		public NPC npc;
-		private Animator MyAnim;
+		public Animator MyAnim;
 		private Inventory inventory;
 		public SimPlayer sim;
 		public ModularParts mod;
@@ -159,11 +160,11 @@ namespace ErenshorCoop
 				sim.MyStats.CurrentMana = _savedMP;
 
 			HandleAggro();
-			if ((npc.CurrentAggroTarget == null) || !character.Alive)
+			if ((npc != null && npc.CurrentAggroTarget == null) || (character != null && !character.Alive))
 			{
 				character.Relax = true;
 			}
-			else if (character.Alive)
+			else if (character != null && character.Alive)
 			{
 				character.Relax = false;
 			}
@@ -197,21 +198,15 @@ namespace ErenshorCoop
 						var _targ = GameData.SimPlayerGrouping.GroupTargets[0];
 						if (_targ != null && _targ.GetComponent<SimPlayer>() == null && _targ.GetComponent<PlayerControl>() == null && _targ.MyFaction != Character.Faction.Mineral)
 						{
-							if (GameData.GroupMember1 != null && GameData.GroupMember1.simIndex >= 0 && GameData.GroupMember1.MyStats.Myself.Alive && GameData.GroupMember1.MyStats.Myself.NearbyEnemies.Contains(_targ))
+							foreach(var mem in GameData.GroupMembers)
 							{
-								GameData.GroupMember1.MyAvatar.IgnoreAllCombat = false;
-								GameData.GroupMember1.MyAvatar.MyStats.Myself.MyNPC.ForceAggroOn(_targ);
+								if (mem != null && mem.simIndex >= 0 && mem.MyStats.Myself.Alive && mem.MyStats.Myself.NearbyEnemies.Contains(_targ))
+								{
+									mem.MyAvatar.IgnoreAllCombat = false;
+									mem.MyAvatar.MyStats.Myself.MyNPC.ForceAggroOn(_targ);
+								}
 							}
-							if (GameData.GroupMember2 != null && GameData.GroupMember2.simIndex >= 0 && GameData.GroupMember2.MyStats.Myself.Alive && GameData.GroupMember2.MyStats.Myself.NearbyEnemies.Contains(_targ))
-							{
-								GameData.GroupMember2.MyAvatar.IgnoreAllCombat = false;
-								GameData.GroupMember2.MyAvatar.MyStats.Myself.MyNPC.ForceAggroOn(_targ);
-							}
-							if (GameData.GroupMember3 != null && GameData.GroupMember3.simIndex >= 0 && GameData.GroupMember3.MyStats.Myself.Alive && GameData.GroupMember3.MyStats.Myself.NearbyEnemies.Contains(_targ))
-							{
-								GameData.GroupMember3.MyAvatar.IgnoreAllCombat = false;
-								GameData.GroupMember3.MyAvatar.MyStats.Myself.MyNPC.ForceAggroOn(_targ);
-							}
+							
 						}
 					}
 				}
@@ -293,11 +288,11 @@ namespace ErenshorCoop
 			bool fromPlayer = false; //This should be false by default, otherwise every player that receives this will be
 									 //Adding player damage to the enemy, which would cause everyone to get xp
 			//Check if we are in a group
-			if (Grouping.HasGroup)
+			if (ClientGroup.HasGroup)
 			{
 				//Set fromPlayer to if this player is in our group and we're the leader
-				fromPlayer = Grouping.IsLocalLeader() && Grouping.IsPlayerInGroup(entityID, true);
-				if (!isPlayer && Grouping.IsPlayerInGroup(entityID, true)) //If the target isn't a player and the player is in our group
+				fromPlayer = ClientGroup.IsLocalLeader() && ClientGroup.IsPlayerInGroup(entityID, true);
+				if (!isPlayer && ClientGroup.IsPlayerInGroup(entityID, true)) //If the target isn't a player and the player is in our group
 				{
 					//We add ourselves to the aggro list, this way everyone in the group is automatically in the aggro list
 					//if (data.damage > 0) //Make sure we actually did damage
@@ -306,12 +301,11 @@ namespace ErenshorCoop
 						attacked.MyNPC.ManageAggro(1, ClientConnectionManager.Instance.LocalPlayer.character);
 						//if (ServerConnectionManager.Instance.IsRunning)
 						{
-							if (GameData.GroupMember1 != null && GameData.GroupMember1.simIndex >= 0)
-								attacked.MyNPC.ManageAggro(1, GameData.GroupMember1.MyStats.Myself);
-							if (GameData.GroupMember2 != null && GameData.GroupMember2.simIndex >= 0)
-								attacked.MyNPC.ManageAggro(1, GameData.GroupMember2.MyStats.Myself);
-							if (GameData.GroupMember3 != null && GameData.GroupMember3.simIndex >= 0)
-								attacked.MyNPC.ManageAggro(1, GameData.GroupMember3.MyStats.Myself);
+							foreach(var mem in GameData.GroupMembers)
+							{
+								if (mem != null && mem.simIndex >= 0)
+									attacked.MyNPC.ManageAggro(1, mem.MyStats.Myself);
+							}
 						}
 						//GameData.GroupMatesInCombat.Add(npc);
 					}
@@ -326,7 +320,7 @@ namespace ErenshorCoop
 			if (data.damageType == GameData.DamageType.Physical)
 				attacked.DamageMe(data.damage, fromPlayer, data.damageType, character, data.effect, data.isCrit);
 			else
-				attacked.MagicDamageMe(data.damage, fromPlayer, data.damageType, character, data.resistMod);
+				attacked.MagicDamageMe(data.damage, fromPlayer, data.damageType, character, data.resistMod, 0);
 
 			Variables.DontCalculateDamageMitigationCharacters.Remove(attacked);
 		}
@@ -354,7 +348,7 @@ namespace ErenshorCoop
 			if (data.damageType == GameData.DamageType.Physical)
 				character.DamageMe(data.damage, false, data.damageType, attacker, data.effect, data.isCrit);
 			else
-				character.MagicDamageMe(data.damage, false, data.damageType, attacker, data.resistMod);
+				character.MagicDamageMe(data.damage, false, data.damageType, attacker, data.resistMod, 0);
 
 			Variables.DontCalculateDamageMitigationCharacters.Remove(character);
 		}
@@ -376,6 +370,18 @@ namespace ErenshorCoop
 
 		public void OnSimDataReceive<T>(T packet) where T : BasePacket
 		{
+			if (packet is PlayerDataPacket _playerDataPacket)
+			{
+				if (_playerDataPacket.dataTypes.Contains(PlayerDataType.DESTR_SIM))
+				{
+					if (gameObject != null)
+						Destroy(gameObject);
+					else
+						OnDestroy();
+
+					return;
+				}
+			}
 			if (SceneManager.GetActiveScene().name != zone) return;
 
 			if (packet is PlayerTransformPacket playerTransformPacket)
@@ -407,7 +413,21 @@ namespace ErenshorCoop
 				if (playerDataPacket.dataTypes.Contains(PlayerDataType.CLASS))
 					sim.MyStats.CharacterClass = playerDataPacket._class;
 				if (playerDataPacket.dataTypes.Contains(PlayerDataType.LEVEL))
+				{
 					sim.MyStats.Level = playerDataPacket.level;
+					UpdateSocialLog.LogAdd($"{name} has gained a level!", "yellow");
+					if (sim.MyStats.LvlUp == null && GameData.PlayerStats.LvlUp != null)
+					{
+						sim.MyStats.LvlUp = Instantiate(GameData.PlayerStats.LvlUp, transform);
+						sim.MyStats.LvlUp.transform.position = Vector3.zero;
+						sim.MyStats.LvlUp.transform.localPosition = Vector3.zero;
+					}
+					if (sim.MyStats.LvlUp != null)
+					{
+						sim.MyStats.LvlUp.Play();
+					}
+					sim.MyStats.CalcStats();
+				}
 				if (playerDataPacket.dataTypes.Contains(PlayerDataType.NAME))
 				{
 					playerName = playerDataPacket.name;
@@ -444,15 +464,25 @@ namespace ErenshorCoop
 				{
 					HandleTargetChange(playerDataPacket.targetID, playerDataPacket.targetType);
 				}
-
-
-
-				if (playerDataPacket.dataTypes.Contains(PlayerDataType.DESTR_SIM))
+				if (playerDataPacket.dataTypes.Contains(PlayerDataType.PERIODIC_UPDATE))
 				{
-					if (gameObject != null)
-						Destroy(gameObject);
-					else
-						OnDestroy();
+					sim.MyStats.CurrentMaxHP = playerDataPacket.maxHealth;
+					sim.MyStats.CurrentHP = playerDataPacket.health;
+					GameHooks.maxMP.SetValue(sim.MyStats, playerDataPacket.maxMP);
+					sim.MyStats.CurrentMana = playerDataPacket.mp;
+					zone = playerDataPacket.scene;
+
+					_savedHP = playerDataPacket.health;
+					_savedMP = playerDataPacket.mp;
+
+					if (!character.Alive && playerDataPacket.alive)
+						HandleRespawn(true);
+				}
+				if (playerDataPacket.dataTypes.Contains(PlayerDataType.STATS))
+					HandleStatChange(playerDataPacket.stats);
+				if(playerDataPacket.dataTypes.Contains(PlayerDataType.RENAME))
+				{
+					HandleRename(playerDataPacket.rename);
 				}
 			}
 
@@ -486,6 +516,14 @@ namespace ErenshorCoop
 				{
 					foreach (var wd in playerActionPacket.wandData)
 						HandleWand(wd);
+				}
+				if (playerActionPacket.dataTypes.Contains(ActionType.WORN_EFFECT_REFRESH))
+				{
+					HandleStatusEffectRefresh(playerActionPacket.wornEffects);
+				}
+				if (playerActionPacket.dataTypes.Contains(ActionType.ACTIVE_STATUS_EFFECTS))
+				{
+					HandleActiveStatusEffects(playerActionPacket.activeEffects);
 				}
 			}
 
@@ -725,7 +763,7 @@ namespace ErenshorCoop
 					targetChar.MyStats.AddStatusEffect(spell, false, effectData.damageBonus, character);
 
 				//Check if we are in a group, and its a sim in our group
-				if (Grouping.HasGroup && Grouping.IsPlayerInGroup(entityID, true))
+				if (ClientGroup.HasGroup && ClientGroup.IsPlayerInGroup(entityID, true))
 				{
 					if (target.type == EntityType.ENEMY) //If the target is an enemy
 					{

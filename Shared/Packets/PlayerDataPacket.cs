@@ -18,14 +18,19 @@ namespace ErenshorCoop.Shared.Packets
 		public Class _class;
 		public int health;
 		public int mp;
+		public int maxHealth;
+		public int maxMP;
 		public int level;
 		public string scene;
 		public string name;
+		public bool alive;
 		public LookData lookData;
 		public List<GearData> gearData;
 		public List<AnimationData> animData = new();
 		public short targetID;
 		public EntityType targetType;
+		public StatData stats;
+		public string rename;
 
 		public PlayerDataPacket() : base(DeliveryMethod.ReliableOrdered) {}
 
@@ -81,6 +86,28 @@ namespace ErenshorCoop.Shared.Packets
 					writer.Put((byte)g.quality);
 				}
 			}
+			if(dataTypes.Contains(PlayerDataType.PERIODIC_UPDATE))
+			{
+				writer.Put(health);
+				writer.Put(maxHealth);
+				writer.Put(mp);
+				writer.Put(maxMP);
+				writer.Put(scene);
+				writer.Put(zone);
+				writer.Put(alive);
+			}
+			if(dataTypes.Contains(PlayerDataType.STATS))
+			{
+				writer.Put(stats.str);
+				writer.Put(stats.dex);
+				writer.Put(stats._int);
+				writer.Put(stats.wis);
+				writer.Put(stats.agi);
+				writer.Put(stats.end);
+				writer.Put(stats.cha);
+			}
+			if(dataTypes.Contains(PlayerDataType.RENAME))
+				writer.Put(rename);
 		}
 
 		public override void Read(NetDataReader reader)
@@ -154,6 +181,31 @@ namespace ErenshorCoop.Shared.Packets
 					gearData.Add(gd);
 				}
 			}
+			if (dataTypes.Contains(PlayerDataType.PERIODIC_UPDATE))
+			{
+				health = reader.GetInt();
+				maxHealth = reader.GetInt();
+				mp = reader.GetInt();
+				maxMP = reader.GetInt();
+				scene = reader.GetString();
+				zone = reader.GetString();
+				alive = reader.GetBool();
+			}
+			if(dataTypes.Contains(PlayerDataType.STATS))
+			{
+				stats = new StatData()
+				{
+					str = reader.GetInt(),
+					dex = reader.GetInt(),
+					_int = reader.GetInt(),
+					wis = reader.GetInt(),
+					agi = reader.GetInt(),
+					end = reader.GetInt(),
+					cha = reader.GetInt()
+				};
+			}
+			if(dataTypes.Contains(PlayerDataType.RENAME))
+				rename = reader.GetString().Sanitize();
 		}
 	}
 
@@ -177,5 +229,16 @@ namespace ErenshorCoop.Shared.Packets
 		public Item.SlotType slotType;
 		public string itemID;
 		public int quality;
+	}
+
+	public struct StatData
+	{
+		public int str;
+		public int dex;
+		public int _int;
+		public int wis;
+		public int agi;
+		public int end;
+		public int cha;
 	}
 }

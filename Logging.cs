@@ -8,6 +8,8 @@ using System.Threading.Tasks;
 using ErenshorCoop.Shared;
 using ErenshorCoop.Shared.Packets;
 using UnityEngine;
+using ErenshorCoop.Client;
+using ErenshorCoop.Client.Grouping;
 
 namespace ErenshorCoop
 {
@@ -41,7 +43,7 @@ namespace ErenshorCoop
 				UpdateSocialLog.CombatLogAdd($"[COOP] {message}", error?"red":GameData.ReadableBlue);
 		}
 
-		public static void HandleMessage(Entity from, PlayerMessagePacket packet)
+		public static void HandleMessage(Entity from, PlayerMessagePacket packet, Entity battleFrom=null)
 		{
 			MessageType messageType = packet.messageType;
 			string mes = packet.message;
@@ -56,7 +58,7 @@ namespace ErenshorCoop
 					UpdateSocialLog.LocalLogAdd($"{from.entityName} says: {mes}");
 					break;
 				case MessageType.GROUP:
-					if(Grouping.HasGroup && Grouping.IsPlayerInGroup(from.entityID, false))
+					if(ClientGroup.HasGroup && ClientGroup.IsPlayerInGroup(from.entityID, false))
 						UpdateSocialLog.LogAdd($"{from.entityName} tells the group: {mes}", "#00B2B7");
 					break;
 				case MessageType.SHOUT:
@@ -74,6 +76,31 @@ namespace ErenshorCoop
 					break;
 				case MessageType.INFO:
 					WriteInfoMessage(mes);
+					break;
+				case MessageType.BATTLE_LOG:
+					if (from == null || from != ClientConnectionManager.Instance.LocalPlayer) break;
+					Variables.DontResendMessageEnts.Add(battleFrom);
+					var isAppend = packet.append;
+					var hasColor = !string.IsNullOrEmpty(packet.color);
+					if (packet.isCombatLog)
+					{
+						if (hasColor)
+							UpdateSocialLog.CombatLogAdd(mes, packet.color);
+						else
+							UpdateSocialLog.CombatLogAdd(mes);
+					}
+					else
+					{
+						if (hasColor && isAppend)
+							UpdateSocialLog.LogAdd(mes, packet.color, packet.append);
+						else if (hasColor && !isAppend)
+							UpdateSocialLog.LogAdd(mes, packet.color);
+						else if (!hasColor && isAppend)
+							UpdateSocialLog.LogAdd(mes, isAppend);
+						else
+							UpdateSocialLog.LogAdd(mes);
+					}
+					Variables.DontResendMessageEnts.Remove(from);
 					break;
 			}
 		}

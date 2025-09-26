@@ -16,6 +16,8 @@ namespace ErenshorCoop.Shared.Packets
 		public List<AnimationData> animData = new();
 		public int health;
 		public int mp;
+		public int maxHealth;
+		public int maxMP;
 		public short targetID;
 		public EntityType targetType;
 
@@ -53,6 +55,13 @@ namespace ErenshorCoop.Shared.Packets
 			{
 				writer.Put(targetID);
 				writer.Put((byte)targetType);
+			}
+			if (dataTypes.Contains(EntityDataType.PERIODIC_UPDATE))
+			{
+				writer.Put(health);
+				writer.Put(maxHealth);
+				writer.Put(mp);
+				writer.Put(maxMP);
 			}
 		}
 
@@ -102,6 +111,13 @@ namespace ErenshorCoop.Shared.Packets
 			{
 				targetID = reader.GetShort();
 				targetType = (EntityType)reader.GetByte();
+			}
+			if (dataTypes.Contains(EntityDataType.PERIODIC_UPDATE))
+			{
+				health = reader.GetInt();
+				maxHealth = reader.GetInt();
+				mp = reader.GetInt();
+				maxMP = reader.GetInt();
 			}
 		}
 	}

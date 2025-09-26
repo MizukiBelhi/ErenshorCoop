@@ -18,6 +18,7 @@ namespace ErenshorCoop.Shared
 
 	public enum PacketType : byte
 	{
+		DONT_RESEND,
 		SERVER_CONNECT,
 		SERVER_INFO,
 		DISCONNECT,
@@ -86,6 +87,7 @@ namespace ErenshorCoop.Shared
 		SHOUT,
 		WHISPER,
 		INFO,
+		BATTLE_LOG,
 	}
 
 	public enum PlayerDataType : byte
@@ -101,7 +103,10 @@ namespace ErenshorCoop.Shared
 		CLASS,
 		MP,
 		CURTARGET,
-		DESTR_SIM
+		DESTR_SIM,
+		PERIODIC_UPDATE,
+		STATS,
+		RENAME
 	}
 
 	public enum EntityDataType : byte
@@ -113,7 +118,8 @@ namespace ErenshorCoop.Shared
 		SIM_REMOVE,
 		ENTITY_REMOVE,
 		MP,
-		CURTARGET
+		CURTARGET,
+		PERIODIC_UPDATE
 	}
 
 	public enum ActionType : byte
@@ -127,7 +133,9 @@ namespace ErenshorCoop.Shared
 		STATUS_EFFECT_APPLY,
 		STATUS_EFFECT_REMOVE,
 		HEAL,
-		WAND_ATTACK
+		WAND_ATTACK,
+		WORN_EFFECT_REFRESH,
+		ACTIVE_STATUS_EFFECTS
 	}
 	public enum AnimatorSyncType : byte
 	{
@@ -156,11 +164,18 @@ namespace ErenshorCoop.Shared
 		SIRAETHE = -3,
 		ADDS = -4,
 		TREASURE_GUARD = -5,
+		ASTRA = -6,
+		WAVE_EVENT = -7,
+		SPAWN_TRIGGER = -8,
+		FERNALLA_WARD = -9,
+		FERNALLA_PORTAL = -10,
+		PRE_SYNCED = -11,
 	}
 
 	public enum Request : byte
 	{
 		ENTITY_ID,
 		MOD_COMMAND,
+		ENTITY_SPAWN,
 	}
 }

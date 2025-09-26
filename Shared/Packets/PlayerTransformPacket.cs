@@ -15,6 +15,7 @@ namespace ErenshorCoop.Shared.Packets
 
 		public Vector3 position;
 		public Quaternion rotation;
+		public short ownerID;
 
 		public PlayerTransformPacket() : base(DeliveryMethod.Unreliable) { }
 
@@ -23,6 +24,8 @@ namespace ErenshorCoop.Shared.Packets
 			writer.Put((byte)PacketType.PLAYER_TRANSFORM);
 			writer.Put(entityID);
 			writer.Put(isSim);
+			if (isSim)
+				writer.Put(ownerID);
 			writer.Put(Extensions.GetSubTypeFlag(dataTypes));
 
 			if (dataTypes.Contains(PlayerDataType.POSITION))
@@ -35,6 +38,8 @@ namespace ErenshorCoop.Shared.Packets
 		{
 			entityID = reader.GetShort();
 			isSim = reader.GetBool();
+			if(isSim)
+				ownerID = reader.GetShort();
 
 			dataTypes = Extensions.ReadSubTypeFlag<PlayerDataType>(reader.GetUShort());
 

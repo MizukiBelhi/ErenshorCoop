@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 using ErenshorCoop.Client;
@@ -16,10 +17,27 @@ namespace ErenshorCoop.Shared
 
 		public static List<Character> DontCalculateDamageMitigationCharacters = new();
 		public static List<Entity> DontCheckEffectCharacters = new();
+		public static List<Entity> DontResendMessageEnts = new();
+		public static ConditionalWeakTable<SpawnPointTrigger, SPTData> triggerIDs = new();
+		public static ConditionalWeakTable<GameHooks.SyncedFernallaPortalEvent, SPTData> portalIDs = new();
+		public static ConditionalWeakTable<GameHooks.PreSyncedEntity, SPTData> presyncedEntities = new();
+		public static ConditionalWeakTable<SpawnPoint, SPTData> syncedSpawns = new();
+		public static List<GameObject> entitiesToDisable = new();
+		public static Dictionary<int, WeakReference<SpawnPoint>> syncedSpawnPoints = new();
+
+		public class SPTData
+		{
+			public int id;
+			//Only used in pre-synced entities
+			public GameObject go;
+			//For spawners
+			public int index;
+			public bool isRare;
+		}
 		public static DroppedItem lastDroppedItem = new();
 
-		public static Dictionary<int, SpawnGroup> spawnData = new();
-		public static Dictionary<int, SpawnPoint> spawnPoints = new();
+		//public static Dictionary<int, SpawnGroup> spawnData = new();
+		//public static Dictionary<int, SyncedSpawnPoint> spawnPoints = new();
 
 		public static Dictionary<string, List<ItemDropData>> droppedItems = new();
 		public static Dictionary<int, short> savedZoneSimID = new();
@@ -40,7 +58,7 @@ namespace ErenshorCoop.Shared
 			public GameObject prefab = null;
 		}
 
-		public static void AddSpawn(int spawnID, SpawnPoint spawn)
+		/*public static void AddSpawn(int spawnID, SpawnPoint spawn)
 		{
 			//string spawnID = spawn.ID;
 
@@ -121,6 +139,6 @@ namespace ErenshorCoop.Shared
 
 				return (-1, false);
 			}
-		}
+		}*/
 	}
 }

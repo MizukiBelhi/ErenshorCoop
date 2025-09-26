@@ -13,10 +13,11 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using Steamworks;
 using System.Collections;
+using ErenshorCoop.Modules;
 
 namespace ErenshorCoop
 {
-	[BepInPlugin("mizuki.coop", "Erenshor Coop", "2.0.7")]
+	[BepInPlugin("mizuki.coop", "Erenshor Coop", "2.2.0")]
 	public class ErenshorCoopMod : BaseUnityPlugin
 	{
 		public static Action<Scene> OnGameMapLoad;
@@ -38,6 +39,8 @@ namespace ErenshorCoop
 		private GameObject ui;
 
 		public static ConfigFile config;
+
+		public static ModuleMngr moduleMngr;
 
 		public void Awake()
 		{
@@ -74,6 +77,9 @@ namespace ErenshorCoop
 
 			GetLoadedPlugins();
 
+			moduleMngr = new ModuleMngr();
+			moduleMngr.GatherModules();
+
 			
 			StartCoroutine(DelayedSteamworksInit());
 
@@ -109,6 +115,13 @@ namespace ErenshorCoop
 		public IEnumerator DelayedSteamworksInit()
 		{
 			yield return new WaitForSeconds(2);
+
+			var npcs = FindObjectsOfType<NPC>(true);
+			foreach (var npc in npcs)
+			{
+				if (npc.gameObject.GetComponent<Entity>() == null)
+					npc.gameObject.GetOrAddComponent<GameHooks.PreSyncedEntity>();
+			}
 			Steamworks.SteamAPI.Init();
 			Steam.Lobby.Init();
 		}
@@ -157,6 +170,12 @@ namespace ErenshorCoop
 			var sn = FindObjectsOfType<SimSync>();
 			foreach (var n in sn)
 				Destroy(n);
+
+			foreach (var sync in GameHooks.preSyncList)
+			{
+				Destroy(sync);
+			}
+			GameHooks.preSyncList.Clear();
 		}
 
 
@@ -187,7 +206,18 @@ namespace ErenshorCoop
 
 		private void OnGameLoad(Scene scene)
 		{
-			if(sceneChange == null)
+			StartCoroutine(SteamCheckStart());
+			CompassHandler.Init();
+
+			var npcs = FindObjectsOfType<NPC>(true);
+			foreach (var npc in npcs)
+			{
+				if(npc.gameObject.GetComponent<Entity>() == null)
+					npc.gameObject.GetOrAddComponent<GameHooks.PreSyncedEntity>();
+			}
+
+
+			if (sceneChange == null)
 				sceneChange = FindObjectOfType<SceneChange>();
 
 			if (sceneChange == null) return;
@@ -198,14 +228,12 @@ namespace ErenshorCoop
 			}else if(ClientConnectionManager.Instance.LocalPlayer == null){
 				Logging.LogError("Could not find Player object. Try changing scenes?");
 			}
-
-			StartCoroutine(SteamCheckStart());
-			CompassHandler.Init();
 		}
 
 		public IEnumerator SteamCheckStart()
 		{
 			yield return new WaitForSeconds(3);
+			VersionCheck.StartRequest();
 			Steam.Lobby.CheckForGameStart();
 		}
 
@@ -311,10 +339,11 @@ namespace ErenshorCoop
 		{
 			switch(_class)
 			{
-				case 0:	return GameData.ClassDB.Warrior;
+				case 0:	return GameData.ClassDB.Paladin;
 				case 1:	return GameData.ClassDB.Druid;
 				case 2: return GameData.ClassDB.Duelist;
 				case 3: return GameData.ClassDB.Arcanist;
+				case 4: return GameData.ClassDB.Stormcaller;
 			}
 
 			return null;
@@ -322,10 +351,11 @@ namespace ErenshorCoop
 
 		public static byte Class2ClassID(Class _class)
 		{
-			if(_class == GameData.ClassDB.Warrior) return 0;
+			if(_class == GameData.ClassDB.Paladin) return 0;
 			if(_class == GameData.ClassDB.Druid) return 1;
 			if(_class == GameData.ClassDB.Duelist) return 2;
 			if(_class == GameData.ClassDB.Arcanist) return 3;
+			if(_class == GameData.ClassDB.Stormcaller) return 4;
 			return byte.MaxValue;
 		}
 

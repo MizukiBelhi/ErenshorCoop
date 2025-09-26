@@ -25,6 +25,41 @@ namespace ErenshorCoop.Shared
 
 		private static Queue<(PacketType packetType, IPacket packet)> packetQueue = new();
 
+		public class RegisteredPacket
+		{
+			public PacketType packetType;
+			public Type type;
+			public bool isServerPacket;
+			public byte channel;
+		}
+
+		private static Dictionary<PacketType, RegisteredPacket> registeredPackets = new();
+
+		public static void RegisterPacket<T>(PacketType type, bool isServerPacket, byte channel) where T : BasePacket, new()
+		{
+			var rPacket = new RegisteredPacket
+			{
+				packetType = type,
+				type = typeof(T),
+				isServerPacket = isServerPacket,
+				channel = channel
+			};
+			registeredPackets[type] = rPacket;
+		}
+
+		public static void UnregisterPacket(PacketType type)
+		{
+			if (registeredPackets.ContainsKey(type))
+				registeredPackets.Remove(type);
+		}
+
+		public static RegisteredPacket GetRegisteredPacket(PacketType packetType)
+		{
+			if (registeredPackets.TryGetValue(packetType, out var rPacket))
+				return rPacket;
+			return null;
+		}
+
 		public static T GetOrCreatePacket<T>(short entityID, PacketType type, bool dontSend=false) where T : BasePacket, new()
 		{
 			if(packets.TryGetValue(entityID, out var entityData))
@@ -116,7 +151,15 @@ namespace ErenshorCoop.Shared
 		private static byte GetChannel(PacketType packetType)
 		{
 			byte channel = 2;
-			switch (packetType)
+			if (registeredPackets.TryGetValue(packetType, out var rPacket))
+			{
+				channel = rPacket.channel;
+			}
+			else
+			{
+				Logging.LogError($"Packet type {packetType} not registered, defaulting to channel 2");
+			}
+			/*switch (packetType)
 			{
 				case PacketType.GROUP:
 				case PacketType.SERVER_GROUP:
@@ -146,7 +189,7 @@ namespace ErenshorCoop.Shared
 					break;
 				case PacketType.ENTITY_TRANSFORM: channel = 4; break;
 				case PacketType.PLAYER_TRANSFORM: channel = 2; break;
-			}
+			}*/
 
 			return channel;
 		}
@@ -157,8 +200,14 @@ namespace ErenshorCoop.Shared
 			//( PacketType packetType, IPacket packet ) = packetQueue.Dequeue();
 
 			byte channel = GetChannel(packetType);
+			//Get registered packet info
+			if (!registeredPackets.TryGetValue(packetType, out var rPacket))
+			{
+				Logging.LogError($"Packet type {packetType} not registered, cannot send");
+				return;
+			}
 
-			bool isClientPacket = packetType == PacketType.GROUP ||
+			bool isClientPacket = !rPacket.isServerPacket;/*packetType == PacketType.GROUP ||
 								packetType == PacketType.PLAYER_CONNECT ||
 								packetType == PacketType.PLAYER_DATA ||
 								packetType == PacketType.PLAYER_ACTION ||
@@ -166,7 +215,7 @@ namespace ErenshorCoop.Shared
 								packetType == PacketType.PLAYER_MESSAGE ||
 								packetType == PacketType.PLAYER_REQUEST ||
 								packetType == PacketType.ITEM_DROP ||
-								packetType == PacketType.WEATHER_DATA;
+								packetType == PacketType.WEATHER_DATA;*/
 
 			var basePacket = (BasePacket)packet;
 			

@@ -4,6 +4,7 @@ using ErenshorCoop.Shared;
 using ErenshorCoop.Shared.Packets;
 using HarmonyLib;
 using System.Net;
+using System.Text.RegularExpressions;
 using UnityEngine;
 
 

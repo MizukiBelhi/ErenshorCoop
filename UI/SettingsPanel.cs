@@ -105,15 +105,16 @@ namespace ErenshorCoop.UI
 
 					for (int i = 0; i < 4; i++)
 					{
-						inputs[i] = Base.AddInputField(parent, new Vector2(startX + (fieldWidth + 5) * i, yPos - 20), new Vector2(fieldWidth, 16), "");
-						inputs[i].text = intValues[i].ToString();
+						int channelIndex = i;
+						inputs[channelIndex] = Base.AddInputField(parent, new Vector2(startX + (fieldWidth + 5) * i, yPos - 20), new Vector2(fieldWidth, 16), "");
+						inputs[channelIndex].text = intValues[channelIndex].ToString();
 
-						inputs[i].onValueChanged.AddListener((string v) =>
+						inputs[channelIndex].onValueChanged.AddListener((string v) =>
 						{
 							if (int.TryParse(v, out var parsed))
 							{
 								parsed = Mathf.Clamp(parsed, 0, 255);
-								intValues[i] = parsed;
+								intValues[channelIndex] = parsed;
 
 								var newColor = new Color(
 									intValues[0] / 255f,

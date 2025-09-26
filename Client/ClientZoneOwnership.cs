@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using ErenshorCoop.Server;
 using ErenshorCoop.Shared;
 using UnityEngine.SceneManagement;
@@ -40,8 +41,13 @@ namespace ErenshorCoop.Client
 		private static void OnGameMapLoad(Scene scene)
 		{
 			_zonePlayers.Clear();
-			//if (ServerConnectionManager.Instance.IsRunning)
 			//SharedNPCSyncManager.Instance.StartCoroutine(SharedNPCSyncManager.Instance.DelayedCheckSim());
+			if (scene.name != "FernallaPortal")
+			{
+				GameHooks.fernallaSpawn1 = false;
+				GameHooks.fernallaSpawn2 = false;
+				GameHooks.fernallaStats = null;
+			}
 		}
 
 		public static void OnClientChangeZone(short playerID, string newZone, string prevZone)
@@ -90,8 +96,9 @@ namespace ErenshorCoop.Client
 
 			if (zone == SceneManager.GetActiveScene().name && isZoneOwner && _lastOwnershipZone != zone)
 			{
-				SharedNPCSyncManager.Instance.TakeOwnership(zone);
+				SharedNPCSyncManager.Instance.StartCoroutine(SharedNPCSyncManager.Instance.TakeOwnershipDelayed(zone));
 				_lastOwnershipZone = zone;
+				
 			}
 
 			bool ownershipWasRemoved = previousOwnership && !isZoneOwner && _lastOwnershipZone == zone;
@@ -99,8 +106,15 @@ namespace ErenshorCoop.Client
 			if (zone == SceneManager.GetActiveScene().name && !isZoneOwner && !ownershipWasRemoved)
 			{
 				Logging.Log("Not Owner!");
-				ClientNPCSyncManager.Instance.LoadAndDestroySpawns();
+				ClientNPCSyncManager.Instance.LoadAndDestroySpawns(false);
 				_lastOwnershipZone = null;
+
+				foreach(var obj in Variables.entitiesToDisable)
+				{
+					if(obj != null)
+						obj?.SetActive(false);
+				}
+				Variables.entitiesToDisable.Clear();
 			}
 
 			if (zone == SceneManager.GetActiveScene().name && ownershipWasRemoved)
@@ -109,6 +123,25 @@ namespace ErenshorCoop.Client
 				ClientNPCSyncManager.Instance.LoadSpawns();
 				SharedNPCSyncManager.Instance.ConvertOwnedToUnowned();
 				_lastOwnershipZone = null;
+
+				foreach (var obj in Variables.entitiesToDisable)
+				{
+					if (obj != null)
+						obj?.SetActive(false);
+				}
+				Variables.entitiesToDisable.Clear();
+			}
+		}
+
+		public static void HandlePreSyncs(bool isOwner)
+		{
+			//var preSyncs = UnityEngine.Object.FindObjectsOfType<GameHooks.PreSyncedEntity>(true);
+			foreach (var sync in GameHooks.preSyncList)
+			{
+				if(isOwner && sync != null && sync.gameObject != null && sync.gameObject.GetComponent<Entity>() == null && sync.id != -1)
+				{
+					GameHooks.SetNetworked(sync.gameObject, sync.id, 0, CustomSpawnID.PRE_SYNCED);
+				}
 			}
 		}
 

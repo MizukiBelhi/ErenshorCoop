@@ -30,7 +30,8 @@ namespace ErenshorCoop.Shared.Packets
 
 		public List<HealingData> healingData;
 		public List<WandAttackData> wandData;
-
+		public List<StatusEffectData> activeEffects;
+		public List<StatusEffectData> wornEffects;
 		public PlayerActionPacket() : base(DeliveryMethod.ReliableOrdered) { }
 
 		public override void Write(NetDataWriter writer)
@@ -52,6 +53,7 @@ namespace ErenshorCoop.Shared.Packets
 				writer.Put(attackData.effect);
 				writer.Put(attackData.resistMod);
 				writer.Put(attackData.isCrit);
+				writer.Put(attackData.baseDmg);
 			}
 			if (dataTypes.Contains(ActionType.DAMAGE_TAKEN))
 			{
@@ -62,6 +64,7 @@ namespace ErenshorCoop.Shared.Packets
 				writer.Put(damageTakenData.effect);
 				writer.Put(damageTakenData.resistMod);
 				writer.Put(damageTakenData.isCrit);
+				writer.Put(damageTakenData.baseDmg);
 			}
 			if (dataTypes.Contains(ActionType.SPELL_CHARGE))
 			{
@@ -109,6 +112,28 @@ namespace ErenshorCoop.Shared.Packets
 				{
 					writer.Put(w.targetID);
 					writer.Put(w.itemID);
+					writer.Put(w.isBowAttack);
+					writer.Put(w.attackType);
+					writer.Put(w.arrowIndex);
+					writer.Put(w.dmgMod);
+					writer.Put(w.interrupt);
+				}
+			}
+			if (dataTypes.Contains(ActionType.WORN_EFFECT_REFRESH))
+			{
+				writer.Put(wornEffects.Count);
+				foreach (var h in wornEffects)
+				{
+					writer.Put(h.spellID);
+				}
+			}
+			if(dataTypes.Contains(ActionType.ACTIVE_STATUS_EFFECTS))
+			{
+				writer.Put(activeEffects.Count);
+				foreach (var h in activeEffects)
+				{
+					writer.Put(h.spellID);
+					writer.Put(h.duration);
 				}
 			}
 		}
@@ -129,7 +154,8 @@ namespace ErenshorCoop.Shared.Packets
 					damageType = (GameData.DamageType)reader.GetByte(),
 					effect = reader.GetBool(),
 					resistMod = reader.GetFloat(),
-					isCrit = reader.GetBool()
+					isCrit = reader.GetBool(),
+					baseDmg = reader.GetInt()
 				};
 			}
 			if (dataTypes.Contains(ActionType.DAMAGE_TAKEN))
@@ -142,7 +168,8 @@ namespace ErenshorCoop.Shared.Packets
 					damageType = (GameData.DamageType)reader.GetByte(),
 					effect = reader.GetBool(),
 					resistMod = reader.GetFloat(),
-					isCrit = reader.GetBool()
+					isCrit = reader.GetBool(),
+					baseDmg = reader.GetInt()
 				};
 			}
 			if (dataTypes.Contains(ActionType.SPELL_CHARGE))
@@ -202,8 +229,40 @@ namespace ErenshorCoop.Shared.Packets
 					{
 						targetID = reader.GetShort(),
 						itemID = reader.GetString().Sanitize(),
+						isBowAttack = reader.GetBool(),
+						attackType = reader.GetShort(),
+						arrowIndex = reader.GetInt(),
+						dmgMod = reader.GetInt(),
+						interrupt = reader.GetBool()
 					};
 					wandData.Add(w);
+				}
+			}
+			if (dataTypes.Contains(ActionType.WORN_EFFECT_REFRESH))
+			{
+				var cnt = reader.GetInt();
+				wornEffects = new();
+				for (int i = 0; i < cnt; i++)
+				{
+					StatusEffectData d = new()
+					{
+						spellID = reader.GetString()
+					};
+					wornEffects.Add(d);
+				}
+			}
+			if (dataTypes.Contains(ActionType.ACTIVE_STATUS_EFFECTS))
+			{
+				var cnt = reader.GetInt();
+				activeEffects = new();
+				for (int i = 0; i < cnt; i++)
+				{
+					StatusEffectData d = new()
+					{
+						spellID = reader.GetString(),
+						duration = reader.GetFloat(),
+					};
+					activeEffects.Add(d);
 				}
 			}
 		}
@@ -218,6 +277,7 @@ namespace ErenshorCoop.Shared.Packets
 		public bool effect;
 		public float resistMod;
 		public bool isCrit;
+		public int baseDmg;
 	}
 
 	public struct DamageTakenData
@@ -229,6 +289,7 @@ namespace ErenshorCoop.Shared.Packets
 		public bool effect;
 		public float resistMod;
 		public bool isCrit;
+		public int baseDmg;
 	}
 
 	public struct StatusEffectData
@@ -255,5 +316,10 @@ namespace ErenshorCoop.Shared.Packets
 	{
 		public short targetID;
 		public string itemID;
+		public bool isBowAttack;
+		public short attackType;
+		public int arrowIndex;
+		public int dmgMod;
+		public bool interrupt;
 	}
 }

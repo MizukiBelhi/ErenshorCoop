@@ -7,6 +7,9 @@ using UnityEngine.SceneManagement;
 using Steamworks;
 using System.Collections.Generic;
 using System.Collections;
+using ErenshorCoop.Client.Grouping;
+using TMPro;
+using System;
 
 namespace ErenshorCoop.Shared
 {
@@ -32,6 +35,10 @@ namespace ErenshorCoop.Shared
 		public string spellID;
 
 		private GameObject spellEffect;
+
+		internal float timeSinceLastPeriodicUpdate = 0;
+
+		public CustomSpawnID spawnID;
 
 		public void Start()
 		{
@@ -67,7 +74,7 @@ namespace ErenshorCoop.Shared
 					return;
 				}
 			}
-				//ask server for an id
+			//ask server for an id
 			if (!ServerConnectionManager.Instance.IsRunning)
 			{
 				ClientConnectionManager.Instance.requestReceivers.Add(this);
@@ -83,21 +90,52 @@ namespace ErenshorCoop.Shared
 			else
 			{
 				entityID = SharedNPCSyncManager.Instance.GetFreeId();
-				if (type == EntityType.PET)
-					SharedNPCSyncManager.Instance.ServerSpawnPet(gameObject, owner.entityID, entityID, spellID);
-				else
-				{
-					if(isGuardian)
-						SharedNPCSyncManager.Instance.ServerSpawnMob(gameObject, (int)CustomSpawnID.TREASURE_GUARD, $"{treasureChestID},{guardianId}", false, transform.position, transform.rotation);
-				}
-				if (type == EntityType.SIM)
-				{
-					SharedNPCSyncManager.Instance.sims.Add(entityID, ((SimSync)this));
-					((SimSync)this).SendConnectData();
-					Variables.savedZoneSimID.Add(((SimSync)this).simIndex, entityID);
-					CheckSummon();
-				}
+				ReceiveRequestID(entityID, true);
 			}
+		}
+
+		public void FixedUpdate()
+		{
+			if(entityID != -1 && ClientConnectionManager.Instance.IsRunning && (GetType() == typeof(NPCSync) || GetType() == typeof(SimSync) || GetType() == typeof(PlayerSync)))
+			{
+				if (timeSinceLastPeriodicUpdate + 5 < Time.time)
+				{
+					if (GetType() != typeof(NPCSync))
+					{
+						var p = PacketManager.GetOrCreatePacket<PlayerDataPacket>(entityID, PacketType.PLAYER_DATA);
+						p.AddPacketData(PlayerDataType.PERIODIC_UPDATE, "health", character.MyStats.CurrentHP);
+						p.mp = character.MyStats.CurrentMana;
+						p.maxHealth = character.MyStats.CurrentMaxHP;
+						p.maxMP = character.MyStats.GetCurrentMaxMana();
+						p.scene = SceneManager.GetActiveScene().name;
+						p.zone = SceneManager.GetActiveScene().name;
+						p.alive = character.Alive;
+
+						p.isSim = GetType() == typeof(SimSync);
+					}
+					else if(GetType() == typeof(NPCSync))
+					{
+						var p = PacketManager.GetOrCreatePacket<EntityDataPacket>(entityID, PacketType.ENTITY_DATA);
+						p.AddPacketData(EntityDataType.PERIODIC_UPDATE, "mp", character.MyStats.CurrentMana);
+						p.health = character.MyStats.CurrentHP;
+						p.maxHealth = character.MyStats.CurrentMaxHP;
+						p.maxMP = character.MyStats.GetCurrentMaxMana();
+						p.SetData("targetPlayerIDs", SharedNPCSyncManager.Instance.GetPlayerSendList());
+						p.entityType = type;
+						p.zone = SceneManager.GetActiveScene().name;
+					}
+
+					timeSinceLastPeriodicUpdate = Time.time;
+				}
+				if (type == EntityType.PLAYER)
+					ClientGroup.PeriodicGroupCheck();
+			}
+		}
+
+		public void HandleLevelUp()
+		{
+			var p = PacketManager.GetOrCreatePacket<PlayerDataPacket>(entityID, PacketType.PLAYER_DATA).AddPacketData(PlayerDataType.LEVEL, "level", character.MyStats.Level);
+			p.isSim = type == EntityType.SIM;
 		}
 
 		public void CheckSummon()
@@ -122,7 +160,7 @@ namespace ErenshorCoop.Shared
 			CheckSummon();
 		}
 
-		public void ReceiveRequestID(short id)
+		public void ReceiveRequestID(short id, bool isHost=false)
 		{
 			//Logging.Log($"received entityID request {id} for {name}");
 			if (GetType() != typeof(NPCSync) && GetType() != typeof(SimSync))
@@ -137,6 +175,11 @@ namespace ErenshorCoop.Shared
 			{
 				if(isGuardian)
 					SharedNPCSyncManager.Instance.ServerSpawnMob(gameObject, (int)CustomSpawnID.TREASURE_GUARD, $"{treasureChestID},{guardianId}", false, transform.position, transform.rotation);
+				if (spawnID == CustomSpawnID.ASTRA)
+					SharedNPCSyncManager.Instance.ServerSpawnMob(gameObject, (int)spawnID, "", false, transform.position, transform.rotation);
+				if (spawnID == CustomSpawnID.WAVE_EVENT || spawnID == CustomSpawnID.SPAWN_TRIGGER
+					|| spawnID == CustomSpawnID.FERNALLA_WARD || spawnID == CustomSpawnID.FERNALLA_PORTAL || spawnID == CustomSpawnID.PRE_SYNCED)
+					SharedNPCSyncManager.Instance.ServerSpawnMob(gameObject, (int)spawnID, $"{treasureChestID},{guardianId}", guardianId == 99, transform.position, transform.rotation);
 			}
 			if(type == EntityType.SIM)
 			{
@@ -214,7 +257,7 @@ namespace ErenshorCoop.Shared
 			catch{}
 		}
 
-		public void SendAttack(int damage, short attackerID, bool attackerNPC, GameData.DamageType dmgType, bool animEffect, float resistMod, bool isCrit)
+		public void SendAttack(int damage, short attackerID, bool attackerNPC, GameData.DamageType dmgType, bool animEffect, float resistMod, bool isCrit, int baseDmg)
 		{
 			var p = PacketManager.GetOrCreatePacket<EntityActionPacket>(entityID, PacketType.ENTITY_ACTION);
 			p.AddPacketData(ActionType.ATTACK, "attackData",
@@ -226,11 +269,23 @@ namespace ErenshorCoop.Shared
 					damageType = dmgType,
 					effect = animEffect,
 					resistMod = resistMod,
-					isCrit = isCrit
+					isCrit = isCrit,
+					baseDmg = baseDmg
 				});
 			p.SetData("targetPlayerIDs", SharedNPCSyncManager.Instance.GetPlayerSendList());
 			p.entityType = type;
 			p.zone = SceneManager.GetActiveScene().name;
+		}
+
+
+		public void SendWand(WandAttackData wa)
+		{
+			var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(entityID, PacketType.PLAYER_ACTION);
+			var wandData = pack.wandData ?? new();
+			wandData.Add(wa);
+			pack.dataTypes.Add(ActionType.WAND_ATTACK);
+			pack.wandData = wandData;
+			pack.isSim = type == EntityType.SIM;
 		}
 
 		public void HandleWand(WandAttackData wandAttackData)
@@ -242,14 +297,38 @@ namespace ErenshorCoop.Shared
 			var ent = Extensions.GetEntityByID(wandAttackData.targetID);
 			if(ent == null) return;
 
-			var go = Instantiate(GameData.Misc.WandBoltSimple, transform.position + Vector3.up + transform.forward, transform.rotation);
-			var bolt = go.GetComponent<WandBolt>();
-			var nbolt = go.AddComponent<SyncedWandBolt>();
-			nbolt.MyAud = bolt.MyAud;
-			nbolt.MyParticle = bolt.MyParticle;
+			if (!wandAttackData.isBowAttack)
+			{
+				var go = Instantiate(GameData.Misc.WandBoltSimple, transform.position + Vector3.up + transform.forward, transform.rotation);
+				var bolt = go.GetComponent<WandBolt>();
+				var nbolt = go.AddComponent<SyncedWandBolt>();
+				nbolt.MyAud = bolt.MyAud;
+				nbolt.MyParticle = bolt.MyParticle;
 
-			nbolt.LoadWandBolt(item.WeaponDmg, ent.character, character, item.WandBoltSpeed, GameData.DamageType.Magic, item.WandBoltColor, item.WandAttackSound);
-			DestroyImmediate(bolt);
+				nbolt.LoadWandBolt(item.WeaponDmg, ent.character, character, item.WandBoltSpeed, GameData.DamageType.Magic, item.WandBoltColor, item.WandAttackSound);
+				DestroyImmediate(bolt);
+			}
+			else
+			{
+				if(type == EntityType.PLAYER)
+					((NetworkedPlayer)this).MyAnim.SetTrigger("FireBow");
+				else if(type == EntityType.SIM)
+					((NetworkedSim)this).MyAnim.SetTrigger("FireBow");
+
+
+				var go = Instantiate(GameData.Misc.ArcheryArrows[wandAttackData.arrowIndex], transform.position + Vector3.up + transform.forward, transform.rotation);
+				var bolt = go.GetComponent<WandBolt>();
+				var nbolt = go.AddComponent<SyncedWandBolt>();
+				nbolt.MyAud = bolt.MyAud;
+				nbolt.MyParticle = bolt.MyParticle;
+
+				var dmgMod = wandAttackData.dmgMod != 0 ? wandAttackData.dmgMod : 1;
+
+
+				nbolt.LoadArrow(item.WeaponDmg * dmgMod, null, ent.character, character, item.BowArrowSpeed, GameData.DamageType.Physical, item.BowAttackSound, false, wandAttackData.interrupt);
+
+				DestroyImmediate(bolt);
+			}
 		}
 
 		public void HandleHeal(List<HealingData> healing)
@@ -335,19 +414,15 @@ namespace ErenshorCoop.Shared
 
 			if (targ == null) return;
 
-			//Logging.Log($"{targetIsNPC}");
+			//Should do for everything
+			if (targ.character.isNPC && ClientZoneOwnership.isZoneOwner)
+			{
+				targ.character.MyNPC.ManageAggro(spell.Aggro, character);
+			}
 
 			switch (spell.Type)
 			{
 				case Spell.SpellType.Damage:
-
-					if (targ.character.isNPC && ClientZoneOwnership.isZoneOwner)
-					{
-						targ.character.MyNPC.ManageAggro(spell.Aggro, character);
-					}
-					Instantiate(GameData.EffectDB.SpellEffects[spell.SpellResolveFXIndex], targ.transform.position, Quaternion.identity);
-
-					break;
 				case Spell.SpellType.StatusEffect:
 				case Spell.SpellType.Beneficial:
 				case Spell.SpellType.PBAE:
@@ -372,6 +447,110 @@ namespace ErenshorCoop.Shared
 			}
 		}
 
+		public void HandleStatusEffectRefresh(List<StatusEffectData> wornEffects)
+		{
+			foreach (StatusEffectData effect in wornEffects)
+			{
+				Spell spell = GameData.SpellDatabase.GetSpellByID(effect.spellID);
+				if (spell == null) return;
+
+				if (!character.MyStats.CheckForStatus(spell) && !character.MyStats.CheckForHigherLevelSE(spell))
+				{
+					character.MyStats.AddStatusEffect(spell, false, 0, character);
+				}
+				else if (character.MyStats.CheckForStatus(spell))
+				{
+					character.MyStats.RefreshWornSE(spell);
+				}
+			}
+		}
+
+		public void HandleActiveStatusEffects(List<StatusEffectData> activeEffects)
+		{
+			foreach (StatusEffectData effect in activeEffects)
+			{
+				Spell spell = GameData.SpellDatabase.GetSpellByID(effect.spellID);
+				if (spell == null) continue;
+
+				character.MyStats.AddStatusEffect(spell, false, 0, character, effect.duration);
+			}
+		}
+
+		private void SendActiveEffects()
+		{
+			var p = PacketManager.GetOrCreatePacket<PlayerActionPacket>(entityID, PacketType.PLAYER_ACTION);
+			p.dataTypes.Add(ActionType.ACTIVE_STATUS_EFFECTS);
+			var activeEffects = p.activeEffects ?? new();
+			p.isSim = type == EntityType.SIM;
+
+			var s = character.MyStats;
+
+			for (int i = 0; i <= s.StatusEffects.Length - 1; i++)
+			{
+				var eff = s.StatusEffects[i];
+				if (eff != null && eff.Effect != null)
+				{
+					activeEffects.Add(new() { spellID = eff.Effect.Id, duration = eff.Duration });
+				}
+			}
+			p.activeEffects = activeEffects;
+		}
+
+		public IEnumerator DelayedSendEffects()
+		{
+			yield return new WaitForSeconds(2f);
+			SendActiveEffects();
+			//Also send stats
+			OnStatChange();
+		}
+
+		public void OnStatChange()
+		{
+			if (type != EntityType.PLAYER && type != EntityType.SIM) return;
+			var p = PacketManager.GetOrCreatePacket<PlayerDataPacket>(entityID, PacketType.PLAYER_DATA);
+			StatData sd = new()
+			{
+				agi = character.MyStats.AgiScaleSpent,
+				str = character.MyStats.StrScaleSpent,
+				end = character.MyStats.EndScaleSpent,
+				_int = character.MyStats.IntScaleSpent,
+				dex = character.MyStats.DexScaleSpent,
+				cha = character.MyStats.ChaScaleSpent,
+				wis = character.MyStats.WisScaleSpent
+			};
+			p.AddPacketData(PlayerDataType.STATS, "stats", sd);
+			p.isSim = type == EntityType.SIM;
+		}
+
+		public void HandleStatChange(StatData sd)
+		{
+			character.MyStats.AgiScaleSpent = sd.agi;
+			character.MyStats.StrScaleSpent = sd.str;
+			character.MyStats.EndScaleSpent = sd.end;
+			character.MyStats.IntScaleSpent = sd._int;
+			character.MyStats.DexScaleSpent = sd.dex;
+			character.MyStats.ChaScaleSpent = sd.cha;
+			character.MyStats.WisScaleSpent = sd.wis;
+		}
+
+		public void HandleRename(string newName)
+		{
+			var npc = character.MyNPC;
+			npc.NPCName = newName;
+			npc.transform.name = newName;
+			character.MyStats.MyName = newName;
+			npc.NamePlate.GetComponent<TextMeshPro>().text = newName;
+			GameData.SimPlayerGrouping.UpdateGroupNamesAfterRename();
+			entityName = newName;
+		}
+
+		public void SendRename(string newName)
+		{
+			if (type != EntityType.SIM) return;
+			var p = PacketManager.GetOrCreatePacket<PlayerDataPacket>(entityID, PacketType.PLAYER_DATA);
+			p.AddPacketData(PlayerDataType.RENAME, "rename", newName);
+			p.isSim = true;
+		}
 	}
 
 	public enum EntityType
@@ -381,80 +560,6 @@ namespace ErenshorCoop.Shared
 		PET,
 		PLAYER,
 		LOCAL_PLAYER,
-	}
-
-
-	public class SyncedWandBolt : MonoBehaviour
-	{
-		private void Start()
-		{
-			MyAud.volume = GameData.SFXVol * MyAud.volume;
-		}
-
-		private void Update()
-		{
-			if (TargetChar == null || SourceChar == null)
-			{
-				Destroy(gameObject);
-				return;
-			}
-			if (moveDel <= 0f)
-			{
-				Vector3 normalized = (TargetChar.transform.position + Vector3.up - transform.position).normalized;
-				if (Vector3.Distance(transform.position, TargetChar.transform.position + Vector3.up) > 2f)
-				{
-					transform.position += normalized * MoveSpeed * Time.deltaTime;
-				}
-				else
-				{
-					DeliverDamage();
-				}
-				MoveSpeed += 10f * Time.deltaTime;
-				return;
-			}
-			moveDel -= 60f * Time.deltaTime;
-			if (moveDel < 15f && !didSFX)
-			{
-				if (AtkSound != null && SourceChar != null)
-				{
-					SourceChar.MyAudio.PlayOneShot(AtkSound, SourceChar.MyAudio.volume * GameData.SFXVol);
-				}
-				didSFX = true;
-			}
-			if (moveDel <= 0f)
-			{
-				transform.position = SourceChar.transform.position + transform.forward + Vector3.up;
-				if (Vector3.Distance(transform.position, TargetChar.transform.position + Vector3.up) > 5f)
-				{
-					MyAud.Play();
-				}
-			}
-		}
-		private void DeliverDamage()
-		{
-			Destroy(gameObject);
-		}
-		public void LoadWandBolt(int _dmg, Character _tar, Character _caster, float _speed, GameData.DamageType _dmgType, Color _boltCol, AudioClip _atkSound)
-		{
-			AtkSound = _atkSound;
-			TargetChar = _tar;
-			SourceChar = _caster;
-			MoveSpeed = _speed;
-			DmgType = _dmgType;
-			var main = MyParticle.main;
-			main.startColor = _boltCol;
-		}
-
-
-		public Character SourceChar;
-		public Character TargetChar;
-		public float MoveSpeed;
-		public GameData.DamageType DmgType = GameData.DamageType.Magic;
-		public ParticleSystem MyParticle;
-		public AudioSource MyAud;
-		private AudioClip AtkSound;
-		private float moveDel = 40f;
-		private bool didSFX;
 	}
 
 }

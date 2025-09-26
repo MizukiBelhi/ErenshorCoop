@@ -1,4 +1,5 @@
-﻿using ErenshorCoop.Shared;
+﻿using ErenshorCoop.Client.Grouping;
+using ErenshorCoop.Shared;
 using LunarCatsStudio.Compass;
 using System;
 using System.Collections.Generic;
@@ -123,7 +124,7 @@ namespace ErenshorCoop.Client
 		{
 			if (target == null || cam == null || uiIcon == null) return;
 
-			if (ClientConfig.MarkersOnlyGroup.Value && !Grouping.IsPlayerInGroup(playerID, false))
+			if (ClientConfig.MarkersOnlyGroup.Value && !ClientGroup.IsPlayerInGroup(playerID, false))
 			{
 				uiImg.color = invisColor;
 				return;

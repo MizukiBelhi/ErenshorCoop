@@ -16,9 +16,6 @@ namespace ErenshorCoop.Server
 	{
 		private NetManager netManager;
 
-		protected short PlayerIDNum = 0;
-
-
 
 		//Callbacks
 		public Action<short, NetPeer> OnClientConnect;
@@ -97,7 +94,6 @@ namespace ErenshorCoop.Server
 			netManager.Stop();
 			//Entities.Clear();
 			OnCloseServer?.Invoke();
-			PlayerIDNum = 0;
 		}
 
 		private string GetLocalIpAddress()
@@ -124,11 +120,8 @@ namespace ErenshorCoop.Server
 		{
 			Logging.Log($"Peer Connected: {peer.Id} {peer.Address}");
 
-			++PlayerIDNum;
-			while (ClientConnectionManager.Instance.Players.ContainsKey(PlayerIDNum) && PlayerIDNum != 0)
-			{
-				++PlayerIDNum;
-			}
+
+			var id = SharedNPCSyncManager.Instance.GetFreeId();
 
 			var p = PacketManager.GetOrCreatePacket<ServerInfoPacket>(0, PacketType.SERVER_INFO);
 			p.AddPacketData(ServerInfoType.PVP_MODE, "pvpMode", ServerConfig.IsPVPEnabled.Value);
@@ -143,16 +136,12 @@ namespace ErenshorCoop.Server
 			};
 			p.dataTypes.Add(ServerInfoType.HOST_MODS);
 			p.plugins = ErenshorCoopMod.loadedPlugins;
-			PacketManager.GetOrCreatePacket<ServerConnectPacket>(PlayerIDNum, PacketType.SERVER_CONNECT).SetPeerTarget(peer);
+			PacketManager.GetOrCreatePacket<ServerConnectPacket>(id, PacketType.SERVER_CONNECT).SetPeerTarget(peer);
 		}
 
 		public void OnPeerConnected(CSteamID steamID)
 		{
-			++PlayerIDNum;
-			while (ClientConnectionManager.Instance.Players.ContainsKey(PlayerIDNum) && PlayerIDNum != 0)
-			{
-				++PlayerIDNum;
-			}
+			var id = SharedNPCSyncManager.Instance.GetFreeId();
 
 			var p = PacketManager.GetOrCreatePacket<ServerInfoPacket>(0, PacketType.SERVER_INFO);
 			p.AddPacketData(ServerInfoType.PVP_MODE, "pvpMode", ServerConfig.IsPVPEnabled.Value);
@@ -169,7 +158,7 @@ namespace ErenshorCoop.Server
 			p.plugins = ErenshorCoopMod.loadedPlugins;
 			p.dataTypes.Add(ServerInfoType.PLAYER_LIST);
 			p.playerInfoList = Steam.Networking.lastPlayerData;
-			PacketManager.GetOrCreatePacket<ServerConnectPacket>(PlayerIDNum, PacketType.SERVER_CONNECT).SetSteamTarget(steamID);
+			PacketManager.GetOrCreatePacket<ServerConnectPacket>(id, PacketType.SERVER_CONNECT).SetSteamTarget(steamID);
 		}
 
 		public void OnPeerDisconnected(NetPeer peer, DisconnectInfo disconnectInfo)

@@ -28,6 +28,8 @@ namespace ErenshorCoop
 		private int previousHealth = 0;
 		private int previousMP = 0;
 
+		private bool sentDeathHealth = false;
+
 		
 
 		public void Awake()
@@ -51,9 +53,9 @@ namespace ErenshorCoop
 		{
 			//Do we have a summon?
 			//Destroy summon if it isn't our summon..
-			if (MySummon == null || MySummon.character.MyNPC != character.MyCharmedNPC)
+			if (MySummon == null || (character != null && MySummon.character.MyNPC != character.MyCharmedNPC))
 			{
-				if (character.MyCharmedNPC != null)
+				if (character != null && character.MyCharmedNPC != null)
 				{
 					Destroy(character.MyCharmedNPC.gameObject);
 				}
@@ -69,13 +71,8 @@ namespace ErenshorCoop
 			if (!ClientConnectionManager.Instance.IsRunning) return; //??
 
 			if (type == EntityType.PET && entityID == -1) return;
-			if (type != EntityType.PET)
-			{
-				if (type != EntityType.SIM && !ClientZoneOwnership.isZoneOwner) return;
-				if (type == EntityType.SIM && !ServerConnectionManager.Instance.IsRunning) return;
-			}
 
-			if (previousHealth != character.MyStats.CurrentHP)
+			if (previousHealth != character.MyStats.CurrentHP || (!character.Alive && !sentDeathHealth && previousHealth == 0))
 			{
 				var p = PacketManager.GetOrCreatePacket<EntityDataPacket>(entityID, PacketType.ENTITY_DATA);
 				p.AddPacketData(EntityDataType.HEALTH, "health", character.MyStats.CurrentHP);
@@ -84,6 +81,10 @@ namespace ErenshorCoop
 				p.zone = SceneManager.GetActiveScene().name;
 
 				previousHealth = character.MyStats.CurrentHP;
+				if (!character.Alive && !sentDeathHealth && previousHealth == 0)
+				{
+					sentDeathHealth = true;
+				}
 			}
 
 			if (previousMP != character.MyStats.CurrentMana)
@@ -225,15 +226,6 @@ namespace ErenshorCoop
 			p.zone = SceneManager.GetActiveScene().name;
 		}
 
-		public void SendWand(WandAttackData wa)
-		{
-			var pack = PacketManager.GetOrCreatePacket<EntityActionPacket>(entityID, PacketType.ENTITY_ACTION);
-			var wandData = pack.wandData ?? new();
-			wandData.Add(wa);
-			pack.dataTypes.Add(ActionType.WAND_ATTACK);
-			pack.wandData = wandData;
-			pack.entityType = type;
-			pack.zone = SceneManager.GetActiveScene().name;
-		}
+
 	}
 }

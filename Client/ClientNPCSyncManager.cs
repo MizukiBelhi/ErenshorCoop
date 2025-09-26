@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using ErenshorCoop.Shared.Packets;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using System.Runtime.InteropServices;
+using ErenshorCoop.Client.Grouping;
 
 namespace ErenshorCoop.Client
 {
@@ -42,7 +44,7 @@ namespace ErenshorCoop.Client
 		{
 			Cleanup();
 			if (ClientConnectionManager.Instance.IsRunning)
-				Grouping.ForceClearGroup();
+				ClientGroup.ForceClearGroup();
 			//ClientConnectionManager.Instance.OnConnect -= LoadAndDestroySpawns;
 			//ErenshorCoopMod.OnGameMapLoad -= _OnMapSceneLoad;
 			ClientConnectionManager.Instance.OnDisconnect -= Cleanup;
@@ -76,7 +78,7 @@ namespace ErenshorCoop.Client
 			Logging.Log($"ClientNPCSyncManager Cleaned up.");
 		}
 
-		public void _OnMapSceneLoad(Scene scene) => LoadAndDestroySpawns();
+		//public void _OnMapSceneLoad(Scene scene) => LoadAndDestroySpawns();
 
 
 
@@ -88,78 +90,50 @@ namespace ErenshorCoop.Client
 			//Cleanup();
 
 
-			var spawns = FindObjectsOfType<SpawnPoint>(true);
-			foreach (var spawn in spawns)
+			/*foreach (var _spawn in Variables.syncedSpawnPoints)
 			{
-				int spawnID = Extensions.GenerateHash(spawn.transform.position, SceneManager.GetActiveScene().name);
-
-				if (!Variables.spawnData.ContainsKey(spawnID))
+				if (_spawn.Value.TryGetTarget(out var spawn))
 				{
-					Variables.AddSpawn(spawnID, spawn);
-					Logging.Log($"Spawn added {spawnID}");
+					if (spawn == null || spawn.gameObject == null) continue;
 					spawn.gameObject.SetActive(false);
 				}
-				else
-				{
-					spawn.gameObject.SetActive(false);
-				}
-
-			}
+			}*/
 		}
-		public void LoadAndDestroySpawns()
+		public void LoadAndDestroySpawns(bool isTakeOver)
 		{
 			if (!CanRun) return;
 
-			//Cleanup here, because we're setting networkedNPC to not destroy, in case we're respawning
-			//Cleanup();
-
-
-			var spawns = FindObjectsOfType<SpawnPoint>(true);
-			foreach (var spawn in spawns)
+			var cnt = 0;
+			var spcnt = 0;
+			foreach (var _spawn in Variables.syncedSpawnPoints)
 			{
-				int spawnID = Extensions.GenerateHash(spawn.transform.position, SceneManager.GetActiveScene().name);
+				if (!_spawn.Value.TryGetTarget(out var spawn)) continue;
+				if (spawn == null || spawn.gameObject == null) continue;
+				int spawnID = _spawn.Key;
 
 				var spawnedNPC = spawn.SpawnedNPC;
+				spawn.gameObject.SetActive(false);
+				spcnt++;
 
-				if (!Variables.spawnData.ContainsKey(spawnID))
+				if (spawnedNPC != null)
 				{
-					Variables.AddSpawn(spawnID, spawn);
+					spawn.actualSpawnDelay = spawn.SpawnDelay;
+					spawn.recentlyKilled = spawn.SpawnDelay;
 
-					//Logging.Log($"Deleted: {spawnID}");
-					//Delete spawned mob+spawner
-					if (spawnedNPC != null)
+					if (NPCTable.LiveNPCs.Contains(spawnedNPC))
+						NPCTable.LiveNPCs.Remove(spawnedNPC);
+
+					//FIXME: it hasn't even been that long and i already forgot why i put this here
+					if (!isTakeOver && spawnedNPC.GetComponent<NetworkedNPC>() != null)
 					{
-						Destroy(spawnedNPC.gameObject);
-						//spawn.ResetSpawnPoint();
-						spawn.actualSpawnDelay = spawn.SpawnDelay;
-						spawn.recentlyKilled = spawn.SpawnDelay;
-						
-						if (NPCTable.LiveNPCs.Contains(spawnedNPC))
-							NPCTable.LiveNPCs.Remove(spawnedNPC);
+						spawn.SpawnedNPC = null;
+						continue;
 					}
-					spawn.gameObject.SetActive(false);
+					Destroy(spawnedNPC.gameObject);
+					cnt++;
 				}
-				else
-				{
-					//Logging.Log($"Spawn already added: {spawnID}");
-					//the spawn is already added but we still need to destroy it
-
-					//Logging.Log($"Deleted: {spawnID}");
-					//Delete spawned mob+spawner
-					if (spawnedNPC != null)
-					{
-						Destroy(spawnedNPC.gameObject);
-						//spawn.ResetSpawnPoint();
-						spawn.actualSpawnDelay = spawn.SpawnDelay;
-						spawn.recentlyKilled = spawn.SpawnDelay;
-
-						if (NPCTable.LiveNPCs.Contains(spawnedNPC))
-							NPCTable.LiveNPCs.Remove(spawnedNPC);
-					}
-					spawn.gameObject.SetActive(false);
-				}
-
 			}
+			Logging.Log($"Destroyed {cnt} mobs with {spcnt} spawns");
 		}
 
 		public void ReadEntitySpawn(EntitySpawnData data, bool spawnInstant=false)
@@ -226,7 +200,7 @@ namespace ErenshorCoop.Client
 			np.entityID = data.entityID;
 			np.type = EntityType.PET;
 			pet.GetComponent<Character>().Master = owner;
-
+			pet.GetComponent<Stats>().CurrentMaxHP = data.maxHP;
 			var ownEnt = owner.GetComponent<Entity>();
 			ownEnt.MySummon = np;
 			owner.MyCharmedNPC = pet.GetComponent<NPC>();
@@ -262,7 +236,7 @@ namespace ErenshorCoop.Client
 						if (!SpawnMob(spawnID, spawnMobID, isRare, entityID, pos, rot, data))
 						{
 							//Put it back on the queue, in case we're not on the same scene as the host
-							//spawnQueue.Enqueue((spawnID, spawnMobID, isRare, entityID, pos, rot));
+							spawnQueue.Enqueue((spawnID, spawnMobID, isRare, entityID, pos, rot, data));
 						}
 					}
 				}
@@ -276,13 +250,20 @@ namespace ErenshorCoop.Client
 			if (NetworkedMobs.ContainsKey(entityID)) return true;
 
 			GameObject prefab = null;
+			bool dontInstantiate = false;
+			int vID = -1;
 			//Special cases
 			bool isSpecial = false;
+			NPC component = null;
+
 			if (spawnID < 0)
 			{
 				var tSpawnMobID = 0;
 
-				if ((CustomSpawnID)spawnID == CustomSpawnID.ADDS || (CustomSpawnID)spawnID == CustomSpawnID.TREASURE_GUARD)
+				if ((CustomSpawnID)spawnID == CustomSpawnID.ADDS || (CustomSpawnID)spawnID == CustomSpawnID.TREASURE_GUARD || 
+					(CustomSpawnID)spawnID == CustomSpawnID.WAVE_EVENT || (CustomSpawnID)spawnID == CustomSpawnID.SPAWN_TRIGGER ||
+					(CustomSpawnID)spawnID == CustomSpawnID.FERNALLA_PORTAL || (CustomSpawnID)spawnID == CustomSpawnID.FERNALLA_WARD ||
+					(CustomSpawnID)spawnID == CustomSpawnID.PRE_SYNCED)
 					tSpawnMobID = int.Parse(spawnMobID.Split(',')[0]);
 				else
 					tSpawnMobID = int.Parse(spawnMobID);
@@ -331,7 +312,7 @@ namespace ErenshorCoop.Client
 							if (spawnedFightEvent != null)
 							{
 								var mID = int.Parse(spawnMobID.Split(',')[1]);
-								var vID = int.Parse(spawnMobID.Split(',')[2]);
+								vID = int.Parse(spawnMobID.Split(',')[2]);
 								prefab = mID switch
 								{
 									1 => spawnedFightEvent.SpawnAdds[vID],
@@ -350,6 +331,116 @@ namespace ErenshorCoop.Client
 							prefab = guard;
 						}
 						break;
+					case CustomSpawnID.ASTRA:
+						var astr = FindObjectOfType<AstraListener>();
+						if (astr != null)
+						{
+							prefab = astr.Dragon;
+						}
+						break;
+					case CustomSpawnID.WAVE_EVENT:
+						var we = FindObjectOfType<WaveEvent>();
+						if (we != null)
+						{
+							var mID = tSpawnMobID;
+							vID = int.Parse(spawnMobID.Split(',')[1]);
+
+							if(isRare)
+							{
+								prefab = we.BossMob;
+								break;
+							}
+
+							List<GameObject> prefList = null;
+							prefList = mID switch
+							{
+								1 => we.WeakWave,
+								2 => we.StrongWave,
+								3 => we.StrongestWave,
+								_ => null
+							};
+							if(prefList != null)
+							{
+								prefab = prefList[vID];
+							}
+						}
+						break;
+					case CustomSpawnID.SPAWN_TRIGGER:
+						var trig = FindObjectsOfType<SpawnPointTrigger>(true);
+						vID = int.Parse(spawnMobID.Split(',')[1]);
+						foreach (var t in trig)
+						{
+							if(Variables.triggerIDs.TryGetValue(t, out var d) && d.id == tSpawnMobID)
+							{
+								GameData.PlayerAud.PlayOneShot(t.Trigger, GameData.SFXVol);
+								if (isRare)
+								{
+									prefab = t.Alt;
+									break;
+								}
+								prefab = t.Spawnables[vID];
+								break;
+							}
+						}
+						break;
+					case CustomSpawnID.FERNALLA_WARD:
+						if(isRare)
+						{
+							prefab = GameHooks.fernallaBoss;
+							break;
+						}
+						vID = tSpawnMobID;
+						dontInstantiate = true;
+						var vts = FindObjectOfType<FernallaPortalBoss>(true);
+						if (vts != null)
+						{
+							prefab = vID switch
+							{
+								1 => vts.Ward1,
+								2 => vts.Ward2,
+								3 => vts.Ward3,
+								_ => null
+							};
+							prefab.SetActive(true);
+							component = prefab.GetComponent<NPC>();
+						}
+						break;
+					case CustomSpawnID.FERNALLA_PORTAL:
+						vID = int.Parse(spawnMobID.Split(',')[1]);
+						var prtls = FindObjectsOfType<GameHooks.SyncedFernallaPortalEvent>();
+						foreach(var prtl in prtls)
+						{
+							if(Variables.portalIDs.TryGetValue(prtl, out var d) && d.id == tSpawnMobID)
+							{
+								prefab = vID switch
+								{
+									1 => prtl.Knight,
+									2 => prtl.Arcanist,
+									3 => prtl.Hound,
+									4 => prtl.Invader,
+									_ => null
+								};
+							}
+						}
+						break;
+					case CustomSpawnID.PRE_SYNCED:
+						var syncs = FindObjectsOfType<GameHooks.PreSyncedEntity>(true);
+						dontInstantiate = true;
+						foreach (var t in syncs)
+						{
+							if (Variables.presyncedEntities.TryGetValue(t, out var d) && d.id == tSpawnMobID)
+							{
+								component = d.go.GetComponent<NPC>();
+								Logging.Log($"syncing {d.go.name}");
+								break;
+							}
+						}
+						if(component == null)
+						{
+							Logging.LogError($"Could not create mob {spawnMobID} for {spawnID}. No prefab for mob.");
+							return false;
+						}
+					break;
 				}
 
 				isSpecial = true;
@@ -358,71 +449,44 @@ namespace ErenshorCoop.Client
 			
 			if (!isSpecial) //No checks if it is
 			{
-				if (!Variables.spawnData.ContainsKey(spawnID))
-				{
-					//Just incase, we'll try to find spawns again.
-					bool fspawn = false;
-					var spawns = FindObjectsOfType<SpawnPoint>(true);
-					foreach (var spawn in spawns)
-					{
-						int spawnerID = Extensions.GenerateHash(spawn.transform.position, SceneManager.GetActiveScene().name);
-
-						if (!Variables.spawnData.ContainsKey(spawnerID))
-						{
-							Variables.AddSpawn(spawnerID, spawn);
-							spawn.gameObject.SetActive(false);
-						}
-
-						if (spawnerID == spawnID)
-							fspawn = true;
-					}
-
-					if (!fspawn)
-					{
-						Logging.LogError($"Could not create mob {spawnMobID} for {spawnID}. No spawn data.");
-						return false;
-					}
-				}
 
 				var tSpawnMobID = int.Parse(spawnMobID);
-
-				var gameData = Variables.spawnData[spawnID].GetMob(isRare, tSpawnMobID);
-				if (gameData == null)
-				{
-					Logging.LogError($"Could not create mob {spawnMobID} for {spawnID}. No mob found.");
-					return false;
-				}
-
-				prefab = gameData.prefab;
+				
+				prefab = SyncedSpawnPoint.GetPrefab(spawnID, tSpawnMobID, isRare);
 				
 			}
 			//Logging.Log($"Spawning {spawnID} {spawnMobID} {isRare} {entityID} {prefab.name} ({gameData.name}).");
 
-			if (prefab == null)
+			if (prefab == null && !dontInstantiate)
 			{
-				Logging.LogError($"Could not create mob {spawnMobID} for {spawnID}. No prefab for mob.");
+				//Logging.LogError($"Could not create mob {spawnMobID} for {spawnID}. No prefab for mob.");
 				return false;
 			}
 
-			var component = Instantiate(prefab, pos, rot).GetComponent<NPC>();
+			if(!dontInstantiate)
+				component = Instantiate(prefab, pos, rot).GetComponent<NPC>();
 
-			if(!isSpecial)
-				component.GetComponent<Stats>().Level += Variables.spawnData[spawnID].levelMod;
+			if (!isSpecial)
+			{
+				if(Variables.syncedSpawnPoints.TryGetValue(spawnID, out var _spwn) && _spwn.TryGetTarget(out var dt))
+					component.GetComponent<Stats>().Level += dt.levelMod;
+			}
 
 
 			//SpawnedNPC = component;
 			NPCTable.LiveNPCs.Add(component);
 
-
+			component.gameObject.SetActive(true);
 			//GameObject mob = Instantiate(prefab, pos, rot);
 			var s = component.gameObject.AddComponent<NetworkedNPC>();
 			s.entityID = entityID;
 			s.pos = pos;
 			s.rot = rot;
-			s.associatedSpawner = spawnID;
+			s.associatedSpawner = data;
 			s.type = EntityType.ENEMY;
 			s.zone = SceneManager.GetActiveScene().name;
 			NetworkedMobs.Add(entityID, s);
+			s.GetComponent<Stats>().CurrentMaxHP = data.maxHP;
 			//DontDestroyOnLoad(component.gameObject);
 			if(data.syncStats)
 			{
@@ -442,74 +506,6 @@ namespace ErenshorCoop.Client
 			}
 			return true;
 		}
-
-
-		/*private bool SpawnSim(string npcID, short entityID, Vector3 pos, Quaternion rot)
-		{
-			if (!CanRun) return true;
-			//if (NetworkedSims.ContainsKey(entityID)) return true;
-
-			if (!int.TryParse(npcID, out int simIndex))
-			{
-				Logging.LogError($"Could not parse simIndex {npcID}.");
-				return false;
-			}
-
-			if (GameData.SimMngr.Sims.Count <= simIndex || simIndex < 0)
-			{
-				Logging.LogError($"SimIndex {npcID} out of bounds (does not exist in game?).");
-				return false;
-			}
-
-			//Get sim
-			var sim = GameData.SimMngr.Sims[simIndex];
-
-			//is the sim on this map?
-			NetworkedNPC network;
-
-			bool isSpawned = sim.CurScene == SceneManager.GetActiveScene().name && sim.MyAvatar != null;
-			//Make 100% sure the sim isn't already in the scene
-			var _sim = GameObject.Find(sim.SimName);
-			if (_sim != null)
-				isSpawned = true;
-
-			if (isSpawned)
-			{
-				if (sim.MyAvatar == null)
-					sim.MyAvatar = _sim.GetComponent<SimPlayer>();
-				//No need to do anything but add our sync and disable npc/sim
-				//Logging.Log($"not spawning sim");
-				network = sim.MyAvatar.gameObject.GetOrAddComponent<NetworkedNPC>();
-				sim.MyAvatar.enabled = false;
-				sim.CurScene = SceneManager.GetActiveScene().name;
-			}
-			else
-			{
-				//Spawn the sim
-				//Logging.Log($"spawning sim");
-				var actualSim = sim.SpawnMeInGame(pos);
-				sim.CurScene = SceneManager.GetActiveScene().name;
-				network = actualSim.gameObject.GetOrAddComponent<NetworkedNPC>();
-				actualSim.enabled = false;
-			}
-
-			//Fuck it, override
-			GameData.SimMngr.Sims[simIndex] = sim;
-
-			network.entityID = entityID;
-			network.pos = pos;
-			network.rot = rot;
-			network.type = EntityType.SIM;
-			network.zone = SceneManager.GetActiveScene().name;
-
-			//Remove the sims summon
-			if (network.GetComponent<Character>().MyCharmedNPC != null)
-				Destroy(network.GetComponent<Character>().MyCharmedNPC.gameObject);
-
-			NetworkedSims[entityID] = network;
-			//DontDestroyOnLoad(component.gameObject);
-			return true;
-		}*/
 
 		public void OnEntityDataReceive<T>(T packet) where T : BasePacket
 		{
@@ -586,27 +582,15 @@ namespace ErenshorCoop.Client
 					{
 						NetworkedMobs[entityData.entityID].HandleTargetChange(entityData.targetID, entityData.targetType);
 					}
+					if (entityData.dataTypes.Contains(EntityDataType.PERIODIC_UPDATE))
+					{
+						var m = NetworkedMobs[entityData.entityID];
+						m.character.MyStats.CurrentMaxHP = entityData.maxHealth;
+						m.character.MyStats.CurrentHP = entityData.health;
+						GameHooks.maxMP.SetValue(m.character.MyStats, entityData.maxMP);
+						m.character.MyStats.CurrentMana = entityData.mp;
+					}
 				}
-				/*else if(NetworkedSims.ContainsKey(entityData.entityID) && entityData.entityType == EntityType.SIM)
-				{
-					if (entityData.dataTypes.Contains(EntityDataType.ANIM))
-					{
-						foreach (var a in entityData.animData)
-							NetworkedSims[entityData.entityID].UpdateAnimState(a);
-					}
-					if (entityData.dataTypes.Contains(EntityDataType.HEALTH))
-						NetworkedSims[entityData.entityID].character.MyStats.CurrentHP = entityData.health;
-					if (entityData.dataTypes.Contains(EntityDataType.SIM_REMOVE))
-					{
-						NetworkedSims[entityData.entityID].sim.enabled = true;
-						Destroy(NetworkedSims[entityData.entityID]);
-						NetworkedSims.Remove(entityData.entityID);
-					}
-					if (entityData.dataTypes.Contains(EntityDataType.CURTARGET))
-					{
-						NetworkedSims[entityData.entityID].HandleTargetChange(entityData.targetID, entityData.targetType);
-					}
-				}*/
 			}
 
 			if (packet is EntityActionPacket entityAction)
@@ -636,23 +620,6 @@ namespace ErenshorCoop.Client
 							NetworkedMobs[entityAction.entityID].HandleWand(wd);
 					}
 				}
-				/*else if(NetworkedSims.ContainsKey(entityAction.entityID) && entityAction.entityType == EntityType.SIM)
-				{
-					if (entityAction.dataTypes.Contains(ActionType.ATTACK))
-						NetworkedSims[entityAction.entityID].HandleAttack(entityAction.attackData);
-					if (entityAction.dataTypes.Contains(ActionType.SPELL_CHARGE))
-						NetworkedSims[entityAction.entityID].HandleSpellCharge(entityAction.SpellChargeFXIndex);
-					if (entityAction.dataTypes.Contains(ActionType.SPELL_EFFECT))
-						NetworkedSims[entityAction.entityID].HandleSpellEffect(entityAction.spellID, entityAction.targetID, entityAction.targetIsNPC, true);
-					if (entityAction.dataTypes.Contains(ActionType.SPELL_END))
-						NetworkedSims[entityAction.entityID].HandleEndSpell();
-					if (entityAction.dataTypes.Contains(ActionType.HEAL))
-						NetworkedSims[entityAction.entityID].HandleHeal(entityAction.healingData);
-					if (entityAction.dataTypes.Contains(ActionType.STATUS_EFFECT_APPLY))
-						NetworkedSims[entityAction.entityID].HandleStatusEffectApply(entityAction.effectData);
-					if (entityAction.dataTypes.Contains(ActionType.STATUS_EFFECT_REMOVE))
-						NetworkedSims[entityAction.entityID].HandleStatusRemoval(entityAction.RemoveAllStatus, entityAction.RemoveBreakable, entityAction.statusID);
-				}*/
 			}
 		}
 

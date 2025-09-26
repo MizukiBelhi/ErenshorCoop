@@ -17,7 +17,6 @@ namespace ErenshorCoop
 		public Vector3 previousPosition = Vector3.zero;
 		public Quaternion previousRotation = Quaternion.identity;
 		public int previousHealth = 0;
-		public int previousLevel = 0;
 		public int previousMP = 0;
 		public Entity previousTarget = null;
 
@@ -49,7 +48,6 @@ namespace ErenshorCoop
 
 			Extensions.BuildPlayerClipLookup(pc, com);
 
-			previousLevel = GameData.PlayerStats.Level;
 			entityName = GameData.CurrentCharacterSlot.CharName;
 			zone = SceneManager.GetActiveScene().name;
 
@@ -57,8 +55,6 @@ namespace ErenshorCoop
 
 			
 		}
-
-		
 
 		private void OnClientConnect(short __, string ___, string ____)
 		{
@@ -80,12 +76,11 @@ namespace ErenshorCoop
 					var com = GetComponent<PlayerCombat>();
 					AnimOverride = pc.AnimOverride;
 					Extensions.BuildPlayerClipLookup(pc, com);
-					previousLevel = GameData.PlayerStats.Level;
 					entityName = GameData.CurrentCharacterSlot.CharName;
 					zone = SceneManager.GetActiveScene().name;
 				}
 
-				var packet = PacketManager.GetOrCreatePacket<PlayerConnectionPacket>(entityID, PacketType.PLAYER_CONNECT, true)
+				var packet = PacketManager.GetOrCreatePacket<PlayerConnectionPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_CONNECT, true)
 					.SetData("scene",    sceneIDX)
 					.SetData("name",     GameData.CurrentCharacterSlot.CharName)
 					.SetData("position", transform.position)
@@ -96,8 +91,11 @@ namespace ErenshorCoop
 					.SetData("level",    GameData.PlayerStats.Level)
 					.SetData("health",   stats.CurrentHP)
 					.SetData("mp",       stats.CurrentMana);
-
+				packet.isSim = false;
 				packet.CanSend();
+				timeSinceLastPeriodicUpdate = Time.time;
+
+				StartCoroutine(DelayedSendEffects());
 
 				//Do we have a summon?
 				if (MySummon != null)
@@ -189,12 +187,12 @@ namespace ErenshorCoop
 
 		public void SendConnectData()
 		{
-			//Logging.Log("edabadabadadeee");
+			Logging.Log("Sending player connect data...");
 			//Tells others to create our player with this data, if they don't already have us
 			var sceneIDX = SceneManager.GetActiveScene().name;
 			(_, LookData l, List<GearData> gear) = GetLookData(true);
 
-			var packet = PacketManager.GetOrCreatePacket<PlayerConnectionPacket>(entityID, PacketType.PLAYER_CONNECT, true)
+			var packet = PacketManager.GetOrCreatePacket<PlayerConnectionPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_CONNECT, true)
 				.SetData("scene",    sceneIDX)
 				.SetData("name",     GameData.CurrentCharacterSlot.CharName)
 				.SetData("position", transform.position)
@@ -205,9 +203,11 @@ namespace ErenshorCoop
 				.SetData("level",    GameData.PlayerStats.Level)
 				.SetData("health",   stats.CurrentHP)
 				.SetData("mp",   stats.CurrentMana);
-
+			packet.isSim = false;
 			packet.CanSend();
 			hasSentConnect = true;
+			timeSinceLastPeriodicUpdate = Time.time;
+			StartCoroutine(DelayedSendEffects());
 		}
 
 		private void OnGameMenuLoad(Scene scene)
@@ -216,10 +216,6 @@ namespace ErenshorCoop
 			Destroy(this);
 		}
 
-		public void SendLevelUpdate()
-		{
-			PacketManager.GetOrCreatePacket<PlayerDataPacket>(entityID, PacketType.PLAYER_DATA).AddPacketData(PlayerDataType.LEVEL, "level", GameData.PlayerStats.Level);
-		}
 
 		private void OnDestroy()
 		{
@@ -254,12 +250,6 @@ namespace ErenshorCoop
 			{
 				PacketManager.GetOrCreatePacket<PlayerDataPacket>(entityID, PacketType.PLAYER_DATA).AddPacketData(PlayerDataType.HEALTH, "health", stats.CurrentHP);
 				previousHealth = stats.CurrentHP;
-			}
-
-			if (previousLevel != GameData.PlayerStats.Level)
-			{
-				SendLevelUpdate();
-				previousLevel = GameData.PlayerStats.Level;
 			}
 
 			if (previousMP != stats.CurrentMana)
@@ -312,11 +302,11 @@ namespace ErenshorCoop
 			}
 		}
 
-		public void SendDamageAttack(int damage, short attackedID, bool attackedIsNPC, GameData.DamageType dmgType, bool effect, float resistMod, bool isCrit)
+		public void SendDamageAttack(int damage, short attackedID, bool attackedIsNPC, GameData.DamageType dmgType, bool effect, float resistMod, bool isCrit, int baseDmg)
 		{
 			if (!hasSentConnect) return;
 
-			PacketManager.GetOrCreatePacket<PlayerActionPacket>(entityID, PacketType.PLAYER_ACTION).AddPacketData(ActionType.ATTACK, "attackData", 
+			var p = PacketManager.GetOrCreatePacket<PlayerActionPacket>(entityID, PacketType.PLAYER_ACTION).AddPacketData(ActionType.ATTACK, "attackData",
 				new PlayerAttackData()
 				{
 					attackedID = attackedID,
@@ -325,8 +315,10 @@ namespace ErenshorCoop
 					damageType = dmgType,
 					effect = effect,
 					resistMod = resistMod,
-					isCrit = isCrit
+					isCrit = isCrit,
+					baseDmg = baseDmg
 				});
+			p.isSim = false;
 		}
 
 
@@ -402,10 +394,10 @@ namespace ErenshorCoop
 				break;
 			}
 
-            if (inventory.AuraSlot.MyItem.Id != aura_slot_id)
-            {
+			if (inventory.AuraSlot.MyItem.Id != aura_slot_id)
+			{
 				anyChanges = true;
-            }
+			}
 			if (inventory.CharmSlot.MyItem.Id != charm_slot_id)
 			{
 				anyChanges = true;
@@ -450,7 +442,7 @@ namespace ErenshorCoop
 			{
 				itemID = inventory.AuraSlot.MyItem.Id,
 				slotType = Item.SlotType.Aura,
-				quality = 1
+				quality = inventory.AuraSlot.Quantity
 			};
 			gearData.Add(_gd);
 
@@ -462,7 +454,7 @@ namespace ErenshorCoop
 			{
 				itemID = inventory.CharmSlot.MyItem.Id,
 				slotType = Item.SlotType.Charm,
-				quality = 1
+				quality = inventory.CharmSlot.Quantity
 			};
 			gearData.Add(_gd);
 
@@ -492,13 +484,6 @@ namespace ErenshorCoop
 			pack.healingData = healingData;
 		}
 
-		public void SendWand(WandAttackData wa)
-		{
-			var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(entityID, PacketType.PLAYER_ACTION);
-			var wandData = pack.wandData ?? new();
-			wandData.Add(wa);
-			pack.dataTypes.Add(ActionType.WAND_ATTACK);
-			pack.wandData = wandData;
-		}
+		
 	}
 }

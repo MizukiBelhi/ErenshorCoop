@@ -82,7 +82,6 @@ namespace ErenshorCoop.Server
 
 		public static void OnClientChangeZone(short playerID, string newZone, string previousZone)
 		{
-			Logging.Log($"wtf {newZone} {previousZone}");
 			if (newZone == previousZone) return;
 
 			if (!_zoneMembers.TryGetValue(newZone, out var newList))
