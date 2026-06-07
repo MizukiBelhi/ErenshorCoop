@@ -37,7 +37,10 @@ namespace ErenshorCoop.Shared
 		GROUP,
 		SERVER_GROUP,
 		ITEM_DROP,
-		WEATHER_DATA
+		WEATHER_DATA,
+		ENTITY_ATTACK,
+		ENTITY_STATUS,
+		ENTITY_GUILD,
 	}
 
 	public enum PacketEntityType : byte
@@ -119,12 +122,12 @@ namespace ErenshorCoop.Shared
 		ENTITY_REMOVE,
 		MP,
 		CURTARGET,
-		PERIODIC_UPDATE
+		PERIODIC_UPDATE,
+		STAT_UPDATE
 	}
 
 	public enum ActionType : byte
 	{
-		ATTACK,
 		DAMAGE_TAKEN,
 		SPELL_CHARGE,
 		SPELL_EFFECT,

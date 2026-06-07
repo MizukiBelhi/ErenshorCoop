@@ -55,7 +55,7 @@ namespace ErenshorCoop.UI
 				}
 				else
 				{
-					if(materials.ContainsKey(mat))
+					if(!materials.ContainsKey(mat))
 						Logging.Log($"Could not find material {mat}");
 				}
 			}
@@ -83,7 +83,7 @@ namespace ErenshorCoop.UI
 				}
 				else
 				{
-					if(sprites.ContainsKey(spr))
+					if(!sprites.ContainsKey(spr))
 						Logging.Log($"Could not find sprite {spr}");
 				}
 			}
@@ -106,7 +106,7 @@ namespace ErenshorCoop.UI
 				}
 				else
 				{
-					if(tmpFonts.ContainsKey(fnt))
+					if(!tmpFonts.ContainsKey(fnt))
 						Logging.Log($"Could not find font {fnt}");
 				}
 			}

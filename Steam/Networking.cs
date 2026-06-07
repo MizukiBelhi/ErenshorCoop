@@ -45,7 +45,7 @@ namespace ErenshorCoop.Steam
 				return;
 			}
 
-			SteamNetworkingIPAddr address = new SteamNetworkingIPAddr();
+			SteamNetworkingIPAddr address = new();
 			address.Clear();
 
 			address.m_port = (ushort)port;

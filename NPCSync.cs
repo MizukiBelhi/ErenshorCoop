@@ -30,6 +30,8 @@ namespace ErenshorCoop
 
 		private bool sentDeathHealth = false;
 
+
+
 		
 
 		public void Awake()

@@ -14,12 +14,16 @@ using UnityEngine.SceneManagement;
 using Steamworks;
 using System.Collections;
 using ErenshorCoop.Modules;
+using System.Linq;
 
 namespace ErenshorCoop
 {
-	[BepInPlugin("mizuki.coop", "Erenshor Coop", "2.2.0")]
+	[BepInPlugin("mizuki.coop", "Erenshor Coop", ErenshorCoopMod._version)]
 	public class ErenshorCoopMod : BaseUnityPlugin
 	{
+		public const string _version = "2.3.1";
+
+
 		public static Action<Scene> OnGameMapLoad;
 		public static Action<Scene> OnGameMenuLoad;
 
@@ -42,11 +46,16 @@ namespace ErenshorCoop
 
 		public static ModuleMngr moduleMngr;
 
+		public static bool isHeadlessMode = false;
+
 		public void Awake()
 		{
-			version = Info.Metadata.Version;
+			version = new System.Version("2.3.1");
 			logger = Logger;
 			config = Config;
+
+
+			isHeadlessMode = Environment.GetCommandLineArgs().Any(arg => arg.ToLower() == "-dedicated");
 
 
 			if (!SteamAPI.Init())
@@ -69,18 +78,18 @@ namespace ErenshorCoop
 			mainGO.AddComponent<ClientNPCSyncManager>();
 			mainGO.AddComponent<SharedNPCSyncManager>();
 
-			ui = new("CoopUI");
-			ModMain = ui.AddComponent<UI.Main>();
-			ui.transform.SetParent(mainGO.transform);
+			
 
 			EnableHooks();
 
 			GetLoadedPlugins();
 
 			moduleMngr = new ModuleMngr();
-			moduleMngr.GatherModules();
+			moduleMngr.RegisterModule<GenericPacketModule>();
+			moduleMngr.RegisterModule<GroupModule>();
+			moduleMngr.RegisterModule<GuildModule>();
 
-			
+
 			StartCoroutine(DelayedSteamworksInit());
 
 			//For ScriptEngine
@@ -116,6 +125,10 @@ namespace ErenshorCoop
 		{
 			yield return new WaitForSeconds(2);
 
+			ui = new("CoopUI");
+			ModMain = ui.AddComponent<UI.Main>();
+			ui.transform.SetParent(mainGO.transform);
+
 			var npcs = FindObjectsOfType<NPC>(true);
 			foreach (var npc in npcs)
 			{
@@ -124,11 +137,22 @@ namespace ErenshorCoop
 			}
 			Steamworks.SteamAPI.Init();
 			Steam.Lobby.Init();
+
+			if(isHeadlessMode)
+			{
+				Logging.Log("Dedicated mode enabled.");
+				//Load dedi settings
+				SettingsLoader.Load();
+				//start lobby
+				Steam.Lobby.CreateLobby(SettingsLoader.GetString("lobbyName"), SettingsLoader.GetString("lobbyPassword"), SettingsLoader.GetLobbyType(), SettingsLoader.GetInt("maxPlayers"));
+			}
 		}
 
 		public void OnApplicationQuit()
 		{
-			if(ClientConnectionManager.Instance != null && ClientConnectionManager.Instance.IsRunning)
+			moduleMngr?.Dispose();
+			moduleMngr = null;
+			if (ClientConnectionManager.Instance != null && ClientConnectionManager.Instance.IsRunning)
 				Steam.Lobby.Cleanup();
 			if(ServerConnectionManager.Instance != null && ServerConnectionManager.Instance.IsRunning)
 				Steam.Networking.Cleanup();
@@ -140,6 +164,8 @@ namespace ErenshorCoop
 
 		private void OnDestroy()
 		{
+			moduleMngr?.Dispose();
+			moduleMngr = null;
 			Steam.Lobby.Cleanup();
 			Steam.Networking.Cleanup();
 
@@ -176,6 +202,8 @@ namespace ErenshorCoop
 				Destroy(sync);
 			}
 			GameHooks.preSyncList.Clear();
+
+
 		}
 
 
@@ -206,6 +234,7 @@ namespace ErenshorCoop
 
 		private void OnGameLoad(Scene scene)
 		{
+
 			StartCoroutine(SteamCheckStart());
 			CompassHandler.Init();
 
@@ -344,6 +373,7 @@ namespace ErenshorCoop
 				case 2: return GameData.ClassDB.Duelist;
 				case 3: return GameData.ClassDB.Arcanist;
 				case 4: return GameData.ClassDB.Stormcaller;
+				case 5: return GameData.ClassDB.Reaver;
 			}
 
 			return null;
@@ -356,6 +386,7 @@ namespace ErenshorCoop
 			if(_class == GameData.ClassDB.Duelist) return 2;
 			if(_class == GameData.ClassDB.Arcanist) return 3;
 			if(_class == GameData.ClassDB.Stormcaller) return 4;
+			if(_class == GameData.ClassDB.Reaver) return 5;
 			return byte.MaxValue;
 		}
 

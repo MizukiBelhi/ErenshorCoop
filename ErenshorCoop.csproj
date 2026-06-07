@@ -24,6 +24,7 @@
     <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
     <RunCodeAnalysis>false</RunCodeAnalysis>
     <UseWinFormsOutOfProcDesigner>False</UseWinFormsOutOfProcDesigner>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -33,6 +34,7 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <UseWinFormsOutOfProcDesigner>False</UseWinFormsOutOfProcDesigner>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup>
     <LangVersion>9.0</LangVersion>
@@ -95,6 +97,10 @@
     <Reference Include="UnityEngine.InputLegacyModule">
       <HintPath>Libraries\UnityEngine.InputLegacyModule.dll</HintPath>
     </Reference>
+    <Reference Include="UnityEngine.JSONSerializeModule, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>F:\steam\steamapps\common\Erenshor\Erenshor_Data\Managed\UnityEngine.JSONSerializeModule.dll</HintPath>
+    </Reference>
     <Reference Include="UnityEngine.ParticleSystemModule, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>F:\steam\steamapps\common\Erenshor\Erenshor_Data\Managed\UnityEngine.ParticleSystemModule.dll</HintPath>
@@ -111,20 +117,28 @@
     <Reference Include="UnityEngine.UIModule">
       <HintPath>Libraries\UnityEngine.UIModule.dll</HintPath>
     </Reference>
+    <Reference Include="UnityEngine.UnityWebRequestModule">
+      <HintPath>F:\steam\steamapps\common\Erenshor\Erenshor_Data\Managed\UnityEngine.UnityWebRequestModule.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Client\ClientConnectionManager.cs" />
+    <Compile Include="Client\Grouping\ClientGroup.cs" />
     <Compile Include="Client\ClientNPCSyncManager.cs" />
     <Compile Include="Client\ClientZoneOwnership.cs" />
     <Compile Include="Client\CompassHandler.cs" />
     <Compile Include="Client\Config.cs" />
     <Compile Include="Client\DroppedItem.cs" />
+    <Compile Include="Client\Grouping\Invites.cs" />
     <Compile Include="Client\WeatherHandler.cs" />
     <Compile Include="CommandHandler.cs" />
     <Compile Include="ErenshorCoop.cs" />
     <Compile Include="GameHooks.cs" />
-    <Compile Include="Grouping.cs" />
     <Compile Include="Logging.cs" />
+    <Compile Include="Modules\GroupModule.cs" />
+    <Compile Include="Modules\GuildModule.cs" />
+    <Compile Include="Modules\ModuleMngr.cs" />
+    <Compile Include="Modules\GenericPacketModule.cs" />
     <Compile Include="NetworkedSim.cs" />
     <Compile Include="NPCSync.cs" />
     <Compile Include="NetworkedNPC.cs" />
@@ -132,9 +146,16 @@
     <Compile Include="PlayerSync.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Server\Config.cs" />
+    <Compile Include="Server\Grouping\Invites.cs" />
     <Compile Include="Server\ServerConnectionManager.cs" />
+    <Compile Include="Server\Grouping\ServerGroup.cs" />
     <Compile Include="Server\ServerZoneOwnership.cs" />
+    <Compile Include="Server\SettingsLoader.cs" />
     <Compile Include="Shared\Entity.cs" />
+    <Compile Include="Shared\Packets\EntityAttackPacket.cs" />
+    <Compile Include="Shared\Packets\EntityGuildData.cs" />
+    <Compile Include="Shared\Packets\EntityStatusEffectPacket.cs" />
+    <Compile Include="Shared\SharedGroup.cs" />
     <Compile Include="Shared\Packets\ItemDropPacket.cs" />
     <Compile Include="Shared\Packets\WeatherPacket.cs" />
     <Compile Include="Shared\SharedNPCSyncManager.cs" />
@@ -158,6 +179,8 @@
     <Compile Include="Shared\Packets\ServerGroupPacket.cs" />
     <Compile Include="Shared\Packets\ServerInfoPacket.cs" />
     <Compile Include="Shared\Packets\ServerRequestPacket.cs" />
+    <Compile Include="Shared\SyncedSpawnPoint.cs" />
+    <Compile Include="Shared\SyncedWandBolt.cs" />
     <Compile Include="Shared\Variables.cs" />
     <Compile Include="SimSync.cs" />
     <Compile Include="Steam\Lobby.cs" />
@@ -173,6 +196,7 @@
     <Compile Include="UI\SettingsPanel.cs" />
     <Compile Include="UI\TabButton.cs" />
     <Compile Include="UI\TabManager.cs" />
+    <Compile Include="VersionCheck.cs" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="UI\icons\circle-info-solid.png" />
@@ -203,5 +227,9 @@
   <PropertyGroup>
     <PostBuildEvent>
     </PostBuildEvent>
+  </PropertyGroup>
+  <PropertyGroup>
+    <PreBuildEvent>
+    </PreBuildEvent>
   </PropertyGroup>
 </Project>

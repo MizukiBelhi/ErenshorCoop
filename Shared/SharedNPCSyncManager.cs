@@ -65,7 +65,7 @@ namespace ErenshorCoop.Shared
 		{
 			if (scene.name != curZone)
 			{
-				Logging.Log($"{curZone} != {scene.name}");
+				//Logging.Log($"{curZone} != {scene.name}");
 				Cleanup();
 				CollectSpawnData();
 				//if (ServerConnectionManager.Instance.IsRunning)
@@ -174,6 +174,7 @@ namespace ErenshorCoop.Shared
 				var _npc = npc.gameObject.GetComponent<NPC>();
 
 				var spawnData = npc.associatedSpawner;
+				if (spawnData == null) continue;
 				int spawnerID = spawnData.spawnerID;
 
 				if (Variables.syncedSpawnPoints.TryGetValue(spawnerID, out var _point) && _point.TryGetTarget(out var point))
@@ -267,17 +268,19 @@ namespace ErenshorCoop.Shared
 		}
 		private void Cleanup(bool noActivateSpawn=false)
 		{
+			//if (!ClientConnectionManager.Instance.IsRunning) return;
+
 			foreach (var mob in mobs)
 				Destroy(mob.Value);
 
-			if (!noActivateSpawn)
+			/*if (!noActivateSpawn)
 			{
 				var spawns = FindObjectsOfType<SpawnPoint>(true);
 				foreach (var spawn in spawns)
 				{
 					spawn.gameObject.SetActive(true);
 				}
-			}
+			}*/
 
 			mobs.Clear();
 			animatorToMobID.Clear();
@@ -540,9 +543,10 @@ namespace ErenshorCoop.Shared
 		/// <summary>
 		/// Spawns a single mob.
 		/// </summary>
-		public void ServerSpawnMob(GameObject spawnedNPC, int spawnID, string spawnMobID, bool isRare, Vector3 pos, Quaternion rot)
+		public void ServerSpawnMob(GameObject spawnedNPC, int spawnID, string spawnMobID, bool isRare, Vector3 pos, Quaternion rot, bool ignoreCheck = false)
 		{
-			if (!CanRun || !ClientZoneOwnership.isZoneOwner) return;
+/*			if(!ignoreCheck)
+				if (!CanRun || !ClientZoneOwnership.isZoneOwner) return;*/
 
 			var s = spawnedNPC.GetOrAddComponent<NPCSync>();
 			s.type = EntityType.ENEMY;
@@ -748,7 +752,7 @@ namespace ErenshorCoop.Shared
 				es.baseDMG = sync.npc.BaseAtkDmg;
 				es.mhatkDelay = sync.character.MyStats.BaseMHAtkDelay;
 
-				Debug.Log($@"
+				/*Debug.Log($@"
 						ID: {entityID}\n
 						Level:        {es.level}\n
 						BaseAC:       {es.baseAC}\n
@@ -759,7 +763,7 @@ namespace ErenshorCoop.Shared
 						BaseVR:       {es.baseVR}\n
 						MHAtkDelay:   {es.mhatkDelay}\n
 						BaseDMG:      {es.baseDMG}
-						");
+						");*/
 			}
 
 			return es;

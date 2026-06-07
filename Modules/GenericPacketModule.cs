@@ -14,16 +14,6 @@ namespace ErenshorCoop.Modules
 	{
 		public override void OnLoad()
 		{
-			/*packetType == PacketType.GROUP ||
-								packetType == PacketType.PLAYER_CONNECT ||
-								packetType == PacketType.PLAYER_DATA ||
-								packetType == PacketType.PLAYER_ACTION ||
-								packetType == PacketType.PLAYER_TRANSFORM ||
-								packetType == PacketType.PLAYER_MESSAGE ||
-								packetType == PacketType.PLAYER_REQUEST ||
-								packetType == PacketType.ITEM_DROP ||
-								packetType == PacketType.WEATHER_DATA;*/
-
 			RegisterPacket<PlayerConnectionPacket>(PacketType.PLAYER_CONNECT, false, 3);
 			RegisterPacket<PlayerDataPacket>(PacketType.PLAYER_DATA, false, 3);
 			RegisterPacket<PlayerTransformPacket>(PacketType.PLAYER_TRANSFORM, false, 2);
@@ -41,6 +31,9 @@ namespace ErenshorCoop.Modules
 			RegisterPacket<ServerDisonnectPacket>(PacketType.DISCONNECT, true, 0);
 			RegisterPacket<ServerInfoPacket>(PacketType.SERVER_INFO, true, 0);
 			RegisterPacket<ServerRequestPacket>(PacketType.SERVER_REQUEST, true, 0);
+
+			RegisterPacket<EntityAttackPacket>(PacketType.ENTITY_ATTACK, false, 6);
+			RegisterPacket<EntityStatusEffectPacket>(PacketType.ENTITY_STATUS, false, 6);
 		}
 		public override (T, PacketType) OnReceiveClientPacket<T>(T packet, PacketType packetType)
 		{
@@ -53,24 +46,23 @@ namespace ErenshorCoop.Modules
 
 		private (T, PacketType) HandleIncomingPacket<T>(T packet, PacketType packetType, bool fromServer) where T : BasePacket
 		{
-			//Logging.Log($"Received packet {packetType} from {(fromServer ? "server" : "client")}");
 			switch (packetType)
 			{
 				case PacketType.SERVER_INFO when packet is ServerInfoPacket serverInfo:
-					HandleServerInfo(serverInfo);
-					return (null, PacketType.DONT_RESEND);
+				HandleServerInfo(serverInfo);
+				return (null, PacketType.DONT_RESEND);
 
 				case PacketType.SERVER_CONNECT when packet is ServerConnectPacket serverConnect:
-					HandleServerConnect(serverConnect);
-					return (null, PacketType.DONT_RESEND);
+				HandleServerConnect(serverConnect);
+				return (null, PacketType.DONT_RESEND);
 
 				case PacketType.ITEM_DROP when packet is ItemDropPacket itemDrop:
-					HandleItemDrop(itemDrop);
-					break;
+				HandleItemDrop(itemDrop);
+				break;
 
 				case PacketType.WEATHER_DATA when packet is WeatherPacket weather:
-					HandleWeatherPacket(weather);
-					break;
+				HandleWeatherPacket(weather);
+				break;
 
 				case PacketType.PLAYER_REQUEST when packet is PlayerRequestPacket preq:
 				if (HandlePlayerRequest(preq) == false)
@@ -78,10 +70,10 @@ namespace ErenshorCoop.Modules
 				break;
 
 				case PacketType.SERVER_REQUEST when packet is ServerRequestPacket sreq:
-					HandleServerRequest(sreq);
-					return (null, PacketType.DONT_RESEND);
-
+				HandleServerRequest(sreq);
+				return (null, PacketType.DONT_RESEND);
 				default:
+				{
 					if (packet is PlayerMessagePacket msg)
 					{
 						HandlePlayerMessage(msg);
@@ -94,7 +86,39 @@ namespace ErenshorCoop.Modules
 					}
 					else
 					{
-						if ((packetType == PacketType.PLAYER_CONNECT || packetType == PacketType.PLAYER_ACTION || packetType == PacketType.PLAYER_DATA || packetType == PacketType.PLAYER_TRANSFORM) && (packet.entityID != ClientConnectionManager.Instance.LocalPlayerID || packet.isSim))
+						if (packetType == PacketType.ENTITY_ATTACK)
+						{
+							if (packet is EntityAttackPacket eatk)
+							{
+								if (eatk.entityType == EntityType.PLAYER || eatk.entityType == EntityType.SIM)
+								{
+									HandlePlayerRelated(packet);
+								}
+								if (eatk.entityType == EntityType.PET || eatk.entityType == EntityType.ENEMY)
+								{
+									var pb = packet as EntityBasePacket;
+									//if (!ClientZoneOwnership.isZoneOwner || pb.entityType == EntityType.PET)
+										ClientNPCSyncManager.Instance.OnEntityDataReceive(packet);
+								}
+							}
+						}
+						else if (packetType == PacketType.ENTITY_STATUS)
+						{
+							if(packet is EntityStatusEffectPacket estat)
+							{
+								if (estat.entityType == EntityType.PLAYER || estat.entityType == EntityType.SIM)
+								{
+									HandlePlayerRelated(packet);
+								}
+								if (estat.entityType == EntityType.PET || estat.entityType == EntityType.ENEMY)
+								{
+									var pb = packet as EntityBasePacket;
+									//if (!ClientZoneOwnership.isZoneOwner || pb.entityType == EntityType.PET)
+										ClientNPCSyncManager.Instance.OnEntityDataReceive(packet);
+								}
+							}
+						}
+						else if ((packetType == PacketType.PLAYER_CONNECT || packetType == PacketType.PLAYER_ACTION || packetType == PacketType.PLAYER_DATA || packetType == PacketType.PLAYER_TRANSFORM) && (packet.entityID != ClientConnectionManager.Instance.LocalPlayerID || packet.isSim))
 						{
 							HandlePlayerRelated(packet);
 						}
@@ -102,14 +126,16 @@ namespace ErenshorCoop.Modules
 						{
 							//Logging.Log($"Received ent packet {packetType}");
 							var pb = packet as EntityBasePacket;
-							if (!ClientZoneOwnership.isZoneOwner || pb.entityType == EntityType.PET)
-								ClientNPCSyncManager.Instance.OnEntityDataReceive(packet);
 							if (ServerConnectionManager.Instance.IsRunning)
 								ServerZoneOwnership.HandleEntityPacket(pb);
+							if (!ClientZoneOwnership.isZoneOwner || pb.entityType == EntityType.PET)
+								ClientNPCSyncManager.Instance.OnEntityDataReceive(packet);
+							if (ServerConnectionManager.Instance.IsRunning && ClientZoneOwnership.isZoneOwner)
+								ClientNPCSyncManager.Instance.OnEntityDataReceive(packet);
 						}
 
 					}
-					
+				}
 				break;
 			}
 
@@ -375,7 +401,13 @@ namespace ErenshorCoop.Modules
 
 			if (p.dataTypes.Contains(Request.ENTITY_SPAWN))
 			{
-				if (p.ownerID == ClientConnectionManager.Instance.LocalPlayerID && SharedNPCSyncManager.Instance.sims.ContainsKey(p.entityReqID))
+				if(p.ownerID == -1)
+				{
+					//We got a request for unknown owner
+					if(SharedNPCSyncManager.Instance.sims.ContainsKey(p.entityReqID)) //it's ours
+						SharedNPCSyncManager.Instance.sims[p.entityReqID].SendConnectData();
+				}
+				else if (p.ownerID == ClientConnectionManager.Instance.LocalPlayerID && SharedNPCSyncManager.Instance.sims.ContainsKey(p.entityReqID))
 				{
 					SharedNPCSyncManager.Instance.sims[p.entityReqID].SendConnectData();
 				}
@@ -446,7 +478,6 @@ namespace ErenshorCoop.Modules
 			}
 			else
 			{
-
 				if (packet is PlayerDataPacket dataPacket)
 				{
 					if (dataPacket.dataTypes.Contains(PlayerDataType.SCENE) && !packet.isSim)

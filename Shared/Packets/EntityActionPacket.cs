@@ -13,19 +13,13 @@ namespace ErenshorCoop.Shared.Packets
 		
 		public HashSet<ActionType> dataTypes = new();
 
-		public EntityAttackData attackData;
 		public int SpellChargeFXIndex;
 		public string spellID;
 		public short targetID;
 		public bool targetIsNPC;
 		public bool targetIsSim;
 		public List<HealingData> healingData;
-		public StatusEffectData effectData;
-		public bool RemoveAllStatus = false;
-		public bool RemoveBreakable = false;
-		public int statusID;
 		public List<WandAttackData> wandData;
-		public List<StatusEffectData> wornEffects;
 
 		public EntityActionPacket() : base(DeliveryMethod.ReliableOrdered) { }
 
@@ -46,17 +40,7 @@ namespace ErenshorCoop.Shared.Packets
 			ushort flag = Extensions.GetSubTypeFlag(dataTypes);
 			writer.Put(flag);
 
-			if (dataTypes.Contains(ActionType.ATTACK))
-			{
-				writer.Put(attackData.attackedID);
-				writer.Put(attackData.attackedIsNPC);
-				writer.Put(attackData.damage);
-				writer.Put((byte)attackData.damageType);
-				writer.Put(attackData.effect);
-				writer.Put(attackData.resistMod);
-				writer.Put(attackData.isCrit);
-				writer.Put(attackData.baseDmg);
-			}
+
 			if (dataTypes.Contains(ActionType.SPELL_CHARGE))
 			{
 				writer.Put(SpellChargeFXIndex);
@@ -80,22 +64,7 @@ namespace ErenshorCoop.Shared.Packets
 					writer.Put(h.isMP);
 				}
 			}
-			if (dataTypes.Contains(ActionType.STATUS_EFFECT_APPLY))
-			{
-				writer.Put(effectData.spellID);
-				writer.Put(effectData.damageBonus);
-				writer.Put(effectData.casterID);
-				writer.Put((byte)effectData.casterType);
-				writer.Put(effectData.duration);
-				writer.Put(effectData.targetID);
-				writer.Put((byte)effectData.targetType);
-			}
-			if (dataTypes.Contains(ActionType.STATUS_EFFECT_REMOVE))
-			{
-				writer.Put(statusID);
-				writer.Put(RemoveAllStatus);
-				writer.Put(RemoveBreakable);
-			}
+
 			if (dataTypes.Contains(ActionType.WAND_ATTACK))
 			{
 				writer.Put(wandData.Count);
@@ -122,20 +91,7 @@ namespace ErenshorCoop.Shared.Packets
 
 			dataTypes = Extensions.ReadSubTypeFlag<ActionType>(reader.GetUShort());
 
-			if (dataTypes.Contains(ActionType.ATTACK))
-			{
-				attackData = new()
-				{
-					attackedID = reader.GetShort(),
-					attackedIsNPC = reader.GetBool(),
-					damage = reader.GetInt(),
-					damageType = (GameData.DamageType)reader.GetByte(),
-					effect = reader.GetBool(),
-					resistMod = reader.GetFloat(),
-					isCrit = reader.GetBool(),
-					baseDmg = reader.GetInt()
-				};
-			}
+
 			if (dataTypes.Contains(ActionType.SPELL_CHARGE))
 			{
 				SpellChargeFXIndex = reader.GetInt();
@@ -163,25 +119,6 @@ namespace ErenshorCoop.Shared.Packets
 					};
 					healingData.Add(h);
 				}
-			}
-			if (dataTypes.Contains(ActionType.STATUS_EFFECT_APPLY))
-			{
-				effectData = new()
-				{
-					spellID = reader.GetString().Sanitize(),
-					damageBonus = reader.GetInt(),
-					casterID = reader.GetShort(),
-					casterType = (EntityType)reader.GetByte(),
-					duration = reader.GetFloat(),
-					targetID = reader.GetShort(),
-					targetType = (EntityType)reader.GetByte()
-				};
-			}
-			if (dataTypes.Contains(ActionType.STATUS_EFFECT_REMOVE))
-			{
-				statusID = reader.GetInt();
-				RemoveAllStatus = reader.GetBool();
-				RemoveBreakable = reader.GetBool();
 			}
 			if (dataTypes.Contains(ActionType.WAND_ATTACK))
 			{
@@ -211,5 +148,39 @@ namespace ErenshorCoop.Shared.Packets
 		public float resistMod;
 		public bool isCrit;
 		public int baseDmg;
+
+		public bool Equals(EntityAttackData other)
+		{
+			return attackedID == other.attackedID
+				&& attackedIsNPC == other.attackedIsNPC
+				&& damage == other.damage
+				&& damageType == other.damageType
+				&& effect == other.effect
+				&& Math.Abs(resistMod - other.resistMod) < 0.0001f // float safe compare
+				&& isCrit == other.isCrit
+				&& baseDmg == other.baseDmg;
+		}
+
+		public override bool Equals(object obj)
+		{
+			return obj is EntityAttackData other && Equals(other);
+		}
+
+		public override int GetHashCode()
+		{
+			unchecked
+			{
+				int hash = 17;
+				hash = hash * 23 + attackedID.GetHashCode();
+				hash = hash * 23 + attackedIsNPC.GetHashCode();
+				hash = hash * 23 + damage.GetHashCode();
+				hash = hash * 23 + damageType.GetHashCode();
+				hash = hash * 23 + effect.GetHashCode();
+				hash = hash * 23 + resistMod.GetHashCode();
+				hash = hash * 23 + isCrit.GetHashCode();
+				hash = hash * 23 + baseDmg.GetHashCode();
+				return hash;
+			}
+		}
 	}
 }

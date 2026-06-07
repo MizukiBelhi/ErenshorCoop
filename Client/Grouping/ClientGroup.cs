@@ -16,6 +16,7 @@ namespace ErenshorCoop.Client.Grouping
 	{
 		public static SharedGroup.Group currentGroup = new();
 		public static Action GroupListCallback = null;
+		private static List<short> retriesForSim = new();
 
 		public static SharedGroup.Member ClientGetMemberFromPlayer(short playerID, bool isSim = false)
 		{
@@ -45,49 +46,6 @@ namespace ErenshorCoop.Client.Grouping
 		public static bool IsLocalLeader()
 		{
 			return currentGroup.leaderID == ClientConnectionManager.Instance.LocalPlayerID;
-		}
-
-		private static void HandleExperience(ServerGroupPacket packet)
-		{
-			var processedSimIndexes = new HashSet<short>();
-
-			foreach (var member in currentGroup.groupList)
-			{
-				if (!member.isSim)
-				{
-					if (member.entityID != ClientConnectionManager.Instance.LocalPlayerID)
-					{
-						//Get player entity + stats
-						var player = ClientConnectionManager.Instance.GetPlayerFromID(member.entityID);
-						if (player == null) continue;
-						if (player is NetworkedPlayer nt && processedSimIndexes.Add(member.entityID))
-						{
-							HandleXPGain(nt.sim.MyStats, packet.earnedXP, packet.xpBonus, true);
-						}
-					}
-				}
-				else
-				{
-					foreach (var mem in GameData.GroupMembers)
-					{
-						SimSync ssync = null;
-						if (mem != null && mem.MyAvatar != null && (ssync = mem.MyAvatar.GetComponent<SimSync>()) != null && mem.simIndex == ssync.simIndex && processedSimIndexes.Add(member.entityID))
-						{
-							GameData.SimMngr.Sims[mem.simIndex].OpinionOfPlayer += 0.01f;
-							var st = mem.MyStats;
-							HandleXPGain(st, packet.earnedXP, packet.xpBonus, false);
-							break;
-						}
-						else if(mem != null && mem.MyAvatar != null && mem.MyAvatar.GetComponent<NetworkedSim>() != null && processedSimIndexes.Add(member.entityID))
-						{
-							HandleXPGain(mem.MyStats, packet.earnedXP, packet.xpBonus, false);
-							break;
-						}
-					}
-				}
-			}
-
-			HandleXPGain(GameData.PlayerStats, packet.earnedXP, packet.xpBonus, true);
 		}
 
 		private static void HandleSimFollow(ServerGroupPacket packet)
@@ -209,7 +167,7 @@ namespace ErenshorCoop.Client.Grouping
 			if (localPlayer != null)
 			{
 				savedList.Remove(localPlayer);
-				localPlayer.slot = 255; // -1 equivalent
+				localPlayer.slot = 255;
 				grp.groupList.Add(localPlayer);
 			}
 
@@ -232,6 +190,46 @@ namespace ErenshorCoop.Client.Grouping
 
 			currentGroup = grp;
 
+			LoadGroupMembers();
+
+			foreach (var s in _saved)
+			{
+				if (s != null && GameData.SimMngr.Sims.Contains(s))
+				{
+					if (s.MyAvatar != null && s.MyAvatar.GetComponent<Entity>() != null)
+					{
+						var e = s.MyAvatar.GetComponent<Entity>();
+						if (e.type == EntityType.SIM && !IsPlayerInGroup(e.entityID, true))
+						{
+							if (e is SimSync)
+								((SimSync)e).npc.InGroup = false;
+							s.Grouped = false;
+							s.MyAvatar.InGroup = false;
+						}
+					}
+				}
+			}
+
+			GroupListCallback?.Invoke();
+		}
+
+		public static void LoadGroupMembers()
+		{
+			List<GameObject> idk = new()
+			{
+				GameData.SimPlayerGrouping.D1,
+				GameData.SimPlayerGrouping.D2,
+				GameData.SimPlayerGrouping.D3,
+				GameData.SimPlayerGrouping.D4,
+			};
+
+			List<TextMeshProUGUI> texts = new()
+			{
+				GameData.SimPlayerGrouping.PlayerOneName,
+				GameData.SimPlayerGrouping.PlayerTwoName,
+				GameData.SimPlayerGrouping.PlayerThreeName,
+				GameData.SimPlayerGrouping.PlayerFourName,
+			};
 
 			foreach (var mem in currentGroup.groupList)
 			{
@@ -246,6 +244,26 @@ namespace ErenshorCoop.Client.Grouping
 					if (player == null)
 					{
 						Logging.LogError($"Error adding {(isSim ? "Sim" : "Player")} with id {playerID}");
+
+						//Request sim if we failed to find
+						if(isSim)
+						{
+							if (retriesForSim.Contains(playerID))
+								retriesForSim[retriesForSim.IndexOf(playerID)]++;
+							else
+								retriesForSim.Add(playerID);
+
+							var tries = retriesForSim[retriesForSim.IndexOf(playerID)];
+							if (tries < 5) //5 retries
+							{
+								ClientConnectionManager.Instance.RedoGroupList.Add(playerID); //Request sim
+								ClientConnectionManager.Instance.RequestSim(playerID, -1);    //With unknown ownerID
+							}
+							else if(tries == 5) //At this point the group is probably out of sync
+							{
+								Logging.LogError($"Maximum retries for sim with id {playerID} reached. Cannot receive SIM.");
+							}
+						}
 						continue;
 					}
 
@@ -288,33 +306,14 @@ namespace ErenshorCoop.Client.Grouping
 					texts[slot].text = isSim ? n.SimName : player.entityName;
 					texts[slot].color = Color.white;
 
-					if (packet.leaderID == ClientConnectionManager.Instance.LocalPlayerID)
+					if (currentGroup.leaderID == ClientConnectionManager.Instance.LocalPlayerID)
 						idk[slot].SetActive(true);
-				}
-			}
-
-			foreach (var s in _saved)
-			{
-				if (s != null && GameData.SimMngr.Sims.Contains(s))
-				{
-					if (s.MyAvatar != null && s.MyAvatar.GetComponent<Entity>() != null)
-					{
-						var e = s.MyAvatar.GetComponent<Entity>();
-						if (e.type == EntityType.SIM && !IsPlayerInGroup(e.entityID, true))
-						{
-							if (e is SimSync)
-								((SimSync)e).npc.InGroup = false;
-							s.Grouped = false;
-							s.MyAvatar.InGroup = false;
-						}
-					}
 				}
 			}
 
 			GameData.SimPlayerGrouping.ChangeToGroup = true;
 			GameData.SimPlayerGrouping.SetRoles();
 			GameData.SimPlayerGrouping.UpdateGroupNames();
-			GroupListCallback?.Invoke();
 		}
 
 
@@ -426,6 +425,58 @@ namespace ErenshorCoop.Client.Grouping
 				Logging.WriteInfoMessage("Your group has been disbanded.");
 		}
 
+		private static void HandleExperience(ServerGroupPacket packet)
+		{
+			//var processedSimIndexes = new HashSet<short>();
+
+			foreach (var member in currentGroup.groupList)
+			{
+				if (!member.isSim)
+				{
+					if (member.entityID != ClientConnectionManager.Instance.LocalPlayerID)
+					{
+						//Get player entity + stats
+						var player = ClientConnectionManager.Instance.GetPlayerFromID(member.entityID);
+						if (player == null) continue;
+						if (player is NetworkedPlayer nt)
+						{
+							HandleXPGain(nt.sim.MyStats, packet.earnedXP, packet.xpBonus, true);
+						}
+					}
+				}
+				else
+				{
+					foreach (var mem in GameData.GroupMembers)
+					{
+						if (mem != null && mem.MyAvatar != null)
+						{
+							SimSync ssync = mem.MyAvatar.GetComponent<SimSync>();
+							if (ssync != null)
+							{
+								var ent = SharedNPCSyncManager.Instance.GetEntityFromID(member.entityID, true) as SimSync;
+								if (mem.simIndex == ent.simIndex)
+								{
+									GameData.SimMngr.Sims[mem.simIndex].OpinionOfPlayer += 0.01f;
+									var st = mem.MyStats;
+									HandleXPGain(st, packet.earnedXP, packet.xpBonus, false);
+									break;
+								}
+							}
+							else if (mem != null && mem.MyAvatar != null && mem.MyAvatar.GetComponent<NetworkedSim>() != null)
+							{
+								if (mem.simIndex == -(member.entityID + 1))
+								{
+									HandleXPGain(mem.MyStats, packet.earnedXP, packet.xpBonus, false);
+									break;
+								}
+							}
+						}
+					}
+				}
+			}
+
+			HandleXPGain(GameData.PlayerStats, packet.earnedXP, packet.xpBonus, true);
+		}
 
 		public static void HandleXPGain(Stats stats, int earnedXP, float XPBonus, bool isPlayer)
 		{
@@ -451,10 +502,7 @@ namespace ErenshorCoop.Client.Grouping
 				}
 				else
 				{
-					UpdateSocialLog.LogAdd(
-						$"{stats.transform.name} receives {earnedXP} +({num} XP bonus) {xpType}xp - ({(type == "ASCENSION" ? stats.CurrentAscensionXP : stats.CurrentExperience)} / {(type == "ASCENSION" ? stats.AscensionXPtoLevelUp : stats.ExperienceToLevelUp)})",
-						"yellow"
-					);
+					UpdateSocialLog.LogAdd($"{stats.transform.name} receives {earnedXP} +({num} XP bonus) {xpType}xp - ({(type == "ASCENSION" ? stats.CurrentAscensionXP : stats.CurrentExperience)} / {(type == "ASCENSION" ? stats.AscensionXPtoLevelUp : stats.ExperienceToLevelUp)})", "yellow");
 					if(!isPlayer)
 					{
 						var zoneAnnounceData = GameData.ZoneAnnounceData;

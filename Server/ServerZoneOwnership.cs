@@ -72,6 +72,7 @@ namespace ErenshorCoop.Server
 		{
 			if (isInUse)
 			{
+				if (!ClientConnectionManager.Instance.IsRunning) return;
 				if (hostPreviousScene != scene.name)
 				{
 					OnClientChangeZone(ClientConnectionManager.Instance.LocalPlayerID, scene.name, hostPreviousScene);

@@ -103,6 +103,8 @@ namespace ErenshorCoop
 					//Needs to be delayed in case the joining player isn't in the zone list yet
 					StartCoroutine(DelayedSendPet());
 				}
+
+				StartCoroutine(DelayedSendGuild());
 			}
 			catch (Exception ex)
 			{
@@ -208,6 +210,7 @@ namespace ErenshorCoop
 			hasSentConnect = true;
 			timeSinceLastPeriodicUpdate = Time.time;
 			StartCoroutine(DelayedSendEffects());
+			StartCoroutine(DelayedSendGuild());
 		}
 
 		private void OnGameMenuLoad(Scene scene)
@@ -228,10 +231,11 @@ namespace ErenshorCoop
 		}
 		public void Update()
 		{
+			if (!ClientConnectionManager.Instance.IsRunning) return;
 			if (ServerConnectionManager.Instance != null && ServerConnectionManager.Instance.IsRunning)
 				hasSentConnect = true;
 
-			if (!ClientConnectionManager.Instance.IsRunning) return;
+			
 			if (!hasSentConnect) return;
 
 			//if (Vector3.Distance(transform.position,previousPosition) > 0.1f && lastInterpTime >= interpCall)
@@ -306,19 +310,25 @@ namespace ErenshorCoop
 		{
 			if (!hasSentConnect) return;
 
-			var p = PacketManager.GetOrCreatePacket<PlayerActionPacket>(entityID, PacketType.PLAYER_ACTION).AddPacketData(ActionType.ATTACK, "attackData",
-				new PlayerAttackData()
-				{
-					attackedID = attackedID,
-					attackedIsNPC = attackedIsNPC,
-					damage = damage,
-					damageType = dmgType,
-					effect = effect,
-					resistMod = resistMod,
-					isCrit = isCrit,
-					baseDmg = baseDmg
-				});
+			var dmgdata = new EntityAttackData()
+			{
+				attackedID = attackedID,
+				attackedIsNPC = attackedIsNPC,
+				damage = damage,
+				damageType = dmgType,
+				effect = effect,
+				resistMod = resistMod,
+				isCrit = isCrit,
+				baseDmg = baseDmg
+			};
+
+			var p = PacketManager.GetOrCreatePacket<EntityAttackPacket>(entityID, PacketType.ENTITY_ATTACK);
+			p.attackData ??= new();
+			p.attackData.Add(dmgdata);
 			p.isSim = false;
+			p.zone = zone;
+			p.entityType = type;
+			p.isMob = false;
 		}
 
 
@@ -469,6 +479,7 @@ namespace ErenshorCoop
 				isMale = GameData.CurrentCharacterSlot.isMale,
 				hairColor = GameData.CurrentCharacterSlot.HairColor,
 				skinColor = GameData.CurrentCharacterSlot.SkinColor,
+				beard = GameData.CurrentCharacterSlot.Beard==1,
 			};
 
 			return (true, lookData, gearData);

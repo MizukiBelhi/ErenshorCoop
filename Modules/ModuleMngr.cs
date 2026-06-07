@@ -9,19 +9,20 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace ErenshorCoop.Modules
 {
-	public class ModuleMngr
+	public class ModuleMngr : IDisposable
 	{
 		private List<Module> _loadedModules = new();
 		//private Dictionary<PacketType, Module> _packetHandlers = new();
 		private Dictionary<Type, string> _moduleHashes = new();
 		private Dictionary<PacketType, List<Module>> _packetHandlers = new();
 
-
-		private enum ModuleLoadState
+		private CancellationTokenSource cts = new();
+		public enum ModuleLoadState
 		{
 			LOADED,
 			_ALREADY_LOADED,
@@ -29,51 +30,43 @@ namespace ErenshorCoop.Modules
 		}
 		public ModuleMngr()
 		{
-			//Start coroutine to detect new modules every 10 seconds
-			Task.Run(async () =>
-			{
-				while (true)
-				{
-					await Task.Delay(10000);
-					DetectAndLoadNewModules();
-				}
-			});
 		}
 
-		public static string GetModuleILHash(Type moduleType)
+		public void Dispose()
 		{
-			var sb = new StringBuilder();
-			sb.Append(moduleType.FullName);
+			cts.Cancel();
+			CleanupModules();
+		}
 
-			foreach (var field in moduleType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
-				sb.Append(field.Name).Append(':').Append(field.FieldType.FullName).Append(';');
-			foreach (var prop in moduleType.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
-				sb.Append(prop.Name).Append(':').Append(prop.PropertyType.FullName).Append(';');
+		public bool RegisterModule<T>() where T : Module, new()
+		{
+			var moduleType = typeof(T);
+			if (LoadModule(moduleType) == ModuleLoadState.FAILED)
+				return false;
+			return true;
+		}
 
-			foreach (var method in moduleType.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
+		public void UnloadModule(Module m)
+		{
+			if (_loadedModules.Contains(m))
 			{
-				sb.Append(method.Name).Append('(');
-				sb.Append(string.Join(",", method.GetParameters().Select(p => p.ParameterType.FullName)));
-				sb.Append(')').Append("->").Append(method.ReturnType.FullName).Append(';');
-
-				try
+				try { m.OnCleanup(); }
+				catch (Exception ex) { Logging.LogError($"Cleaning up module {m.GetType().Name}: {ex}"); }
+				_loadedModules.Remove(m);
+				//Unregister packet handlers
+				foreach (var key in _packetHandlers.Keys.ToList())
 				{
-					var body = method.GetMethodBody();
-					if (body != null)
+					var handlers = _packetHandlers[key];
+					if (handlers.Remove(m) && handlers.Count == 0)
 					{
-						var il = body.GetILAsByteArray();
-						if (il != null && il.Length > 0)
-							sb.Append(Convert.ToBase64String(il));
+						PacketManager.UnregisterPacket(key);
+						_packetHandlers.Remove(key);
 					}
 				}
-				catch{}
+				Logging.Log($"Unloaded module: {m.GetType().Name}");
 			}
-
-			using var sha256 = SHA256.Create();
-			var bytes = Encoding.UTF8.GetBytes(sb.ToString());
-			var hash = sha256.ComputeHash(bytes);
-			return Convert.ToBase64String(hash);
 		}
+		
 
 		public void AddPacketHandler(PacketType packetType, Module module)
 		{
@@ -84,100 +77,7 @@ namespace ErenshorCoop.Modules
 				_packetHandlers[packetType].Add(module);
 		}
 
-		public void GatherModules()
-		{
-			var modules = AppDomain.CurrentDomain.GetAssemblies().SelectMany(x => x.GetTypes())
-				.Where(x => x.IsClass
-					&& !x.IsAbstract
-					&& x.IsSubclassOf(typeof(Module))
-					&& Attribute.IsDefined(x, typeof(ModuleAttribute))
-					&& !x.IsNested
-					&& !x.IsGenericTypeDefinition
-					&& !x.Name.StartsWith("<")) // exclude compiler-generated
-				.ToList();
-			foreach (var moduleType in modules)
-			{
-				if (LoadModule(moduleType) == ModuleLoadState.FAILED)
-				{
-					
-					continue; //Already loaded or failed to load
-				}
-				_moduleHashes[moduleType] = GetModuleILHash(moduleType);
-			}
-		}
-
-		//We need to detect during runtime if a new module has been added and load it
-		public void DetectAndLoadNewModules()
-		{
-			//Logging.Log("Detecting new modules...");
-			var modules = AppDomain.CurrentDomain.GetAssemblies().SelectMany(x => x.GetTypes())
-				.Where(x => x.IsClass
-					&& !x.IsAbstract
-					&& x.IsSubclassOf(typeof(Module))
-					&& Attribute.IsDefined(x, typeof(ModuleAttribute))
-					&& !x.IsNested
-					&& !x.IsGenericTypeDefinition
-					&& !x.Name.StartsWith("<")) // exclude compiler-generated
-				.ToList();
-			foreach (var moduleType in modules)
-			{
-				var currentHash = GetModuleILHash(moduleType);
-				if (_moduleHashes.TryGetValue(moduleType, out var previousHash) && previousHash == currentHash)
-				{
-					//Logging.Log($"Module {moduleType.Name} unchanged, skipping. prevHash: {previousHash} currHash: {currentHash}");
-					continue; //Skip trying to load again, same hash as last failure
-				}
-				try
-				{
-					if (LoadModule(moduleType) == ModuleLoadState.FAILED)
-					{
-
-						continue; //Already loaded or failed to load
-					}
-				}
-				catch(Exception ex)
-				{
-					Logging.LogError($"Loading module failed {moduleType.Name}: {ex}");
-					continue;
-				}
-				_moduleHashes[moduleType] = currentHash;
-			}
-			//Detect removed modules that we couldn't cleanup
-			foreach(var loadedModule in _loadedModules.ToList())
-			{
-				if(!modules.Any(m => m == loadedModule.GetType()))
-				{
-					try { loadedModule.OnCleanup(); }
-					catch (Exception ex) { Logging.LogError($"Cleaning up module {loadedModule.GetType().Name}: {ex}"); }
-
-					_loadedModules.Remove(loadedModule);
-					//Unregister packet handlers
-					foreach (var key in _packetHandlers.Keys.ToList())
-					{
-						var handlers = _packetHandlers[key];
-						if (handlers.Remove(loadedModule) && handlers.Count == 0)
-						{
-							PacketManager.UnregisterPacket(key);
-							_packetHandlers.Remove(key);
-						}
-					}
-
-					var attr = (ModuleAttribute)Attribute.GetCustomAttribute(loadedModule.GetType(), typeof(ModuleAttribute));
-					if (attr != null)
-					{
-						Logging.Log($"Dynamically Unloaded Module: {attr.Name}");
-					}
-				}
-			}
-			//Remove null modules and packet handlers
-			_loadedModules = _loadedModules.Where(m => m != null).ToList();
-			//Unregister null packet handlers
-			foreach(var kvp in _packetHandlers.Where(kvp => kvp.Value == null).ToList())
-			{
-				PacketManager.UnregisterPacket(kvp.Key);
-			}
-			_packetHandlers = _packetHandlers.Where(kvp => kvp.Value != null).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-		}
+		
 
 		private ModuleLoadState LoadModule(Type moduleType)
 		{

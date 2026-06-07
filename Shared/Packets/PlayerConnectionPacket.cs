@@ -43,7 +43,9 @@ namespace ErenshorCoop.Shared.Packets
 			writer.Put(lookData.hairName);
 			writer.Put(lookData.hairColor);
 			writer.Put(lookData.skinColor);
+			writer.Put(lookData.beard);
 			writer.Put(gearData.Count);
+
 			foreach (var g in gearData)
 			{
 				writer.Put((byte)g.slotType);
@@ -73,6 +75,7 @@ namespace ErenshorCoop.Shared.Packets
 				hairName = reader.GetString(), //Not sure if this can be safely sanitized
 				hairColor = reader.GetColor(),
 				skinColor = reader.GetColor(),
+				beard = reader.GetBool()
 			};
 
 			gearData = new();

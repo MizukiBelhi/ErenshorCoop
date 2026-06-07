@@ -511,6 +511,25 @@ namespace ErenshorCoop.Client
 		{
 			if (!CanRun) return;
 
+			if (packet is EntityAttackPacket eap)
+			{
+				if (NetworkedMobs.ContainsKey(eap.entityID))
+					NetworkedMobs[eap.entityID].HandleAttack(eap.attackData);
+				return;
+			}
+			if(packet is EntityStatusEffectPacket esep)
+			{
+				if (!NetworkedMobs.ContainsKey(esep.entityID)) return;
+
+				if (esep.dataTypes.Contains(ActionType.STATUS_EFFECT_APPLY))
+					NetworkedMobs[esep.entityID].HandleStatusEffectApply(esep.effectData);
+				if (esep.dataTypes.Contains(ActionType.STATUS_EFFECT_REMOVE))
+					NetworkedMobs[esep.entityID].HandleStatusRemoval(esep.RemoveAllStatus, esep.RemoveBreakable, esep.statusID);
+				if (esep.dataTypes.Contains(ActionType.ACTIVE_STATUS_EFFECTS))
+					NetworkedMobs[esep.entityID].HandleActiveStatusEffects(esep.activeEffects, true);
+				return;
+			}
+
 			if (packet is EntitySpawnPacket entitySpawnPacket)
 			{
 				//Logging.Log("recv spawn packet");
@@ -519,6 +538,8 @@ namespace ErenshorCoop.Client
 					//Logging.Log("but we arent a receiving player");
 					return;
 				}
+
+
 
 				foreach (var spawn in entitySpawnPacket.spawnData)
 				{
@@ -590,6 +611,15 @@ namespace ErenshorCoop.Client
 						GameHooks.maxMP.SetValue(m.character.MyStats, entityData.maxMP);
 						m.character.MyStats.CurrentMana = entityData.mp;
 					}
+					if(entityData.dataTypes.Contains(EntityDataType.STAT_UPDATE))
+					{
+						var m = NetworkedMobs[entityData.entityID];
+						m.character.MyStats.CurrentMaxHP = entityData.statUpdate.curMaxHP;
+						m.character.MyStats.CurrentHP = entityData.statUpdate.curHP;
+						m.character.MyStats.Level = entityData.statUpdate.level;
+						m.npc.DamageRange.x = entityData.statUpdate.damageRangeMin;
+						m.npc.DamageRange.y = entityData.statUpdate.damageRangeMax;
+					}
 				}
 			}
 
@@ -600,8 +630,6 @@ namespace ErenshorCoop.Client
 					if (!entityAction.targetPlayerIDs.Contains(ClientConnectionManager.Instance.LocalPlayerID))
 						return;
 
-					if (entityAction.dataTypes.Contains(ActionType.ATTACK))
-						NetworkedMobs[entityAction.entityID].HandleAttack(entityAction.attackData);
 					if (entityAction.dataTypes.Contains(ActionType.SPELL_CHARGE))
 						NetworkedMobs[entityAction.entityID].HandleSpellCharge(entityAction.SpellChargeFXIndex);
 					if (entityAction.dataTypes.Contains(ActionType.SPELL_EFFECT))
@@ -610,10 +638,6 @@ namespace ErenshorCoop.Client
 						NetworkedMobs[entityAction.entityID].HandleEndSpell();
 					if (entityAction.dataTypes.Contains(ActionType.HEAL))
 						NetworkedMobs[entityAction.entityID].HandleHeal(entityAction.healingData);
-					if(entityAction.dataTypes.Contains(ActionType.STATUS_EFFECT_APPLY))
-						NetworkedMobs[entityAction.entityID].HandleStatusEffectApply(entityAction.effectData);
-					if(entityAction.dataTypes.Contains(ActionType.STATUS_EFFECT_REMOVE))
-						NetworkedMobs[entityAction.entityID].HandleStatusRemoval(entityAction.RemoveAllStatus, entityAction.RemoveBreakable, entityAction.statusID);
 					if (entityAction.dataTypes.Contains(ActionType.WAND_ATTACK))
 					{
 						foreach (var wd in entityAction.wandData)

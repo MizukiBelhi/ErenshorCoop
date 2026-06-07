@@ -28,6 +28,12 @@ namespace ErenshorCoop.Client.Grouping
 				return false;
 			}
 
+			if (simPlayer.character.MyStats.Level - GameData.PlayerStats.Level > 3)
+			{
+				UpdateSocialLog.LogAdd("This player is outside of your level range.", "yellow");
+				return false;
+			}
+
 			Logging.Log($"Try inv {simPlayer.name} {simPlayer.entityID}");
 
 			if (ServerConnectionManager.Instance.IsRunning)

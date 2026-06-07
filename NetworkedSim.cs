@@ -220,13 +220,18 @@ namespace ErenshorCoop
 		{
 			if (requiresSimUpdate && isNextFrame)
 			{
-
+				requiresSimUpdate = false;
+				isNextFrame = false;
 				GameHooks.GetTransformNames.Invoke(mod, null);
 				mod.UpdateSimPlayerVisuals(sim.MyEquipment, MH, OH);
 
+				//Logging.Log($"{name} {mod.HairName} {mod.HairCol}");
+
+				mod.UpdateHair(mod.HairName, mod.HairCol);
+				mod.SkinCol = skinCol;
+				GameHooks.DoSkinColor(mod);
 				//sim.AuditInventory();
-				requiresSimUpdate = false;
-				isNextFrame = false;
+
 				sim.MyStats.MyAura = sim.MyEquipment[equipSlotIndices["Aura_0"]].MyItem.Aura;
 				sim.MyStats.OverrideHPforNPC = false; //Make sure this is always set false before calculating stats
 				inventory.UpdateInvStats();
@@ -235,7 +240,6 @@ namespace ErenshorCoop
 
 				sim.MyStats.CurrentHP = _savedHP;
 				sim.MyStats.CurrentMana = _savedMP;
-
 			}
 			if (requiresSimUpdate) isNextFrame = true;
 
@@ -267,90 +271,99 @@ namespace ErenshorCoop
 		}
 
 
-		private void HandlePlayerAttack(PlayerAttackData data)
+		private void HandlePlayerAttack(List<EntityAttackData> _data)
 		{
 			if (zone != SceneManager.GetActiveScene().name) return;
 			//TODO: attacked could potentially be a sim with PVP mod
-			(bool isPlayer, var attacked) = Extensions.GetCharacterFromID(data.attackedIsNPC, data.attackedID, false);
 
-
-
-			if (attacked == null)
+			foreach (var data in _data)
 			{
-				Logging.Log($"[SIM ATTACK ({entityName})] But something was null? {attacked == null} {data.attackedIsNPC} {data.attackedID}");
-				return;
-			}
-			if(character == null)
-			{
-				return;
-			}
+				(bool isPlayer, var attacked) = Extensions.GetCharacterFromID(data.attackedIsNPC, data.attackedID, false);
 
-			bool fromPlayer = false; //This should be false by default, otherwise every player that receives this will be
-									 //Adding player damage to the enemy, which would cause everyone to get xp
-			//Check if we are in a group
-			if (ClientGroup.HasGroup)
-			{
-				//Set fromPlayer to if this player is in our group and we're the leader
-				fromPlayer = ClientGroup.IsLocalLeader() && ClientGroup.IsPlayerInGroup(entityID, true);
-				if (!isPlayer && ClientGroup.IsPlayerInGroup(entityID, true)) //If the target isn't a player and the player is in our group
+
+
+				if (attacked == null)
 				{
-					//We add ourselves to the aggro list, this way everyone in the group is automatically in the aggro list
-					//if (data.damage > 0) //Make sure we actually did damage
+					Logging.Log($"[SIM ATTACK ({entityName})] But something was null? {attacked == null} {data.attackedIsNPC} {data.attackedID}");
+					return;
+				}
+				if (character == null)
+				{
+					return;
+				}
+
+				bool fromPlayer = false; //This should be false by default, otherwise every player that receives this will be
+										 //Adding player damage to the enemy, which would cause everyone to get xp
+										 //Check if we are in a group
+				if (ClientGroup.HasGroup)
+				{
+					//Set fromPlayer to if this player is in our group and we're the leader
+					fromPlayer = ClientGroup.IsLocalLeader() && ClientGroup.IsPlayerInGroup(entityID, true);
+					if (!isPlayer && ClientGroup.IsPlayerInGroup(entityID, true)) //If the target isn't a player and the player is in our group
 					{
-						//Logging.Log($"beep boop aggro {playerName} vs {attacked.name} to us");
-						attacked.MyNPC.ManageAggro(1, ClientConnectionManager.Instance.LocalPlayer.character);
-						//if (ServerConnectionManager.Instance.IsRunning)
+						//We add ourselves to the aggro list, this way everyone in the group is automatically in the aggro list
+						//if (data.damage > 0) //Make sure we actually did damage
 						{
-							foreach(var mem in GameData.GroupMembers)
+							//Logging.Log($"beep boop aggro {playerName} vs {attacked.name} to us");
+							attacked.MyNPC.ManageAggro(1, ClientConnectionManager.Instance.LocalPlayer.character);
+							//if (ServerConnectionManager.Instance.IsRunning)
 							{
-								if (mem != null && mem.simIndex >= 0)
-									attacked.MyNPC.ManageAggro(1, mem.MyStats.Myself);
+								foreach (var mem in GameData.GroupMembers)
+								{
+									if (mem != null && mem.simIndex >= 0)
+										attacked.MyNPC.ManageAggro(1, mem.MyStats.Myself);
+								}
 							}
+							//GameData.GroupMatesInCombat.Add(npc);
 						}
-						//GameData.GroupMatesInCombat.Add(npc);
 					}
 				}
+
+				//Add attacked character to a list and remove it again after this call
+				//This way we can skip the mitigation calculation
+
+				Variables.DontCalculateDamageMitigationCharacters.Add(attacked);
+
+				if (data.damageType == GameData.DamageType.Physical)
+					attacked.DamageMe(data.damage, fromPlayer, data.damageType, character, data.effect, data.isCrit);
+				else
+					attacked.MagicDamageMe(data.damage, fromPlayer, data.damageType, character, data.resistMod, 0);
+
+				Variables.DontCalculateDamageMitigationCharacters.Remove(attacked);
 			}
-
-			//Add attacked character to a list and remove it again after this call
-			//This way we can skip the mitigation calculation
-
-			Variables.DontCalculateDamageMitigationCharacters.Add(attacked);
-
-			if (data.damageType == GameData.DamageType.Physical)
-				attacked.DamageMe(data.damage, fromPlayer, data.damageType, character, data.effect, data.isCrit);
-			else
-				attacked.MagicDamageMe(data.damage, fromPlayer, data.damageType, character, data.resistMod, 0);
-
-			Variables.DontCalculateDamageMitigationCharacters.Remove(attacked);
 		}
 
 
-		private void HandleDamageTaken(DamageTakenData data)
+		private void HandleDamageTaken(List<DamageTakenData> _data)
 		{
 			if (zone != SceneManager.GetActiveScene().name) return;
-			//TODO: attacker could potentially be a sim with PVP mod
-			(bool isPlayer, var attacker) = Extensions.GetCharacterFromID(data.attackerIsNPC, data.attackerID, false);
 
-			//Logging.Log($"{name} damage taken");
-
-			if (attacker == null)
+			foreach (var data in _data)
 			{
-				Logging.Log($"[SIM DAMAGED] But something was null? {attacker == null} {data.attackerIsNPC} {data.attackerID}");
-				return;
+
+				//TODO: attacker could potentially be a sim with PVP mod
+				(bool isPlayer, var attacker) = Extensions.GetCharacterFromID(data.attackerIsNPC, data.attackerID, false);
+
+				//Logging.Log($"{name} damage taken");
+
+				if (attacker == null)
+				{
+					Logging.Log($"[SIM DAMAGED] But something was null? {attacker == null} {data.attackerIsNPC} {data.attackerID}");
+					return;
+				}
+
+				//Add attacked character to a list and remove it again after this call
+				//This way we can skip the mitigation calculation
+
+				Variables.DontCalculateDamageMitigationCharacters.Add(character);
+
+				if (data.damageType == GameData.DamageType.Physical)
+					character.DamageMe(data.damage, false, data.damageType, attacker, data.effect, data.isCrit);
+				else
+					character.MagicDamageMe(data.damage, false, data.damageType, attacker, data.resistMod, 0);
+
+				Variables.DontCalculateDamageMitigationCharacters.Remove(character);
 			}
-
-			//Add attacked character to a list and remove it again after this call
-			//This way we can skip the mitigation calculation
-
-			Variables.DontCalculateDamageMitigationCharacters.Add(character);
-
-			if (data.damageType == GameData.DamageType.Physical)
-				character.DamageMe(data.damage, false, data.damageType, attacker, data.effect, data.isCrit);
-			else
-				character.MagicDamageMe(data.damage, false, data.damageType, attacker, data.resistMod, 0);
-
-			Variables.DontCalculateDamageMitigationCharacters.Remove(character);
 		}
 
 
@@ -370,6 +383,25 @@ namespace ErenshorCoop
 
 		public void OnSimDataReceive<T>(T packet) where T : BasePacket
 		{
+			if(packet is EntityAttackPacket eap)
+			{
+				HandlePlayerAttack(eap.attackData);
+			}
+			if (packet is EntityStatusEffectPacket esep)
+			{
+				if (esep.dataTypes.Contains(ActionType.STATUS_EFFECT_APPLY))
+					HandleStatusEffectApply(esep.effectData);
+				if (esep.dataTypes.Contains(ActionType.STATUS_EFFECT_REMOVE))
+					HandleStatusRemoval(esep.RemoveAllStatus, esep.RemoveBreakable, esep.statusID);
+				if (esep.dataTypes.Contains(ActionType.WORN_EFFECT_REFRESH))
+				{
+					HandleStatusEffectRefresh(esep.wornEffects);
+				}
+				if (esep.dataTypes.Contains(ActionType.ACTIVE_STATUS_EFFECTS))
+				{
+					HandleActiveStatusEffects(esep.activeEffects);
+				}
+			}
 			if (packet is PlayerDataPacket _playerDataPacket)
 			{
 				if (_playerDataPacket.dataTypes.Contains(PlayerDataType.DESTR_SIM))
@@ -382,7 +414,7 @@ namespace ErenshorCoop
 					return;
 				}
 			}
-			if (SceneManager.GetActiveScene().name != zone) return;
+			//if (SceneManager.GetActiveScene().name != zone) return;
 
 			if (packet is PlayerTransformPacket playerTransformPacket)
 			{
@@ -471,6 +503,7 @@ namespace ErenshorCoop
 					GameHooks.maxMP.SetValue(sim.MyStats, playerDataPacket.maxMP);
 					sim.MyStats.CurrentMana = playerDataPacket.mp;
 					zone = playerDataPacket.scene;
+					sim.MyStats.CurrentExperience = playerDataPacket.currentXP;
 
 					_savedHP = playerDataPacket.health;
 					_savedMP = playerDataPacket.mp;
@@ -488,10 +521,6 @@ namespace ErenshorCoop
 
 			if (packet is PlayerActionPacket playerActionPacket)
 			{
-				if (playerActionPacket.dataTypes.Contains(ActionType.ATTACK))
-				{
-					HandlePlayerAttack(playerActionPacket.attackData);
-				}
 				if (playerActionPacket.dataTypes.Contains(ActionType.REVIVE))
 					HandleRespawn();
 				if (playerActionPacket.dataTypes.Contains(ActionType.DAMAGE_TAKEN))
@@ -506,10 +535,6 @@ namespace ErenshorCoop
 					HandleSpellEffect(playerActionPacket.spellID, playerActionPacket.targetID, playerActionPacket.targetIsNPC, playerActionPacket.targetIsSim);
 				if (playerActionPacket.dataTypes.Contains(ActionType.SPELL_END))
 					HandleEndSpell();
-				if (playerActionPacket.dataTypes.Contains(ActionType.STATUS_EFFECT_APPLY))
-					HandleStatusEffectApply(playerActionPacket.effectData);
-				if (playerActionPacket.dataTypes.Contains(ActionType.STATUS_EFFECT_REMOVE))
-					HandleStatusRemoval(playerActionPacket.RemoveAllStatus, playerActionPacket.RemoveBreakable, playerActionPacket.statusID);
 				if (playerActionPacket.dataTypes.Contains(ActionType.HEAL))
 					HandleHeal(playerActionPacket.healingData);
 				if (playerActionPacket.dataTypes.Contains(ActionType.WAND_ATTACK))
@@ -517,14 +542,7 @@ namespace ErenshorCoop
 					foreach (var wd in playerActionPacket.wandData)
 						HandleWand(wd);
 				}
-				if (playerActionPacket.dataTypes.Contains(ActionType.WORN_EFFECT_REFRESH))
-				{
-					HandleStatusEffectRefresh(playerActionPacket.wornEffects);
-				}
-				if (playerActionPacket.dataTypes.Contains(ActionType.ACTIVE_STATUS_EFFECTS))
-				{
-					HandleActiveStatusEffects(playerActionPacket.activeEffects);
-				}
+
 			}
 
 		}
@@ -533,7 +551,7 @@ namespace ErenshorCoop
 
 		static Dictionary<string, int> equipSlotIndices;
 		private bool hasClearedEquip = false;
-
+		private Color skinCol = Color.white;
 
 		public void UpdateLooks(LookData data, List<GearData> gearData)
 		{
@@ -660,7 +678,8 @@ namespace ErenshorCoop
 			mod.HairName = data.hairName;
 			mod.HairCol = data.hairColor;
 			mod.SkinCol = data.skinColor;
-
+			mod.Beard = data.beard ? 1 : 0;
+			skinCol = mod.SkinCol;
 
 			//Logging.Log($"Updating visuals player {name}");
 
@@ -675,6 +694,8 @@ namespace ErenshorCoop
 				sim.MyStats.CalcSimStats();
 				sim.MyStats.CalcStats();
 				mod.UpdateHair(data.hairName, data.hairColor);
+				mod.SkinCol = data.skinColor;
+				GameHooks.DoSkinColor(mod);
 			}
 			else
 			{
@@ -771,6 +792,13 @@ namespace ErenshorCoop
 						targetChar.MyNPC.ManageAggro(1, ClientConnectionManager.Instance.LocalPlayer.character);
 					}
 				}
+
+				//if we are the zone owner, send all effects
+				if (ClientZoneOwnership.isZoneOwner)
+				{
+					target.SendActiveEffects();
+					//StartCoroutine(target.DelayedSendEffects());
+				}
 			}
 			else
 			{
@@ -780,6 +808,13 @@ namespace ErenshorCoop
 					targetChar.MyStats.AddStatusEffect(spell, false, effectData.damageBonus, character);
 				if (effectData.targetID == -3)
 					targetChar.MyStats.AddStatusEffect(spell, false, effectData.damageBonus, character, effectData.duration);
+
+				//if we are the zone owner, send all effects
+				if (ClientZoneOwnership.isZoneOwner)
+				{
+					target.SendActiveEffects();
+					//StartCoroutine(target.DelayedSendEffects());
+				}
 			}
 			//character.isNPC = true;
 			Variables.DontCheckEffectCharacters.Remove(target);
@@ -813,7 +848,7 @@ namespace ErenshorCoop
 			GameHooks.hideHair.SetValue(mod, false);
 			mod.UpdateSlot(mod.WeaponR, GameData.PlayerInv.Empty, 0, Item.SlotType.Primary);
 			mod.UpdateSlot(mod.WeaponL, GameData.PlayerInv.Empty, 0, Item.SlotType.Secondary);
-			mod.UpdateHair(sim.HairName, sim.HairColor);
+			mod.UpdateHair(sim.HairName, GameData.SimMngr.HairColors[sim.HairColor]);
 			mod.UpdateSlot(mod.HeadCover, GameData.PlayerInv.Empty, 0, Item.SlotType.Head);
 			mod.UpdateSlot(mod.FullHeadHelm, GameData.PlayerInv.Empty, 0, Item.SlotType.Leg);
 			mod.UpdateSlot(mod.HatWithHair, GameData.PlayerInv.Empty, 0, Item.SlotType.Leg);

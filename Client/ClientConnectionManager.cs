@@ -52,6 +52,8 @@ namespace ErenshorCoop.Client
 
 		private Coroutine spawnRoutine;
 
+		public List<short> RedoGroupList = new();
+
 		public void Awake()
 		{
 			if (Instance != null) Destroy(gameObject);
@@ -66,7 +68,7 @@ namespace ErenshorCoop.Client
 				ChannelsCount = Variables.MaxChannelCount
 			};
 
-			spawnRoutine = StartCoroutine(ActualSpawnSim());
+			
 		}
 
 		public void OnGameMenuLoad(Scene _)
@@ -103,6 +105,7 @@ namespace ErenshorCoop.Client
 			if(IsConnected && IsRunning)
 				Logging.LogGameMessage($"Disconnected.");
 
+			spawnRoutine = null;
 			//Destroy connected player characters
 			foreach (var player in Players.Values)
 			{
@@ -143,6 +146,11 @@ namespace ErenshorCoop.Client
 
 		public void Update()
 		{
+			if(IsRunning)
+			{
+				if(spawnRoutine == null)
+					spawnRoutine = StartCoroutine(ActualSpawnSim());
+			}
 			foreach (var player in Players)
 			{
 				if (player.Value.sceneChanged)
@@ -197,7 +205,7 @@ namespace ErenshorCoop.Client
 			//For some reason it's not invoking anymore..
 			//ClientZoneOwnership.OnClientChangeZone(playerID, scene, "");
 			//ServerZoneOwnership.OnClientChangeZone(playerID, scene, "");
-
+			
 			StartCoroutine(_OnConnectDelayed(delayInSeconds, playerID, scene));
 			//_OnConnectDelayed(delayInSeconds, playerID, scene);
 		}
@@ -229,8 +237,6 @@ namespace ErenshorCoop.Client
 				Players.Add(playerID, pl);
 				pl.Init(pos, rot, charName, scene, playerID, peer);
 				pl.HandleConnectPacket(packet);
-
-
 
 				Logging.Log($"Player {charName} connected @{scene}");
 
@@ -293,9 +299,17 @@ namespace ErenshorCoop.Client
 			simSpawnQueue.Enqueue((playerID, packet));
 		}
 
+		public void RequestSim(short simID, short ownerID)
+		{
+			var pa = PacketManager.GetOrCreatePacket<PlayerRequestPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_REQUEST);
+			pa.dataTypes.Add(Request.ENTITY_SPAWN);
+			pa.ownerID = ownerID; //We assume host knows owner
+			pa.entityReqID = simID;
+		}
+
 		private System.Collections.IEnumerator ActualSpawnSim()
 		{
-			while (true)
+			while (IsRunning)
 			{
 				if (simSpawnQueue.Count > 0)
 				{
@@ -316,8 +330,14 @@ namespace ErenshorCoop.Client
 							pl.HandleConnectPacket(packet);
 							pl.ownerID = packet.ownerID;
 							pl.gameObject.SetActive(false);
+							pl.ownerPlayerID = packet.ownerID;
 
 							//Logging.Log($"SIM {charName} #{pl.ownerID} connected @{scene}");
+							if(RedoGroupList.Count > 0 && RedoGroupList.Contains(playerID))
+							{
+								RedoGroupList.Remove(playerID);
+								ClientGroup.LoadGroupMembers();
+							}
 						}
 						else
 						{

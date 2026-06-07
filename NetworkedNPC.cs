@@ -141,63 +141,67 @@ namespace ErenshorCoop
 			}
 		}
 
-		public void HandleAttack(EntityAttackData data)
+		public void HandleAttack(List<EntityAttackData> _data)
 		{
-			var ent = Extensions.GetEntityByID(data.attackedID);
-
-			if (ent == null)
+			foreach (var data in _data)
 			{
-				if (string.IsNullOrEmpty(entityName))
-					entityName = name;
-				Logging.Log($"[Entity Attack ({entityName})] But something was null? {ent == null} {data.attackedIsNPC} {data.attackedID}");
-				return;
-			}
-			var attacked = ent.character;
-			if (ent.character == null) return;
-			if (character == null) return;
-			//Logging.Log($"{name} attacked {attacked.name} {data.damage}");
+				var ent = Extensions.GetEntityByID(data.attackedID);
 
-			if (ClientGroup.HasGroup)
-			{
-				//Set fromPlayer to if this player is in our group and we're the leader
-				if ((ent is NetworkedPlayer || ent is PlayerSync || ent is NetworkedSim || ent is SimSync) && ClientGroup.IsPlayerInGroup(data.attackedID, ent.type == EntityType.SIM)) //If the target isn't a player and the player is in our group
+				if (ent == null)
 				{
-					//Logging.Log($"beep boop aggro {attacked.name} vs {name} to us");
-					npc.ManageAggro(1, ClientConnectionManager.Instance.LocalPlayer.character);
-					//if (ServerConnectionManager.Instance.IsRunning)
-					{
-						foreach(var mem in GameData.GroupMembers)
-						{
-							if (mem != null && mem.simIndex >= 0)
-								npc.ManageAggro(1, mem.MyStats.Myself);
-						}
+					if (string.IsNullOrEmpty(entityName))
+						entityName = name;
+					Logging.Log($"[Entity Attack ({entityName})] But something was null? {ent == null} {data.attackedIsNPC} {data.attackedID}");
+					return;
+				}
+				var attacked = ent.character;
+				if (ent.character == null) return;
+				if (character == null) return;
+				//Logging.Log($"{name} attacked {attacked.name} {data.damage}");
 
+				if (ClientGroup.HasGroup)
+				{
+					//Set fromPlayer to if this player is in our group and we're the leader
+					if ((ent is NetworkedPlayer || ent is PlayerSync || ent is NetworkedSim || ent is SimSync) && ClientGroup.IsPlayerInGroup(data.attackedID, ent.type == EntityType.SIM)) //If the target isn't a player and the player is in our group
+					{
+						//Logging.Log($"beep boop aggro {attacked.name} vs {name} to us");
+						npc.ManageAggro(1, ClientConnectionManager.Instance.LocalPlayer.character);
+						//if (ServerConnectionManager.Instance.IsRunning)
+						{
+							foreach (var mem in GameData.GroupMembers)
+							{
+								if (mem != null && mem.simIndex >= 0)
+									npc.ManageAggro(1, mem.MyStats.Myself);
+							}
+
+						}
 					}
 				}
+
+				//Add attacked character to a list and remove it again after this call
+				//This way we can skip the mitigation calculation
+
+				Variables.DontCalculateDamageMitigationCharacters.Add(attacked);
+				int ret = 999;
+
+				if (ent is NetworkedPlayer || ent is PlayerSync)
+					attacked.MyFaction = Character.Faction.PC;
+
+				if (data.damageType == GameData.DamageType.Physical)
+					ret = attacked.DamageMe(data.damage, (ent is NetworkedPlayer || ent is PlayerSync), data.damageType, character, data.effect, data.isCrit);
+				else
+					ret = attacked.MagicDamageMe(data.damage, (ent is NetworkedPlayer || ent is PlayerSync), data.damageType, character, data.resistMod, data.baseDmg);
+
+				if (ent is NetworkedPlayer || ent is PlayerSync)
+					attacked.MyFaction = attacked.BaseFaction;
+
+				Variables.DontCalculateDamageMitigationCharacters.Remove(attacked);
 			}
-
-			//Add attacked character to a list and remove it again after this call
-			//This way we can skip the mitigation calculation
-
-			Variables.DontCalculateDamageMitigationCharacters.Add(attacked);
-			int ret = 999;
-
-			if (ent is NetworkedPlayer || ent is PlayerSync)
-				attacked.MyFaction = Character.Faction.PC;
-
-			if (data.damageType == GameData.DamageType.Physical)
-				ret = attacked.DamageMe(data.damage, (ent is NetworkedPlayer || ent is PlayerSync), data.damageType, character, data.effect, data.isCrit);
-			else
-				ret = attacked.MagicDamageMe(data.damage, (ent is NetworkedPlayer || ent is PlayerSync), data.damageType, character, data.resistMod, data.baseDmg);
-
-			if (ent is NetworkedPlayer || ent is PlayerSync)
-				attacked.MyFaction = attacked.BaseFaction;
-
-			Variables.DontCalculateDamageMitigationCharacters.Remove(attacked);
 		}
 
 		public void HandleStatusEffectApply(StatusEffectData effectData)
 		{
+			//Logging.Log($"Status Effect Apply {effectData.spellID} to {effectData.targetID} ({effectData.targetType}) dur {effectData.duration} dmgBonus {effectData.damageBonus}");
 			Spell spell = GameData.SpellDatabase.GetSpellByID(effectData.spellID);
 			if (spell == null) return;
 
@@ -231,6 +235,13 @@ namespace ErenshorCoop
 					targetChar.MyStats.AddStatusEffect(spell, true, effectData.damageBonus, character, effectData.duration);
 				else if (effectData.duration <= 0)
 					targetChar.MyStats.AddStatusEffect(spell, true, effectData.damageBonus, character);
+
+				//if we are the zone owner, send all effects
+				if (ClientZoneOwnership.isZoneOwner)
+				{
+					target.SendActiveEffects();
+					//	StartCoroutine(target.DelayedSendEffects());
+				}
 			}
 
 			Variables.DontCheckEffectCharacters.Remove(target);

@@ -1,4 +1,5 @@
-﻿using System.Reflection;
+﻿using ErenshorCoop;
+using System.Reflection;
 using System.Runtime.InteropServices;
 
 // General Information about an assembly is controlled through the following
@@ -28,5 +29,5 @@ using System.Runtime.InteropServices;
 //      Build Number
 //      Revision
 //
-[assembly: AssemblyVersion("2.0.7")]
-[assembly: AssemblyFileVersion("2.0.7")]
+[assembly: AssemblyVersion(ErenshorCoopMod._version)]
+[assembly: AssemblyFileVersion(ErenshorCoopMod._version)]

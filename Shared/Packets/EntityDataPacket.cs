@@ -20,6 +20,7 @@ namespace ErenshorCoop.Shared.Packets
 		public int maxMP;
 		public short targetID;
 		public EntityType targetType;
+		public EntityStatUpdate statUpdate;
 
 		public EntityDataPacket() : base(DeliveryMethod.ReliableOrdered) { }
 
@@ -62,6 +63,14 @@ namespace ErenshorCoop.Shared.Packets
 				writer.Put(maxHealth);
 				writer.Put(mp);
 				writer.Put(maxMP);
+			}
+			if(dataTypes.Contains(EntityDataType.STAT_UPDATE))
+			{
+				writer.Put(statUpdate.curMaxHP);
+				writer.Put(statUpdate.curHP);
+				writer.Put(statUpdate.level);
+				writer.Put(statUpdate.damageRangeMin);
+				writer.Put(statUpdate.damageRangeMax);
 			}
 		}
 
@@ -119,6 +128,65 @@ namespace ErenshorCoop.Shared.Packets
 				mp = reader.GetInt();
 				maxMP = reader.GetInt();
 			}
+			if (dataTypes.Contains(EntityDataType.STAT_UPDATE))
+			{
+				statUpdate = new()
+				{
+					curMaxHP = reader.GetInt(),
+					curHP = reader.GetInt(),
+					level = reader.GetInt(),
+					damageRangeMin = reader.GetFloat(),
+					damageRangeMax = reader.GetFloat()
+				};
+			}
+		}
+	}
+
+	//For HardSetStats
+	public struct EntityStatUpdate
+	{
+		public int curMaxHP;
+		public int curHP;
+		public float damageRangeMin;
+		public float damageRangeMax;
+		public int level;
+
+
+		public override bool Equals(object obj)
+		{
+			if (obj is not EntityStatUpdate)
+				return false;
+
+			var other = (EntityStatUpdate)obj;
+			return curMaxHP == other.curMaxHP &&
+				   curHP == other.curHP &&
+				   damageRangeMin == other.damageRangeMin &&
+				   damageRangeMax == other.damageRangeMax &&
+				   level == other.level;
+		}
+
+		public override int GetHashCode()
+		{
+			unchecked
+			{
+				int hash = 17;
+				hash = hash * 23 + curMaxHP.GetHashCode();
+				hash = hash * 23 + curHP.GetHashCode();
+				hash = hash * 23 + damageRangeMin.GetHashCode();
+				hash = hash * 23 + damageRangeMax.GetHashCode();
+				hash = hash * 23 + level.GetHashCode();
+				return hash;
+			}
+		}
+
+		public static bool operator ==(EntityStatUpdate left, EntityStatUpdate right)
+		{
+			return left.Equals(right);
+		}
+
+		public static bool operator !=(EntityStatUpdate left, EntityStatUpdate right)
+		{
+			return !(left == right);
 		}
 	}
 }

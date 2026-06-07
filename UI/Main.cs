@@ -369,7 +369,8 @@ namespace ErenshorCoop.UI
 
 		private void OnDisconnect()
 		{
-			statsPanel?.SetActive(false);
+			if(statsPanel != null)
+				statsPanel?.SetActive(false);
 			ConnectPanel.EnableButtons();
 			hasDoneConnect = false;
 		}

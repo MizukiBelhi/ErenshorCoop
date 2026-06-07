@@ -55,7 +55,7 @@ namespace ErenshorCoop
 			{
 				case MessageType.SAY:
 					UpdateSocialLog.LogAdd($"{from.entityName} says: {mes}");
-					UpdateSocialLog.LocalLogAdd($"{from.entityName} says: {mes}");
+					//UpdateSocialLog.LocalLogAdd($"{from.entityName} says: {mes}");
 					break;
 				case MessageType.GROUP:
 					if(ClientGroup.HasGroup && ClientGroup.IsPlayerInGroup(from.entityID, false))
@@ -69,7 +69,7 @@ namespace ErenshorCoop
 					if(target == GameData.CurrentCharacterSlot.CharName)
 					{
 						UpdateSocialLog.LogAdd($"[WHISPER FROM] {from.entityName}: {mes}", "#FB09FF");
-						UpdateSocialLog.LocalLogAdd($"[WHISPER FROM] {from.entityName}: {mes}", "#FB09FF");
+						//UpdateSocialLog.LocalLogAdd($"[WHISPER FROM] {from.entityName}: {mes}", "#FB09FF");
 						GameData.TextInput.LastPlayerMsg = from.entityName;
 						GameData.PlayerAud.PlayOneShot(GameData.Misc.ReceiveTell, GameData.PlayerAud.volume * 0.5f * GameData.SFXVol);
 					}
@@ -92,11 +92,11 @@ namespace ErenshorCoop
 					else
 					{
 						if (hasColor && isAppend)
-							UpdateSocialLog.LogAdd(mes, packet.color, packet.append);
+							UpdateSocialLog.LogAdd(mes, packet.color);
 						else if (hasColor && !isAppend)
 							UpdateSocialLog.LogAdd(mes, packet.color);
 						else if (!hasColor && isAppend)
-							UpdateSocialLog.LogAdd(mes, isAppend);
+							UpdateSocialLog.LogAdd(mes);
 						else
 							UpdateSocialLog.LogAdd(mes);
 					}

@@ -16,6 +16,7 @@ using Random = UnityEngine.Random;
 using System.Text.RegularExpressions;
 using ErenshorCoop.Client.Grouping;
 using ErenshorCoop.Server.Grouping;
+using TMPro;
 
 namespace ErenshorCoop
 {
@@ -84,6 +85,7 @@ namespace ErenshorCoop
 			ErenshorCoopMod.CreatePrefixHook(typeof(NPC),                        "DoBowAttack",             typeof(GameHooks), "NPCDoBowAttackC_Prefix", new[] { typeof(Character), typeof(Spell), typeof(int), typeof(bool) });
 			ErenshorCoopMod.CreatePrefixHook(typeof(NPC),                        "DoBowAttack",             typeof(GameHooks), "NPCDoBowAttackD_Prefix", new[] { typeof(Character), typeof(int), typeof(int) });
 			ErenshorCoopMod.CreatePrefixHook(typeof(NPC),                        "UpdateNav",               typeof(GameHooks), "NPCUpdateNav_Prefix");
+			ErenshorCoopMod.CreatePrefixHook(typeof(NPC),                        "UpdateNamePlate",         typeof(GameHooks), "NPCUpdateNamePlate_Prefix");
 			ErenshorCoopMod.CreatePrefixHook(typeof(SimPlayerMngr),              "BringPlayerGroupToZone",  typeof(GameHooks), "BringPlayerGroupToZone_pre");
 			ErenshorCoopMod.CreatePrefixHook(typeof(SimPlayerMngr),              "SpawnSimsInZone",         typeof(GameHooks), "SpawnSimsInZone_pre");
 			ErenshorCoopMod.CreatePrefixHook(typeof(SimItemDisplay),             "OnPointerDown",           typeof(GameHooks), "SimItemOnPointerDown_Prefix");
@@ -104,6 +106,7 @@ namespace ErenshorCoop
 			ErenshorCoopMod.CreatePrefixHook(typeof(FernallaPortalEvent),        "Update",                  typeof(GameHooks), "FernallaPortalEventUpdate_Prefix");
 			ErenshorCoopMod.CreatePrefixHook(typeof(FernallaPortalShouts),       "Update",                  typeof(GameHooks), "FernallaShoutsUpdate_Prefix");
 			ErenshorCoopMod.CreatePrefixHook(typeof(SpawnPoint),                 "SpawnNPC",                typeof(SyncedSpawnPoint), "SpawnNPC");
+			ErenshorCoopMod.CreatePrefixHook(typeof(HardSetStats),               "Update",                  typeof(GameHooks), "HardSetStatUpdate_Prefix");
 			//ErenshorCoopMod.CreatePrefixHook(typeof(TypeText),                   "RenameSimPlayer",         typeof(GameHooks), "RenameSimPlayer_Prefix");
 
 
@@ -123,18 +126,17 @@ namespace ErenshorCoop
 			ErenshorCoopMod.CreatePostHook(typeof(SimPlayerTracking), "SpawnMeInGame",      typeof(GameHooks), "SimSpawn_Postfix");
 			ErenshorCoopMod.CreatePostHook(typeof(Stats),             "HealMe",             typeof(GameHooks), "StatsHealMe_Postfix", new[] { typeof(Spell), typeof(int), typeof(bool), typeof(bool), typeof(Character) });
 			ErenshorCoopMod.CreatePostHook(typeof(Stats),             "DoLevelUp",          typeof(GameHooks), "DoLevelUp_Postfix");
-			ErenshorCoopMod.CreatePostHook(typeof(UpdateSocialLog),   "CombatLogAdd",       typeof(GameHooks), "CombatLogAdd_Postfix", new[] { typeof(string) });
+			/*ErenshorCoopMod.CreatePostHook(typeof(UpdateSocialLog),   "CombatLogAdd",       typeof(GameHooks), "CombatLogAdd_Postfix", new[] { typeof(string) });
 			ErenshorCoopMod.CreatePostHook(typeof(UpdateSocialLog),   "LogAdd",             typeof(GameHooks), "LogAdd_Postfix", new[] { typeof(string) });
 			ErenshorCoopMod.CreatePostHook(typeof(UpdateSocialLog),   "CombatLogAdd",       typeof(GameHooks), "CombatLogAdd2_Postfix", new[] { typeof(string), typeof(string) });
 			ErenshorCoopMod.CreatePostHook(typeof(UpdateSocialLog),   "LogAdd",             typeof(GameHooks), "LogAdd2_Postfix", new[] { typeof(string), typeof(string) });
 			ErenshorCoopMod.CreatePostHook(typeof(UpdateSocialLog),   "LogAdd",             typeof(GameHooks), "LogAdd3_Postfix", new[] { typeof(string), typeof(string), typeof(bool) });
-			ErenshorCoopMod.CreatePostHook(typeof(UpdateSocialLog),   "LogAdd",             typeof(GameHooks), "LogAdd4_Postfix", new[] { typeof(string), typeof(bool) });
+			ErenshorCoopMod.CreatePostHook(typeof(UpdateSocialLog),   "LogAdd",             typeof(GameHooks), "LogAdd4_Postfix", new[] { typeof(string), typeof(bool) });*/
 			//ErenshorCoopMod.CreatePostHook(typeof(SimInspect),        "SpendPoint",         typeof(GameHooks), "SimSpendPoint");
 			ErenshorCoopMod.CreatePostHook(typeof(Stats), "CalcStats", typeof(GameHooks), "OnCalcStat");
+			ErenshorCoopMod.CreatePostHook(typeof(HardSetStats), "Update", typeof(GameHooks), "HardSetStatUpdate_Postfix");
 			//ErenshorCoopMod.CreatePrefixHook(typeof(Misc), "GenPopup", typeof(GameHooks), "MiscGenPopup_Prefix");
 			//ErenshorCoopMod.CreatePostHook(typeof(TypeText),          "RenameSimPlayer",    typeof(GameHooks), "RenameSimPlayer_Postfix");
-
-
 
 			var type = typeof(ModularParts);
 			hideHair = type.GetField("hideHair", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -185,6 +187,167 @@ namespace ErenshorCoop
 
 			type = typeof(SpawnPointTrigger);
 			spTrigCD = type.GetField("cooldown", BindingFlags.NonPublic | BindingFlags.Instance);
+
+			type = typeof(ModularParts);
+			getCachTrans = type.GetMethod("GetCachedTransforms", BindingFlags.NonPublic | BindingFlags.Instance);
+			prpb = type.GetField("_mpb", BindingFlags.NonPublic | BindingFlags.Instance);
+		}
+
+
+		public static bool NPCUpdateNamePlate_Prefix(NPC __instance)
+		{
+			if (!ClientConnectionManager.Instance.IsRunning) return true;
+			//is this a player or sim
+			if((bool)__instance.GetComponent<NetworkedSim>() || (bool)__instance.GetComponent<NetworkedPlayer>())
+			//if(__instance.ThisSim.myIndex < 0)
+			{
+				if (__instance.NamePlate != null)
+				{
+					__instance.NamePlate.GetComponent<TextMeshPro>().color = Color.green;
+					__instance.NamePlate.GetComponent<FlashUIColors>().col1 = Color.green;
+					
+					__instance.NamePlate.GetComponent<TextMeshPro>().text = __instance.NPCName;
+					if (__instance.GuildName != "")
+					{
+						TextMeshPro component = __instance.NamePlate.GetComponent<TextMeshPro>();
+						component.text = component.text + "\n<" + __instance.GuildName + ">";
+					}
+				}
+				return false;
+			}
+			return true;
+		}
+
+
+		private static MethodInfo getCachTrans;
+		private static FieldInfo prpb;
+
+		public static void DoSkinColor(ModularParts m)
+		{
+			UpdateSkinCol(m.Head, m);
+			UpdateSkinCol(m.Eyebrows, m);
+			UpdateSkinCol(m.Chest, m);
+			UpdateSkinCol(m.ArmR, m);
+			UpdateSkinCol(m.ArmL, m);
+			UpdateSkinCol(m.BracerL, m);
+			UpdateSkinCol(m.BracerR, m);
+			UpdateSkinCol(m.GloveL, m);
+			UpdateSkinCol(m.GloveR, m);
+			UpdateSkinCol(m.Pants, m);
+			UpdateSkinCol(m.BootsL, m);
+			UpdateSkinCol(m.BootsR, m);
+			UpdateSkinCol(m.ShoulderL, m);
+			UpdateSkinCol(m.ShoulderR, m);
+			UpdateSkinCol(m.KneeL, m);
+			UpdateSkinCol(m.KneeR, m);
+			UpdateSkinCol(m.ElbowL, m);
+			UpdateSkinCol(m.ElbowR, m);
+			UpdateSkinCol(m.Cloak, m);
+			UpdateSkinCol(m.HeadCover, m);
+			UpdateSkinCol(m.FullHeadHelm, m);
+			UpdateSkinCol(m.FaceCover, m);
+			UpdateSkinCol(m.HatWithHair, m);
+			UpdateSkinCol(m.HelmetAttachment, m);
+		}
+
+		private static void UpdateSkinCol(Transform root, ModularParts _m)
+		{
+			if (!root)
+				return;
+
+			void SetColor(Renderer r, string prop, Color c, int matIndex = -1)
+			{
+				if(prpb.GetValue(_m) == null)
+					prpb.SetValue(_m, new MaterialPropertyBlock());
+
+				var _mpb = (MaterialPropertyBlock)prpb.GetValue(_m);
+				bool flag = matIndex >= 0;
+				if (flag)
+				{
+					r.GetPropertyBlock(_mpb, matIndex);
+				}
+				else
+				{
+					r.GetPropertyBlock(_mpb);
+				}
+				_mpb.SetColor(prop, c);
+				bool flag2 = matIndex >= 0;
+				if (flag2)
+				{
+					r.SetPropertyBlock(_mpb, matIndex);
+				}
+				else
+				{
+					r.SetPropertyBlock(_mpb);
+				}
+			}
+
+			var ct = (Transform[])getCachTrans.Invoke(_m, new object[] { root });
+
+			foreach (Transform t in ct)
+			{
+				if (!t)
+					continue;
+
+				var renderer = t.GetComponent<Renderer>();
+				if (!renderer)
+					continue;
+
+				var materials = renderer.sharedMaterials;
+
+				if (materials != null && materials.Length > 1)
+				{
+					for (int i = 0; i < materials.Length; i++)
+					{
+						SetColor(renderer, "_Color_Skin", _m.SkinCol, i);
+					}
+				}
+				else
+				{
+					SetColor(renderer, "_Color_Skin", _m.SkinCol, -1);
+				}
+			}
+		}
+
+		private static EntityStatUpdate _previousStats = new();
+		public static bool HardSetStatUpdate_Prefix()
+		{
+			if (!ClientConnectionManager.Instance.IsRunning) return true;
+			if (!ClientZoneOwnership.isZoneOwner) return false;
+			return true;
+		}
+
+		public static void HardSetStatUpdate_Postfix(HardSetStats __instance)
+		{
+			if (!ClientConnectionManager.Instance.IsRunning) return;
+			if (!ClientZoneOwnership.isZoneOwner) return;
+
+			var nps = __instance.GetComponent<NPCSync>();
+
+			if (nps == null) return;
+
+			var stats = nps.character.MyStats;
+
+			EntityStatUpdate curStat = new()
+			{
+				curMaxHP = stats.CurrentMaxHP,
+				curHP = stats.CurrentHP,
+				damageRangeMax = stats.Myself.MyNPC.DamageRange.y,
+				damageRangeMin = stats.Myself.MyNPC.DamageRange.x,
+				level = stats.Level
+			};
+
+			if (_previousStats != curStat)
+			{
+				//Create packet
+				var p = PacketManager.GetOrCreatePacket<EntityDataPacket>(nps.entityID, PacketType.ENTITY_DATA);
+				p.AddPacketData(EntityDataType.STAT_UPDATE, "statUpdate", curStat);
+				p.SetData("targetPlayerIDs", SharedNPCSyncManager.Instance.GetPlayerSendList());
+				p.entityType = nps.type;
+				p.zone = SceneManager.GetActiveScene().name;
+				
+				_previousStats = curStat;
+			}
 		}
 
 		public static void RenameSimPlayer_Postfix(Character _currentTarget, string _allTxt)
@@ -738,6 +901,8 @@ namespace ErenshorCoop
 
 			result = ReplaceWholeWord(result, "YOUR", CurrentPlayerName + "'s");
 			result = ReplaceWholeWord(result, "Your", CurrentPlayerName + "'s");
+			result = ReplaceWholeWord(result, "your", CurrentPlayerName + "'s");
+
 
 			result = Regex.Replace(result, $@"\b{CurrentPlayerName} (are|take|try|have|do|absorb)\b", match =>
 			{
@@ -888,7 +1053,7 @@ namespace ErenshorCoop
 				if (mem != null && mem.simIndex >= 0 && mem.MyAvatar == null)
 				{
 					//	Logging.Log($"spawn gp1 {GameData.GroupMember1.simIndex} {GameData.GroupMember1.SimName} ");
-					__instance.ActiveSimInstances.Add(mem.SpawnMeInGame(GameData.PlayerControl.transform.position + new Vector3(Random.Range(-1, 1), 0f, Random.Range(-1, 1))));
+					__instance.ActiveSimInstances.Add(mem.SpawnMeInGame(GameData.PlayerControl.transform.position + new Vector3(Random.Range(-1, 1), 0f, Random.Range(-1, 1)), mem));
 					mem.MyAvatar.InGroup = true;
 					mem.isPuller = false;
 					mem.Caution = false;
@@ -942,25 +1107,12 @@ namespace ErenshorCoop
 
 		public static NetworkedPlayer CreatePlayer(int playerID, Vector3 pos, Quaternion rot)
 		{
-			var sims = GameData.SimMngr.ActualSims;
-			if (sims.Count == 0)
-			{
-				Logging.LogError($"Could not create player for {playerID}. No Sim instances.");
-				return null;
-			}
-			var sim = sims[0];
-			if (sim == null)
-			{
-				Logging.LogError($"Could not create player for {playerID}. No Sim.");
-				return null;
-			}
-
 			//Logging.Log($"Sim Name: {sim.name}");
-
-			var nMeshAgent = sim.gameObject.GetComponent<NavMeshAgent>();
+			GameData.SimMngr.BlankSPTemplate.GetComponent<NPC>().NPCName = "Loading..";
+			var nMeshAgent = GameData.SimMngr.BlankSPTemplate.GetComponent<NavMeshAgent>();
 			if (nMeshAgent != null) nMeshAgent.enabled = false;
 
-			GameObject _player = UnityEngine.Object.Instantiate(sim.gameObject, new Vector3(999, 999, 999), rot);
+			GameObject _player = UnityEngine.Object.Instantiate(GameData.SimMngr.BlankSPTemplate, new Vector3(999, 999, 999), rot);
 			_player.SetActive(false); //immediately hide this player, could be optimized by only creating the player if they're in the same zone.
 			var pCon = _player.GetComponent<SimPlayer>();
 			if(pCon == null)
@@ -984,29 +1136,17 @@ namespace ErenshorCoop
 
 		public static NetworkedSim CreateSim(int playerID, Vector3 pos, Quaternion rot)
 		{
-			var sims = GameData.SimMngr.ActualSims;
-			if (sims.Count == 0)
-			{
-				Logging.LogError($"Could not create player for {playerID}. No Sim instances.");
-				return null;
-			}
-			var sim = sims[0];
-			if (sim == null)
-			{
-				Logging.LogError($"Could not create player for {playerID}. No Sim.");
-				return null;
-			}
-
 			//Logging.Log($"Sim Name: {sim.name}");
-			var nMeshAgent = sim.gameObject.GetComponent<NavMeshAgent>();
+			GameData.SimMngr.BlankSPTemplate.GetComponent<NPC>().NPCName = "Loading..";
+			var nMeshAgent = GameData.SimMngr.BlankSPTemplate.GetComponent<NavMeshAgent>();
 			if (nMeshAgent != null) nMeshAgent.enabled = false;
 
-			GameObject _player = UnityEngine.Object.Instantiate(sim.gameObject, new Vector3(999, 999, 999), rot);
+			GameObject _player = UnityEngine.Object.Instantiate(GameData.SimMngr.BlankSPTemplate, new Vector3(999, 999, 999), rot);
 			
 			var pCon = _player.GetComponent<SimPlayer>();
 			if (pCon == null)
 			{
-				Logging.LogError($"Could not create player for {playerID}.");
+				Logging.LogError($"Could not create sim {playerID}.");
 				return null;
 			}
 			pCon.enabled = false;
@@ -1328,7 +1468,7 @@ namespace ErenshorCoop
 			return false;
 		}
 
-		public static void SimSpawn_Postfix(SimPlayerTracking __instance, ref SimPlayer __result, Vector3 pos)
+		public static void SimSpawn_Postfix(SimPlayerTracking __instance, ref SimPlayer __result, Vector3 pos, SimPlayerTracking _sim)
 		{
 			if (!ClientConnectionManager.Instance.IsRunning) return;
 			if (__result == null) return;
@@ -1427,18 +1567,31 @@ namespace ErenshorCoop
 		}
 
 
+		private static List<TextMeshProUGUI> grpSimNames = null;
+
 		public static bool InformGroupOfLoot_Prefix(ItemIcon __instance, Item _item)
 		{
 			if (!ClientConnectionManager.Instance.IsRunning) return true;
 
-			foreach(var mem in GameData.GroupMembers)
+			//Little more robust than grabbing the name from the avatar obj?
+			grpSimNames ??= new()
+			{
+				GameData.SimPlayerGrouping.PlayerOneName,
+				GameData.SimPlayerGrouping.PlayerTwoName,
+				GameData.SimPlayerGrouping.PlayerThreeName,
+				GameData.SimPlayerGrouping.PlayerFourName,
+			};
+
+			var idx = 0;
+			foreach (var mem in GameData.GroupMembers)
 			{
 				if (mem != null && mem.simIndex >= 0 && mem.MyAvatar.IsThatAnUpgrade(_item))
 				{
 					string str = mem.MyAvatar.MyDialog.GetLootReq().Replace("II", _item.ItemName);
-					GameData.SimPlayerGrouping.AddStringForDisplay(GameData.SimPlayerGrouping.PlayerOneName.text + " tells the group: " + str, "#00B2B7");
+					GameData.SimPlayerGrouping.AddStringForDisplay($"{grpSimNames[idx].text} tells the group: {str}", "#00B2B7");
 					mem.OpinionOfPlayer -= 0.3f;
 				}
+				idx++;
 			}
 
 			if (Variables.lastDroppedItem != null && Variables.lastDroppedItem.item.Id == _item.Id)
@@ -1460,6 +1613,10 @@ namespace ErenshorCoop
 			//bool flag = EventSystem.current.IsPointerOverGameObject();
 			if (Physics.Raycast(ray, out var raycastHit))
 			{
+				/*if (raycastHit.transform.name == "Terrain" || raycastHit.transform.name == "Terrain (1)")
+				{
+					return true;
+				}*/
 				if (raycastHit.transform.GetComponent<NetworkedPlayer>() != null)
 					return false;
 				if (raycastHit.transform.GetComponent<NetworkedSim>() != null)
@@ -1472,8 +1629,19 @@ namespace ErenshorCoop
 					return true;
 				if (raycastHit.transform.tag == "Forge")
 					return true;
+				if (raycastHit.transform.tag == "PlanningDesk")
+					return true;
 				if (raycastHit.transform.tag == "Treasure")
 					return true;
+				if (raycastHit.transform.tag == "ItemBag")
+					return true;
+				if (raycastHit.transform.tag == "EventLantern")
+					return true;
+				if (raycastHit.transform.tag == "EventBell")
+					return true;
+				if (raycastHit.transform.tag == "FernallaTree")
+					return true;
+
 
 				List<RaycastResult> list = new();
 				PointerEventData pointerEventData = new(EventSystem.current)
@@ -1961,14 +2129,11 @@ namespace ErenshorCoop
 		{
 			if (!ClientConnectionManager.Instance.IsRunning) return true;
 
-			//If we aren't the host... we are outta here, we don't handle sims
-			//if (!ServerConnectionManager.Instance.IsRunning) return false;
-
 			foreach (var mem in GameData.GroupMembers)
 			{
 				if (mem != null && mem.simIndex >= 0)
 				{
-					__instance.ActiveSimInstances.Add(mem.SpawnMeInGame(GameData.PlayerControl.transform.position + new Vector3((float)Random.Range(-1, 1), 0f, (float)Random.Range(-1, 1))));
+					__instance.ActiveSimInstances.Add(mem.SpawnMeInGame(GameData.PlayerControl.transform.position + new Vector3((float)Random.Range(-1, 1), 0f, (float)Random.Range(-1, 1)), mem));
 					mem.MyAvatar.InGroup = true;
 					mem.isPuller = false;
 					mem.Caution = false;
@@ -1976,7 +2141,6 @@ namespace ErenshorCoop
 					__instance.SimsInZones[mem.simIndex] = SceneManager.GetActiveScene().name;
 				}
 			}
-
 
 			return false;
 		}
@@ -2106,9 +2270,9 @@ namespace ErenshorCoop
 #region SIMPLAYERTRACKING
 
 
-		public static bool SpawnMeInGame_Prefix(SimPlayerTracking __instance)
+		public static bool SpawnMeInGame_Prefix(SimPlayerTracking __instance, SimPlayerTracking _sim)
 		{
-			if (__instance.simIndex < 0) return false;
+			if (_sim.simIndex < 0) return false;
 			//Logging.Log($"spawning {__instance.simIndex} {__instance.SimName}\n {System.Environment.StackTrace}");
 			return true;
 		}
@@ -2120,7 +2284,6 @@ namespace ErenshorCoop
 
 #region SIMPLAYERGROUPING
 
-		//Yes it's annoying to have to do each individually, the game should really be using a list to address group members.
 		public static bool DismissMember1_Prefix(SimPlayerGrouping __instance)
 		{
 			if (!ClientConnectionManager.Instance.IsRunning) return true;
@@ -2291,7 +2454,7 @@ namespace ErenshorCoop
 				if (targ != null && (targ is SimSync || targ is NetworkedSim || targ is NetworkedPlayer))
 				{
 					if (!GameData.PlayerControl.Myself.Alive) return true;
-					if (Mathf.Abs(GameData.PlayerStats.Level - targ.character.MyStats.Level) > 3)
+					if (targ.character.MyStats.Level - GameData.PlayerStats.Level > 3)
 					{
 						UpdateSocialLog.LogAdd("This player is outside of your level range.", "yellow");
 						return false;
@@ -2467,35 +2630,29 @@ namespace ErenshorCoop
 		}
 		private static Entity GetEntityByStats(Stats _char)
 		{
-			if (!ClientZoneOwnership.isZoneOwner)
-			{
-				foreach (var mob in ClientNPCSyncManager.Instance.NetworkedMobs)
-				{
-					if (mob.Value != null && mob.Value.character != null && mob.Value.character.MyStats == _char)
-					{
-						return mob.Value;
-					}
-				}
 
-				foreach (var mob in ClientNPCSyncManager.Instance.NetworkedSims)
+			foreach (var mob in ClientNPCSyncManager.Instance.NetworkedMobs)
+			{
+				if (mob.Value != null && mob.Value.character != null && mob.Value.character.MyStats == _char)
 				{
-					if (mob.Value != null && mob.Value.character != null && mob.Value.character.MyStats == _char)
-					{
-						return mob.Value;
-					}
+					return mob.Value;
 				}
 			}
-			else
-			{
-				foreach (var mob in SharedNPCSyncManager.Instance.mobs)
-				{
-					if (mob.Value != null && mob.Value.character != null && mob.Value.character.MyStats == _char)
-					{
-						return mob.Value;
-					}
-				}
 
-				
+			foreach (var mob in ClientNPCSyncManager.Instance.NetworkedSims)
+			{
+				if (mob.Value != null && mob.Value.character != null && mob.Value.character.MyStats == _char)
+				{
+					return mob.Value;
+				}
+			}
+
+			foreach (var mob in SharedNPCSyncManager.Instance.mobs)
+			{
+				if (mob.Value != null && mob.Value.character != null && mob.Value.character.MyStats == _char)
+				{
+					return mob.Value;
+				}
 			}
 
 			foreach (var mob in SharedNPCSyncManager.Instance.sims)
@@ -2520,6 +2677,27 @@ namespace ErenshorCoop
 			return null;
 		}
 
+
+		private static void SendEffectPacket(short entityID, string spellID, int dmgBonus, EntityType casterType, short casterID, EntityType targetType, short targetID = -1, float duration = -1, List<short> targetPlayerIDs = null)
+		{
+			if (entityID <= 0) return;
+			var pack = PacketManager.GetOrCreatePacket<EntityStatusEffectPacket>(entityID, PacketType.ENTITY_STATUS);
+			pack.dataTypes.Add(ActionType.STATUS_EFFECT_APPLY);
+			pack.effectData = new StatusEffectData()
+			{
+				spellID = spellID,
+				damageBonus = dmgBonus,
+				casterType = casterType,
+				casterID = casterID,
+				targetType = targetType,
+				targetID = targetID,
+				duration = duration,
+			};
+			pack.entityType = casterType;
+			if (targetPlayerIDs != null && targetPlayerIDs.Count > 0)
+				pack.targetPlayerIDs = targetPlayerIDs;
+		}
+
 		public static void AddStatusEffectType1_Prefix(Stats __instance, Spell spell, bool _fromPlayer, int _dmgBonus)
 		{
 			if (ClientConnectionManager.Instance.IsRunning)
@@ -2530,16 +2708,15 @@ namespace ErenshorCoop
 					if (Variables.DontCheckEffectCharacters.Contains(ClientConnectionManager.Instance.LocalPlayer)) return;
 
 					string spellID = spell.Id;
-					var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_ACTION);
-					pack.dataTypes.Add(ActionType.STATUS_EFFECT_APPLY);
-					pack.effectData = new StatusEffectData()
-					{
-						spellID =  spellID,
-						damageBonus = _dmgBonus,
-						targetID =  -1,
-						duration = -1,
-					};
-
+					SendEffectPacket(ClientConnectionManager.Instance.LocalPlayerID, spellID, _dmgBonus, EntityType.PLAYER, ClientConnectionManager.Instance.LocalPlayerID, EntityType.PLAYER);
+				}
+				else
+				{
+					Entity caster = GetEntityByStats(__instance);
+					if (caster == null) return;
+					if (Variables.DontCheckEffectCharacters.Contains(caster)) return;
+					if (caster is NetworkedPlayer || caster is NetworkedSim || caster is NetworkedNPC) return;
+					SendEffectPacket(caster.entityID, spell.Id, _dmgBonus, caster.type, caster.entityID, caster.type, -1, -1, SharedNPCSyncManager.Instance.GetPlayerSendList());
 				}
 			}
 		}
@@ -2548,6 +2725,8 @@ namespace ErenshorCoop
 		{
 			if (ClientConnectionManager.Instance.IsRunning)
 			{
+				
+
 				if (__instance == null) return;
 				if (_specificCaster == null) return;
 
@@ -2560,86 +2739,25 @@ namespace ErenshorCoop
 
 				if (Variables.DontCheckEffectCharacters.Contains(target)) return;
 
+				string spellID = spell.Id;
+
 				//If we cast something on ourselves
 				if (target == ClientConnectionManager.Instance.LocalPlayer && caster == ClientConnectionManager.Instance.LocalPlayer)
 				{
-					string spellID = spell.Id;
-					var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_ACTION);
-					pack.dataTypes.Add(ActionType.STATUS_EFFECT_APPLY);
-					pack.effectData = new StatusEffectData()
-					{
-						spellID = spellID,
-						damageBonus = _dmgBonus,
-						casterType = EntityType.PLAYER,
-						targetID = -2,
-						duration = -1,
-					};
+					SendEffectPacket(ClientConnectionManager.Instance.LocalPlayerID, spellID, _dmgBonus, EntityType.PLAYER, ClientConnectionManager.Instance.LocalPlayerID, EntityType.PLAYER, -2);
 				}
 				else
 				{
 					//if we are the caster
 					if (caster == ClientConnectionManager.Instance.LocalPlayer)
 					{
-						string spellID = spell.Id;
-						var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_ACTION);
-						pack.dataTypes.Add(ActionType.STATUS_EFFECT_APPLY);
-						pack.effectData = new StatusEffectData()
-						{
-							spellID = spellID,
-							damageBonus = _dmgBonus,
-							casterType = EntityType.PLAYER,
-							casterID = caster.entityID,
-							duration = -1,
-							targetID = target.entityID,
-							targetType = target.type,
-						};
-						if (target is NetworkedPlayer)
-							pack.effectData.targetType = EntityType.PLAYER;
-
+						SendEffectPacket(ClientConnectionManager.Instance.LocalPlayerID, spellID, _dmgBonus, EntityType.PLAYER, caster.entityID, target.type, target.entityID);
 					}
 					else //We're not the caster
 					{
-						if (ClientZoneOwnership.isZoneOwner || caster is SimSync)
+						if (caster is NPCSync || caster is SimSync)
 						{
-							if (caster is SimSync)
-							{
-								string spellID = spell.Id;
-								var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(caster.entityID, PacketType.PLAYER_ACTION);
-								pack.dataTypes.Add(ActionType.STATUS_EFFECT_APPLY);
-								pack.effectData = new StatusEffectData()
-								{
-									spellID = spellID,
-									damageBonus = _dmgBonus,
-									casterType = caster.type,
-									casterID = caster.entityID,
-									duration = -1,
-									targetID = target.entityID,
-									targetType = target.type,
-								};
-								if (target is NetworkedPlayer)
-									pack.effectData.targetType = EntityType.PLAYER;
-								pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
-								pack.isSim = true;
-							}
-							else
-							{
-								string spellID = spell.Id;
-								var pack = PacketManager.GetOrCreatePacket<EntityActionPacket>(caster.entityID, PacketType.ENTITY_ACTION);
-								pack.dataTypes.Add(ActionType.STATUS_EFFECT_APPLY);
-								pack.effectData = new StatusEffectData()
-								{
-									spellID = spellID,
-									damageBonus = _dmgBonus,
-									casterType = caster.type,
-									casterID = caster.entityID,
-									duration = -1,
-									targetID = target.entityID,
-									targetType = target.type,
-								};
-								if (target is NetworkedPlayer)
-									pack.effectData.targetType = EntityType.PLAYER;
-								pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
-							}
+							SendEffectPacket(caster.entityID, spellID, _dmgBonus, caster.type, caster.entityID, target.type, target.entityID, -1, SharedNPCSyncManager.Instance.GetPlayerSendList());
 						}
 					}
 				}
@@ -2661,87 +2779,28 @@ namespace ErenshorCoop
 
 
 				if (Variables.DontCheckEffectCharacters.Contains(target)) return;
+				string spellID = spell.Id;
 
 				//If we cast something on ourselves
 				if (target == ClientConnectionManager.Instance.LocalPlayer && caster == ClientConnectionManager.Instance.LocalPlayer)
 				{
-					string spellID = spell.Id;
-					var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_ACTION);
-					pack.dataTypes.Add(ActionType.STATUS_EFFECT_APPLY);
-					pack.effectData = new StatusEffectData()
-					{
-						spellID = spellID,
-						damageBonus = _dmgBonus,
-						casterType = EntityType.PLAYER,
-						targetID = -3,
-						duration = _duration,
-					};
-
+					
+					SendEffectPacket(caster.entityID, spellID, _dmgBonus, caster.type, caster.entityID, EntityType.PLAYER, -3, _duration);
 				}
 				else
 				{
 					//if we are the caster
 					if (caster == ClientConnectionManager.Instance.LocalPlayer)
 					{
-						string spellID = spell.Id;
-						var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_ACTION);
-						pack.dataTypes.Add(ActionType.STATUS_EFFECT_APPLY);
-						pack.effectData = new StatusEffectData()
-						{
-							spellID = spellID,
-							damageBonus = _dmgBonus,
-							casterType = EntityType.PLAYER,
-							casterID = caster.entityID,
-							duration = _duration,
-							targetID = target.entityID,
-							targetType = target.type,
-						};
-						if (target is NetworkedPlayer)
-							pack.effectData.targetType = EntityType.PLAYER;
+						SendEffectPacket(caster.entityID, spellID, _dmgBonus, caster.type, caster.entityID, target.type, target.entityID, _duration);
 					}
 					else //We're not the caster
 					{
-						if (ClientZoneOwnership.isZoneOwner || caster is SimSync)
+						if (caster is NPCSync || caster is SimSync)
 						{
-							if (caster is SimSync)
-							{
-								string spellID = spell.Id;
-								var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(caster.entityID, PacketType.PLAYER_ACTION);
-								pack.dataTypes.Add(ActionType.STATUS_EFFECT_APPLY);
-								pack.effectData = new StatusEffectData()
-								{
-									spellID = spellID,
-									damageBonus = _dmgBonus,
-									casterType = caster.type,
-									casterID = caster.entityID,
-									duration = _duration,
-									targetID = target.entityID,
-									targetType = target.type,
-								};
-								if (target is NetworkedPlayer)
-									pack.effectData.targetType = EntityType.PLAYER;
-								pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
-								pack.isSim = true;
-							}
-							else
-							{
-								string spellID = spell.Id;
-								var pack = PacketManager.GetOrCreatePacket<EntityActionPacket>(caster.entityID, PacketType.ENTITY_ACTION);
-								pack.dataTypes.Add(ActionType.STATUS_EFFECT_APPLY);
-								pack.effectData = new StatusEffectData()
-								{
-									spellID = spellID,
-									damageBonus = _dmgBonus,
-									casterType = caster.type,
-									casterID = caster.entityID,
-									duration = _duration,
-									targetID = target.entityID,
-									targetType = target.type,
-								};
-								if (target is NetworkedPlayer)
-									pack.effectData.targetType = EntityType.PLAYER;
-								pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
-							}
+
+							SendEffectPacket(caster.entityID, spellID, _dmgBonus, caster.type, caster.entityID, target.type, target.entityID, _duration, SharedNPCSyncManager.Instance.GetPlayerSendList());
+
 						}
 					}
 				}
@@ -2754,31 +2813,33 @@ namespace ErenshorCoop
 			{
 				if (ClientConnectionManager.Instance.LocalPlayer.stats == __instance)
 				{
-					var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_ACTION);
+					var pack = PacketManager.GetOrCreatePacket<EntityStatusEffectPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.ENTITY_STATUS);
 					pack.dataTypes.Add(ActionType.STATUS_EFFECT_REMOVE);
 					pack.statusID = index;
+					pack.entityType = EntityType.PLAYER;
 				}
 				else
 				{
 					if (__instance == null) return;
 					Entity target = GetEntityByStats(__instance);
-					if (ClientZoneOwnership.isZoneOwner || target is SimSync)
+					if (target is NPCSync || target is SimSync)
 					{
 						if (target == null) return;
 						if (target is SimSync)
 						{
-							var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(target.entityID, PacketType.PLAYER_ACTION);
+							var pack = PacketManager.GetOrCreatePacket<EntityStatusEffectPacket>(target.entityID, PacketType.ENTITY_STATUS);
 							pack.dataTypes.Add(ActionType.STATUS_EFFECT_REMOVE);
 							pack.statusID = index;
 							pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
-							pack.isSim = true;
+							pack.entityType = target.type;
 						}
 						else
 						{
-							var pack = PacketManager.GetOrCreatePacket<EntityActionPacket>(target.entityID, PacketType.ENTITY_ACTION);
+							var pack = PacketManager.GetOrCreatePacket<EntityStatusEffectPacket>(target.entityID, PacketType.ENTITY_STATUS);
 							pack.dataTypes.Add(ActionType.STATUS_EFFECT_REMOVE);
 							pack.statusID = index;
 							pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
+							pack.entityType = target.type;
 						}
 					}
 				}
@@ -2791,31 +2852,33 @@ namespace ErenshorCoop
 			{
 				if (ClientConnectionManager.Instance.LocalPlayer.stats == __instance)
 				{
-					var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_ACTION);
+					var pack = PacketManager.GetOrCreatePacket<EntityStatusEffectPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.ENTITY_STATUS);
 					pack.dataTypes.Add(ActionType.STATUS_EFFECT_REMOVE);
 					pack.RemoveAllStatus = true;
+					pack.entityType = EntityType.PLAYER;
 				}
 				else
 				{
 					if (__instance == null) return;
 					Entity target = GetEntityByStats(__instance);
-					if (ClientZoneOwnership.isZoneOwner || target is SimSync)
+					if (target is NPCSync || target is SimSync)
 					{
 						if (target == null) return;
 						if (target is SimSync)
 						{
-							var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(target.entityID, PacketType.PLAYER_ACTION);
+							var pack = PacketManager.GetOrCreatePacket<EntityStatusEffectPacket>(target.entityID, PacketType.ENTITY_STATUS);
 							pack.dataTypes.Add(ActionType.STATUS_EFFECT_REMOVE);
 							pack.RemoveAllStatus = true;
 							pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
-							pack.isSim = true;
+							pack.entityType = target.type;
 						}
 						else
 						{
-							var pack = PacketManager.GetOrCreatePacket<EntityActionPacket>(target.entityID, PacketType.ENTITY_ACTION);
+							var pack = PacketManager.GetOrCreatePacket<EntityStatusEffectPacket>(target.entityID, PacketType.ENTITY_STATUS);
 							pack.dataTypes.Add(ActionType.STATUS_EFFECT_REMOVE);
 							pack.RemoveAllStatus = true;
 							pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
+							pack.entityType = target.type;
 						}
 						
 					}
@@ -2829,31 +2892,33 @@ namespace ErenshorCoop
 			{
 				if (ClientConnectionManager.Instance.LocalPlayer.stats == __instance)
 				{
-					var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_ACTION);
+					var pack = PacketManager.GetOrCreatePacket<EntityStatusEffectPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.ENTITY_STATUS);
 					pack.dataTypes.Add(ActionType.STATUS_EFFECT_REMOVE);
 					pack.RemoveBreakable = true;
+					pack.entityType = EntityType.PLAYER;
 				}
 				else
 				{
 					if (__instance == null) return;
 					Entity target = GetEntityByStats(__instance);
-					if (ClientZoneOwnership.isZoneOwner || target is SimSync)
+					if (target is NPCSync || target is SimSync)
 					{
 						if (target == null) return;
 						if (target is SimSync)
 						{
-							var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(target.entityID, PacketType.PLAYER_ACTION);
+							var pack = PacketManager.GetOrCreatePacket<EntityStatusEffectPacket>(target.entityID, PacketType.ENTITY_STATUS);
 							pack.dataTypes.Add(ActionType.STATUS_EFFECT_REMOVE);
 							pack.RemoveBreakable = true;
 							pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
-							pack.isSim = true;
+							pack.entityType = target.type;
 						}
 						else
 						{
-							var pack = PacketManager.GetOrCreatePacket<EntityActionPacket>(target.entityID, PacketType.ENTITY_ACTION);
+							var pack = PacketManager.GetOrCreatePacket<EntityStatusEffectPacket>(target.entityID, PacketType.ENTITY_STATUS);
 							pack.dataTypes.Add(ActionType.STATUS_EFFECT_REMOVE);
 							pack.RemoveBreakable = true;
 							pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
+							pack.entityType = target.type;
 						}
 					}
 				}
@@ -2879,7 +2944,7 @@ namespace ErenshorCoop
 		}
 		public static bool StatsReduceHP_Prefix(Stats __instance, ref bool __result, int _dmg, GameData.DamageType _dmgType)
 		{
-			if (!ClientZoneOwnership.isZoneOwner && ClientConnectionManager.Instance.IsRunning)
+			if ( ClientConnectionManager.Instance.IsRunning)
 			{
 				foreach (var mob in ClientNPCSyncManager.Instance.NetworkedMobs)
 				{
@@ -2923,37 +2988,39 @@ namespace ErenshorCoop
 			{
 				if (ClientConnectionManager.Instance.LocalPlayer.stats == __instance)
 				{
-					var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.PLAYER_ACTION);
+					var pack = PacketManager.GetOrCreatePacket<EntityStatusEffectPacket>(ClientConnectionManager.Instance.LocalPlayerID, PacketType.ENTITY_STATUS);
 					pack.dataTypes.Add(ActionType.WORN_EFFECT_REFRESH);
 					var activeEffects = pack.wornEffects ?? new();
 					activeEffects.Add(new() { spellID = _spell.Id });
 					pack.wornEffects = activeEffects;
+					pack.entityType = EntityType.PLAYER;
 				}
 				else
 				{
 					if (__instance == null) return;
 					Entity target = GetEntityByStats(__instance);
-					if (ClientZoneOwnership.isZoneOwner || target is SimSync)
+					if (target is NPCSync || target is SimSync)
 					{
 						if (target == null) return;
 						if (target is SimSync)
 						{
-							var pack = PacketManager.GetOrCreatePacket<PlayerActionPacket>(target.entityID, PacketType.PLAYER_ACTION);
+							var pack = PacketManager.GetOrCreatePacket<EntityStatusEffectPacket>(target.entityID, PacketType.ENTITY_STATUS);
 							pack.dataTypes.Add(ActionType.WORN_EFFECT_REFRESH);
 							var activeEffects = pack.wornEffects ?? new();
 							activeEffects.Add(new() { spellID = _spell.Id });
 							pack.wornEffects = activeEffects;
 							pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
-							pack.isSim = true;
+							pack.entityType = target.type;
 						}
 						else
 						{
-							var pack = PacketManager.GetOrCreatePacket<EntityActionPacket>(target.entityID, PacketType.ENTITY_ACTION);
+							var pack = PacketManager.GetOrCreatePacket<EntityStatusEffectPacket>(target.entityID, PacketType.ENTITY_ACTION);
 							pack.dataTypes.Add(ActionType.WORN_EFFECT_REFRESH);
 							var activeEffects = pack.wornEffects ?? new();
 							activeEffects.Add(new() { spellID = _spell.Id });
 							pack.wornEffects = activeEffects;
 							pack.targetPlayerIDs = SharedNPCSyncManager.Instance.GetPlayerSendList();
+							pack.entityType = target.type;
 						}
 
 					}
@@ -3107,7 +3174,9 @@ namespace ErenshorCoop
 		{
 			if (!ClientConnectionManager.Instance.IsRunning) return;
 
-			if (ClientZoneOwnership.isZoneOwner)
+
+
+			if (_attacker != null && _attacker.GetComponent<NPCSync>() != null)
 				SyncDamage(__instance, __result, _dmgType, _attacker, _animEffect, 0, _criticalHit, __result);
 			if (_attacker != null && _attacker.GetComponent<SimSync>() != null)
 				SyncDamage(__instance, __result, _dmgType, _attacker, _animEffect, 0, _criticalHit, __result);
@@ -3125,9 +3194,9 @@ namespace ErenshorCoop
 		{
 			if (!ClientConnectionManager.Instance.IsRunning) return;
 
-			if (ClientZoneOwnership.isZoneOwner)
+			if (_attacker != null && _attacker.GetComponent<NPCSync>() != null)
 				SyncDamage(__instance, __result, _dmgType, _attacker, false, resistMod, false, _baseDmg);
-			if(_attacker.GetComponent<SimSync>() != null)
+			if(_attacker != null && _attacker.GetComponent<SimSync>() != null)
 				SyncDamage(__instance, __result, _dmgType, _attacker, false, resistMod, false, _baseDmg);
 			if (ClientConnectionManager.Instance.IsRunning && _attacker != null && _attacker == ClientConnectionManager.Instance.LocalPlayer.character)
 				SyncDamageClient(__instance, __result, _dmgType, _attacker, false, resistMod, false, _baseDmg);
@@ -3147,6 +3216,8 @@ namespace ErenshorCoop
 		public static FieldInfo lastTyped;
 		public static bool CheckInput_Prefix(TypeText __instance)
 		{
+			if(!ClientConnectionManager.Instance.IsRunning) return true;
+
 			var text = __instance.typed.text;
 
 			if (text.Length > 0)
@@ -3329,7 +3400,7 @@ namespace ErenshorCoop
 				isNetworked = true;
 				break;
 			}*/
-			if (!ClientZoneOwnership.isZoneOwner)
+			//if (!ClientZoneOwnership.isZoneOwner)
 			{
 				foreach (var mob in ClientNPCSyncManager.Instance.NetworkedMobs)
 				{
@@ -3375,7 +3446,7 @@ namespace ErenshorCoop
 				if (mob.Value.npc == __instance)
 					return false;
 			}
-			if (!ClientZoneOwnership.isZoneOwner)
+			//if (!ClientZoneOwnership.isZoneOwner)
 			{
 				foreach (var mob in ClientNPCSyncManager.Instance.NetworkedMobs)
 				{
@@ -3499,7 +3570,7 @@ namespace ErenshorCoop
 			if (issim && !SharedNPCSyncManager.Instance.sims.ContainsKey(mobID)) return;
 			if (!issim && !SharedNPCSyncManager.Instance.mobs.ContainsKey(mobID)) return;
 			if (issim && !SharedNPCSyncManager.Instance.sims[mobID].isCloseToPlayer) return;
-			//if (!issim && !SharedNPCSyncManager.Instance.mobs[mobID].isCloseToPlayer) return;
+			if (!issim && !SharedNPCSyncManager.Instance.mobs[mobID].isCloseToPlayer) return;
 
 			var pack = PacketManager.GetOrCreatePacket<EntityDataPacket>(mobID, PacketType.ENTITY_DATA);
 			pack.AddType(EntityDataType.ANIM);
@@ -3530,7 +3601,7 @@ namespace ErenshorCoop
 				return;
 			}
 
-			if (ClientZoneOwnership.isZoneOwner && SharedNPCSyncManager.Instance.overrideToMobID.TryGetValue(__instance, out short mobID))
+			if (SharedNPCSyncManager.Instance.overrideToMobID.TryGetValue(__instance, out short mobID) && SharedNPCSyncManager.Instance.mobs.ContainsKey(mobID))
 			{
 				SendMobAnimData(mobID, name, value.name, AnimatorSyncType.OVERRIDE);
 				return;
@@ -3574,7 +3645,7 @@ namespace ErenshorCoop
 				return;
 			}
 
-			if (ClientZoneOwnership.isZoneOwner && SharedNPCSyncManager.Instance.animatorToMobID.TryGetValue(__instance, out short mobID))
+			if (SharedNPCSyncManager.Instance.animatorToMobID.TryGetValue(__instance, out short mobID) && SharedNPCSyncManager.Instance.mobs.ContainsKey(mobID))
 			{
 				SendMobAnimData(mobID, name, value, AnimatorSyncType.BOOL);
 				return;
@@ -3618,7 +3689,7 @@ namespace ErenshorCoop
 				return;
 			}
 
-			if (ClientZoneOwnership.isZoneOwner && SharedNPCSyncManager.Instance.animatorToMobID.TryGetValue(__instance, out short mobID))
+			if (SharedNPCSyncManager.Instance.animatorToMobID.TryGetValue(__instance, out short mobID) && SharedNPCSyncManager.Instance.mobs.ContainsKey(mobID))
 			{
 				SendMobAnimData(mobID, name, value, AnimatorSyncType.FLOAT);
 				return;
@@ -3663,7 +3734,7 @@ namespace ErenshorCoop
 				return;
 			}
 
-			if (ClientZoneOwnership.isZoneOwner && SharedNPCSyncManager.Instance.animatorToMobID.TryGetValue(__instance, out short mobID))
+			if (SharedNPCSyncManager.Instance.animatorToMobID.TryGetValue(__instance, out short mobID) && SharedNPCSyncManager.Instance.mobs.ContainsKey(mobID))
 			{
 				SendMobAnimData(mobID, name, value, AnimatorSyncType.INT);
 				return;
@@ -3704,7 +3775,7 @@ namespace ErenshorCoop
 				return;
 			}
 
-			if (ClientZoneOwnership.isZoneOwner && SharedNPCSyncManager.Instance.animatorToMobID.TryGetValue(__instance, out short mobID))
+			if (SharedNPCSyncManager.Instance.animatorToMobID.TryGetValue(__instance, out short mobID) && SharedNPCSyncManager.Instance.mobs.ContainsKey(mobID))
 			{
 				SendMobAnimData(mobID, name, true, AnimatorSyncType.TRIG);
 				return;
@@ -3745,7 +3816,7 @@ namespace ErenshorCoop
 				return;
 			}
 
-			if (ClientZoneOwnership.isZoneOwner && SharedNPCSyncManager.Instance.animatorToMobID.TryGetValue(__instance, out short mobID))
+			if (SharedNPCSyncManager.Instance.animatorToMobID.TryGetValue(__instance, out short mobID) && SharedNPCSyncManager.Instance.mobs.ContainsKey(mobID))
 			{
 				SendMobAnimData(mobID, name, false, AnimatorSyncType.RSTTRIG);
 				return;

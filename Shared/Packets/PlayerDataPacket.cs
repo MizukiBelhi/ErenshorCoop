@@ -31,6 +31,7 @@ namespace ErenshorCoop.Shared.Packets
 		public EntityType targetType;
 		public StatData stats;
 		public string rename;
+		public int currentXP;
 
 		public PlayerDataPacket() : base(DeliveryMethod.ReliableOrdered) {}
 
@@ -78,6 +79,7 @@ namespace ErenshorCoop.Shared.Packets
 				writer.Put(lookData.hairName);
 				writer.Put(lookData.hairColor);
 				writer.Put(lookData.skinColor);
+				writer.Put(lookData.beard);
 				writer.Put(gearData.Count);
 				foreach (var g in gearData)
 				{
@@ -95,6 +97,7 @@ namespace ErenshorCoop.Shared.Packets
 				writer.Put(scene);
 				writer.Put(zone);
 				writer.Put(alive);
+				writer.Put(currentXP);
 			}
 			if(dataTypes.Contains(PlayerDataType.STATS))
 			{
@@ -167,6 +170,7 @@ namespace ErenshorCoop.Shared.Packets
 					hairName = reader.GetString().Sanitize(),
 					hairColor = reader.GetColor(),
 					skinColor = reader.GetColor(),
+					beard = reader.GetBool()
 				};
 				gearData = new();
 				int count = reader.GetInt();
@@ -190,6 +194,7 @@ namespace ErenshorCoop.Shared.Packets
 				scene = reader.GetString();
 				zone = reader.GetString();
 				alive = reader.GetBool();
+				currentXP = reader.GetInt();
 			}
 			if(dataTypes.Contains(PlayerDataType.STATS))
 			{
@@ -222,6 +227,7 @@ namespace ErenshorCoop.Shared.Packets
 		public string hairName;
 		public Color hairColor;
 		public Color skinColor;
+		public bool beard;
 	}
 
 	public struct GearData
